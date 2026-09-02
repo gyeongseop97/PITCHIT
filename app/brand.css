@@ -1,0 +1,9 @@
+.brand{display:flex;align-items:baseline;gap:0;font-size:34px;font-weight:950;font-style:italic;letter-spacing:-.055em}
+.brand .pitch,.brand .hit{display:inline;color:var(--ink);background:none;width:auto;height:auto;margin:0;border-radius:0}
+.brand .brandH{display:inline;color:var(--red);background:none;width:auto;height:auto;margin:0;border-radius:0;position:relative}
+.brand small{font-size:11px;font-style:normal;font-weight:700;letter-spacing:.16em;margin-left:14px;color:#6d7781}
+.miniBrand{display:flex;align-items:baseline;gap:0;font-size:21px;font-style:italic;letter-spacing:-.05em}
+.miniBrand span{font-size:21px;margin:0}
+.miniBrand b{color:#ff493e}
+.miniBrand small{font-size:9px;font-style:normal;letter-spacing:.12em;margin-left:10px;color:#ffffffaa}
+@media(max-width:520px){.brand{font-size:27px}.brand small{display:none}.miniBrand small{display:none}}
