@@ -8,7 +8,7 @@ const lineup=Array.from({length:9},(_,i)=>({...types[Math.floor(Math.random()*4)
 state.turn=0;state.batter=lineup[0];state.inning=1;
 document.querySelector("aside.panel").insertAdjacentHTML("beforeend",'<hr><h3>현재 타자</h3><div id="batcard"></div><h3>오늘의 타순</h3><div id="lineup"></div>');
 const prior=render;
-render=()=>{prior();if(!state.mode)return;$("inning").textContent=state.inning;$("batcard").innerHTML=`<b>${state.batter.n} · ${state.batter.t}</b><p class="hint">파워 ${state.batter.p} · 정확도 ${state.batter.a}<br>선구안 ${state.batter.e} · 주력 ${state.batter.v}</p>`;$("lineup").innerHTML=lineup.map((b,i)=>`<small${i===state.turn?' style="color:#e33b31;font-weight:900"':''}>${i+1}. ${b.t}</small>`).join("<br>")};
+render=()=>{prior();if(!state.mode)return;$("inning").textContent=state.inning;if($("batcard"))$("batcard").innerHTML=`<b>${state.batter.n} · ${state.batter.t}</b><p class="hint">파워 ${state.batter.p} · 정확도 ${state.batter.a}<br>선구안 ${state.batter.e} · 주력 ${state.batter.v}</p>`;if($("lineup"))$("lineup").innerHTML=lineup.map((b,i)=>`<small${i===state.turn?' style="color:#e33b31;font-weight:900"':''}>${i+1}. ${b.t}</small>`).join("<br>")};
 function nextBatter(){state.b=0;state.s=0;state.turn=(state.turn+1)%9;state.batter=lineup[state.turn]}
 function advance(n){let next=[0,0,0];for(let i=2;i>=0;i--)if(state.bases[i]){let d=i+n;if(d>=3)state.r++;else next[d]=1}if(n>=4)state.r++;else next[n-1]=1;state.bases=next}
 function walk(){if(state.bases[0]&&state.bases[1]&&state.bases[2])state.r++;if(state.bases[1])state.bases[2]=1;if(state.bases[0])state.bases[1]=1;state.bases[0]=1}
