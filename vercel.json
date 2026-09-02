@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "buildCommand": "node scripts/build-static.mjs",
-  "outputDirectory": "static"
+  "framework": "nextjs",
+  "functions": {
+    "api/match.ts": {
+      "maxDuration": 30
+    }
+  }
 }
