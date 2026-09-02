@@ -49,4 +49,16 @@ if(state.mode&&!state.pitchers)newPitchers();render();
 document.head.insertAdjacentHTML("beforeend",`<style>.infoPanel{display:grid;gap:14px}.infoCard{padding:14px;border:1px solid #d8e2ed;background:#fbfdff}.infoCard h3{margin:0 0 10px;font-size:17px}.infoCard h4{margin:12px 0 6px;font-size:14px}.infoCard p{margin:0;color:#48627e;font-size:13px;line-height:1.55}.infoLineup{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}.infoLineup span{padding:6px;background:#f0f4f8;font-size:12px}.infoLineup .now{background:#e33b31;color:#fff;font-weight:900}.bullpen{display:grid;gap:6px}.bullpen button{width:100%;border:1px solid #cbd7e4;background:#fff;color:#102846;padding:9px;text-align:left;font-weight:800;cursor:pointer}.bullpen button.active{background:#102846;color:#fff}.bullpen button:disabled{opacity:.42;cursor:not-allowed;text-decoration:line-through}.defenseNote{margin-top:8px;color:#e33b31;font-size:12px;font-weight:800}</style>`);
 function renderGameInfo(){if(!state.mode||!state.pitchers)return;const side=document.querySelector("aside.panel"),p=state.pitchers[state.activePitcher],defending=state.half==="bottom";side.className="panel infoPanel";side.innerHTML=`<section class="infoCard"><h3>공격 정보</h3><h4>현재 타자 · ${state.batter.n} ${state.batter.t}</h4><p>파워 ${state.batter.p} · 정확도 ${state.batter.a}<br>선구안 ${state.batter.e} · 주력 ${state.batter.v}</p><h4>타순</h4><div class="infoLineup">${lineup.map((x,i)=>`<span class="${i===state.turn?'now':''}">${i+1}. ${x.t.replace('형','')}</span>`).join('')}</div></section><section class="infoCard"><h3>수비 정보</h3><h4>현재 투수 · ${p.n}</h4><p>구속 ${p.v} · 제구 ${p.c}<br>구위 ${p.s} · 변화 ${p.m}</p><h4>불펜</h4><div class="bullpen">${state.pitchers.map((x,i)=>`<button data-reliever="${i}" class="${i===state.activePitcher?'active':''}" ${!defending||state.usedPitchers.includes(i)?'disabled':''}>${x.t} · 구속 ${x.v} / 제구 ${x.c}</button>`).join('')}</div><div class="defenseNote">${defending?'수비 중: 사용하지 않은 투수만 교체할 수 있습니다.':'공격 중: 투수 교체는 수비 차례에 가능합니다.'}</div></section>`;side.querySelectorAll('[data-reliever]').forEach(button=>button.onclick=()=>{const i=+button.dataset.reliever;if(state.usedPitchers.includes(i)||state.half!=="bottom")return;state.activePitcher=i;state.usedPitchers.push(i);$("result").textContent=`투수 교체 · ${state.pitchers[i].n} 등판`;$("art").className="art";render()})}
 const renderBeforeInfoPanels=render;render=()=>{renderBeforeInfoPanels();renderGameInfo()};render();
+</script><script id="turn-flow-fix-v2">
+finishAtBat=(text,offense)=>{
+  resetCount();
+  if(offense==="my"){state.turn=(state.turn+1)%lineup.length;state.batter=lineup[state.turn]}
+  if(state.o<3)return text;
+  state.o=0;state.bases=[0,0,0];
+  if(state.half==="top"){state.half="bottom";return text+" · 3아웃! 공수 교대, 이제 수비입니다."}
+  state.half="top";state.inning++;return text+" · 3아웃! 공수 교대, 다시 공격입니다.";
+}
+const renderBeforeTurnFix=render;
+render=()=>{renderBeforeTurnFix();if(!state.mode)return;const attack=state.half==="top";$('modeTitle').textContent=(state.mode==="solo"?"싱글 플레이":state.mode==="quick"?"빠른 대전":"친구와 플레이")+" · "+(attack?"공격":"수비");document.querySelector('.score').setAttribute('data-half',attack?'attack':'defense')};
+render();
 </script></body></html>
