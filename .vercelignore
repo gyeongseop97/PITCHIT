@@ -1,0 +1,5 @@
+.sites-runtime
+.next
+node_modules
+static
+.env*
