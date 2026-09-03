@@ -55,8 +55,10 @@ export function resolvePlateAppearance(input: {
   const targetRow = Math.floor(input.targetCell / 5), targetColumn = input.targetCell % 5;
   const predictedDirection = direction === "high" ? targetRow <= 1 : direction === "low" ? targetRow >= 3 : direction === "in" ? targetColumn <= 1 : targetColumn >= 3;
   if (direction) {
-    const baitExecution = clamp(0.48 + input.pitcher.c / 150 + (breaking ? input.pitcher.m / 320 : 0));
-    const chaseChance = clamp((predictedDirection ? 0.64 : 0.13) + (64 - input.batter.e) / 260 + (breaking ? 0.07 : -0.03));
+    // With two strikes, an outside pitch becomes a little more effective; the
+    // bonus is deliberately modest so BALL is never the dominant choice.
+    const baitExecution = clamp(0.48 + input.pitcher.c / 150 + (breaking ? input.pitcher.m / 320 : 0) + (input.count.strikes >= 2 ? 0.035 : 0));
+    const chaseChance = clamp((predictedDirection ? 0.64 : 0.13) + (64 - input.batter.e) / 260 + (breaking ? 0.07 : -0.03) + (input.count.strikes >= 2 ? 0.035 : 0));
     if (random() < baitExecution) {
       if (random() < chaseChance) return { outcome: "swinging_strike", actualCell: input.pitchCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · ${direction === "high" ? "높은" : direction === "low" ? "낮은" : direction === "in" ? "몸쪽" : "바깥쪽"} 유인구에 타자가 속았습니다.` };
       return { outcome: "ball", actualCell: input.pitchCell, isBall: true, pitchName, speed, message: `${pitchName} ${speed}km/h · 유인구를 잘 골라냈습니다.` };
@@ -71,7 +73,10 @@ export function resolvePlateAppearance(input: {
   const actualCell = mistake ? mistakeIntoTarget(input.targetCell, input.swing, random) : input.pitchCell;
   const actualRow = Math.floor(actualCell / 5), actualColumn = actualCell % 5;
   const actualCenterDistance = Math.abs(actualRow - 2) + Math.abs(actualColumn - 2);
-  const accidentalBallRisk = clamp(Math.max(0, selectedCenterDistance - 1) * 0.02 + 0.003 - input.pitcher.c / 2000);
+  // A hitter's count forces the pitcher to come closer to the zone. Corners
+  // remain useful, but are a touch more likely to miss when behind in count.
+  const hittersCountRisk = input.count.balls >= 3 && selectedCenterDistance >= 2 ? 0.024 : 0;
+  const accidentalBallRisk = clamp(Math.max(0, selectedCenterDistance - 1) * 0.02 + 0.003 - input.pitcher.c / 2000 + hittersCountRisk);
   if (random() < accidentalBallRisk) {
     return { outcome: "ball", actualCell, isBall: true, pitchName, speed, message: `${pitchName} ${speed}km/h · 구석 승부가 빠져 볼이 됐습니다.` };
   }
@@ -98,12 +103,12 @@ export function resolvePlateAppearance(input: {
 
   const pitchDifficulty = input.pitcher.v / 560 + input.pitcher.c / 180 + input.pitcher.s / 410 + (breaking ? input.pitcher.m / 330 : 0);
   const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "spot" ? 0.04 : 0.06;
-  const contactChance = clamp(0.65 + input.batter.a / 135 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.06 : 0) + (nearTarget ? 0.04 : 0));
+  const contactChance = clamp(0.65 + input.batter.a / 135 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.06 : 0) + (nearTarget ? 0.04 : 0) + (input.count.strikes >= 2 ? 0.018 : 0));
   const contact = covered && random() < contactChance;
   if (!contact) {
-    const nearFoulChance = clamp(0.48 + input.batter.a / 430 + (input.swing === "contact" ? 0.10 : input.swing === "power" ? 0.065 : 0.04) - input.pitcher.s / 1050);
+    const nearFoulChance = clamp(0.48 + input.batter.a / 430 + (input.swing === "contact" ? 0.10 : input.swing === "power" ? 0.065 : 0.04) - input.pitcher.s / 1050 + (input.count.strikes >= 2 ? 0.10 : 0));
     if (nearTarget && random() < nearFoulChance) return { outcome: "foul", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 타겟 바로 옆 공을 파울로 걷어냈습니다.` };
-    const foulChance = clamp(0.16 + input.batter.a / 520 + (input.swing === "contact" ? 0.09 : 0) - input.pitcher.s / 900);
+    const foulChance = clamp(0.16 + input.batter.a / 520 + (input.swing === "contact" ? 0.09 : 0) - input.pitcher.s / 900 + (input.count.strikes >= 2 ? 0.065 : 0));
     if (covered && random() < foulChance) return { outcome: "foul", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 파울, 끈질기게 승부를 이어갑니다.` };
     return { outcome: "swinging_strike", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 헛스윙 스트라이크.` };
   }

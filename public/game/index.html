@@ -412,4 +412,32 @@ applyMatch=function(data){
   }
   return applyMatchBeforeRosterOrder(data);
 };
+</script><style id="pattern-history-v1">
+.zone button.pattern-memory{position:relative;overflow:visible}.zone button.pattern-memory:before{content:"";position:absolute;inset:18%;border:2px dashed rgba(25,87,150,var(--memory-opacity,.2));border-radius:50%;pointer-events:none}.zone button.pattern-memory.memory-pitch:before{border-radius:50%;border-style:solid;background:rgba(245,78,58,var(--memory-opacity,.2));border-color:rgba(200,52,38,var(--memory-opacity,.2))}.zone button.pattern-memory.memory-bat:before{border-radius:4px;transform:rotate(45deg);background:rgba(36,112,190,var(--memory-opacity,.2));border-color:rgba(25,87,150,var(--memory-opacity,.2))}.zone button.pattern-memory.memory-latest:before{inset:10%;border-width:3px;box-shadow:0 0 0 2px rgba(255,255,255,.75)}.patternHistoryHint{width:min(450px,100%);margin:6px auto 0;color:#58708a;font-size:11px;font-weight:800;text-align:center}.patternHistoryHint b{color:#173b62}@media(max-width:760px){.patternHistoryHint{width:min(70vw,31dvh,250px);font-size:8px;margin:2px auto 0}}
+</style><script id="pattern-history-v1">
+const applyMatchBeforePatternHistory=applyMatch;
+applyMatch=function(data){
+  if(data?.game?.history) state.playHistory=data.game.history;
+  return applyMatchBeforePatternHistory(data);
+};
+const renderBeforePatternHistory=render;
+render=()=>{
+  renderBeforePatternHistory();
+  if(!state.net||!Array.isArray(state.playHistory)||!matchSession)return;
+  const zone=$('zone');if(!zone)return;
+  const me=matchSession.player;
+  state.playHistory.slice(0,5).forEach((play,index)=>{
+    // Show the opposing decision: their pitch while I bat, their read while I pitch.
+    const opponentBatted=play.attacker!==me;
+    const cellIndex=opponentBatted?play.batCell:play.actualCell;
+    const cell=zone.querySelector(`[data-z="${cellIndex}"]`);if(!cell)return;
+    cell.classList.add('pattern-memory',opponentBatted?'memory-bat':'memory-pitch');
+    if(index===0)cell.classList.add('memory-latest');
+    cell.style.setProperty('--memory-opacity',index===0?'.88':'.20');
+    cell.title=`${index===0?'직전':'최근 '+(index+1)+'번째'} 상대 ${opponentBatted?'타격 노림':'투구 위치'}`;
+  });
+  let hint=document.getElementById('patternHistoryHint');
+  if(!hint){hint=document.createElement('p');hint.id='patternHistoryHint';hint.className='patternHistoryHint';zone.parentElement.after(hint)}
+  hint.innerHTML='<b>심리전 기록</b> · 진한 표식은 직전 선택, 옅은 표식은 최근 5개 패턴입니다.';
+};
 </script></body></html>

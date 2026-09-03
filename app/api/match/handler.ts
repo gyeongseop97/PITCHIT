@@ -7,6 +7,7 @@ type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: str
 type Batter = { n: string; t: string; p: number; a: number; e: number; v: number };
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
+type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
 type Game = {
   status: "waiting" | "playing" | "finished";
   inning: number;
@@ -23,6 +24,7 @@ type Game = {
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
   lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number } | null;
+  history: PlayMemory[];
   event: string;
 };
 type Room = { code: string; mode: "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -54,7 +56,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -66,24 +68,33 @@ const publicRoom = (room: Room) => ({
   attacker: actor(room.game),
 });
 
-function advance(game: Game, runs: number) {
+function advance(game: Game, runs: number, batterSpeed: number) {
   const side = game.half;
   const next: [number, number, number] = [0, 0, 0];
+  let extraAdvance = "";
   for (let i = 2; i >= 0; i--) if (game.bases[i]) {
     const destination = i + runs;
     if (destination >= 3) game.scores[side]++;
-    else next[destination as 0 | 1 | 2] = 1;
+    else next[destination as 0 | 1 | 2] = game.bases[i];
   }
   if (runs >= 4) game.scores[side]++;
-  else next[(runs - 1) as 0 | 1 | 2] = 1;
+  else next[(runs - 1) as 0 | 1 | 2] = batterSpeed;
+  // A fast runner can take an extra base on a single. This is automatic, so
+  // the batting choice remains focused on reading the pitch.
+  if (runs === 1 && next[2] && Math.random() < Math.min(0.26, Math.max(0.03, (next[2] - 36) / 175))) {
+    game.scores[side]++;
+    next[2] = 0;
+    extraAdvance = " · 주력으로 2루에서 홈까지 파고듭니다!";
+  }
   game.bases = next;
+  return extraAdvance;
 }
-function walk(game: Game) {
+function walk(game: Game, batterSpeed: number) {
   const side = game.half;
   if (game.bases[0] && game.bases[1] && game.bases[2]) game.scores[side]++;
-  if (game.bases[1]) game.bases[2] = 1;
-  if (game.bases[0]) game.bases[1] = 1;
-  game.bases[0] = 1;
+  if (game.bases[1]) game.bases[2] = game.bases[1];
+  if (game.bases[0]) game.bases[1] = game.bases[0];
+  game.bases[0] = batterSpeed;
 }
 function nextPitch(game: Game) {
   game.choices = {};
@@ -96,12 +107,22 @@ function endPlate(game: Game) {
   if (game.outs < 3) return;
   game.outs = 0;
   game.bases = [0, 0, 0];
-  if (game.half === 0) game.half = 1;
-  else if (game.inning >= 3) {
+  if (game.half === 0) {
+    game.half = 1;
+    if (game.inning >= 4) game.bases = [0, 55, 0];
+    return;
+  }
+  if (game.inning < 3) { game.half = 0; game.inning++; return; }
+  if (game.scores[0] !== game.scores[1]) {
     game.status = "finished";
     game.deadline = 0;
-    game.event = game.scores[0] === game.scores[1] ? "3이닝 종료 · 무승부" : `3이닝 종료 · ${game.scores[0] > game.scores[1] ? "p1" : "p2"} 승리`;
-  } else { game.half = 0; game.inning++; }
+    game.event = `${game.inning}이닝 종료 · ${game.scores[0] > game.scores[1] ? "p1" : "p2"} 승리`;
+    return;
+  }
+  game.inning++;
+  game.half = 0;
+  game.bases = [0, 55, 0];
+  game.event = `${game.inning - 1}이닝 종료 · 승부치기! 무사 2루에서 시작합니다.`;
 }
 function resolve(room: Room) {
   const game = room.game;
@@ -122,21 +143,33 @@ function resolve(room: Room) {
     count: { balls: game.balls, strikes: game.strikes },
   });
   game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell };
+  game.history = [{ batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
   game.event = plate.message;
   if (plate.outcome === "ball") {
     game.balls++;
-    if (game.balls >= 4) { game.walks[game.half]++; walk(game); game.event = `${plate.message} · 볼넷`; endPlate(game); }
+    if (game.balls >= 4) { game.walks[game.half]++; walk(game, batter.v); game.event = `${plate.message} · 볼넷`; endPlate(game); }
   } else if (plate.outcome === "foul") {
     game.strikes = Math.min(2, game.strikes + 1);
   } else if (plate.outcome === "swinging_strike") {
     game.strikes++;
     if (game.strikes >= 3) { game.outs++; game.event = `${plate.message} · 삼진 아웃`; endPlate(game); }
   } else if (plate.outcome === "groundout" || plate.outcome === "flyout") {
+    let tagUp = "";
+    if (plate.outcome === "flyout" && game.outs < 2 && game.bases[2]) {
+      const runnerSpeed = game.bases[2];
+      const tagUpChance = Math.min(0.42, Math.max(0.10, 0.12 + (runnerSpeed - 40) / 145));
+      if (Math.random() < tagUpChance) {
+        game.bases[2] = 0;
+        game.scores[game.half]++;
+        tagUp = " · 3루 주자가 태그업 득점!";
+      }
+    }
     game.outs++;
+    game.event = `${plate.message}${tagUp}`;
     endPlate(game);
   } else {
     const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
-    game.hits[game.half]++; advance(game, bases); endPlate(game);
+    game.hits[game.half]++; const extraAdvance = advance(game, bases, batter.v); game.event = `${plate.message}${extraAdvance}`; endPlate(game);
   }
   if (game.status === "playing") nextPitch(game);
 }
