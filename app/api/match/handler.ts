@@ -1,9 +1,9 @@
 import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
-import { resolvePlateAppearance, type PitchType, type SwingType } from "../../../lib/game-engine";
+import { resolvePlateAppearance, type BallDirection, type PitchType, type SwingType } from "../../../lib/game-engine";
 
 type PlayerId = "p1" | "p2";
-type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
+type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string; ball?: BallDirection };
 type Batter = { n: string; t: string; p: number; a: number; e: number; v: number };
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
@@ -35,6 +35,13 @@ const ttl = 60 * 60 * 6;
 const key = (code: string) => `pitchit:room:${code}`;
 const quickQueueKey = "pitchit:quick:queue";
 const quickQueueLockKey = "pitchit:quick:queue:lock";
+const strikeCells = [6, 7, 8, 11, 12, 13, 16, 17, 18];
+const zoneIndex = (legacyCell: number) => {
+  const row = Math.floor(legacyCell / 5) - 1;
+  const column = legacyCell % 5 - 1;
+  return Math.max(0, Math.min(2, row)) * 3 + Math.max(0, Math.min(2, column));
+};
+const legacyCell = (index: number) => (Math.floor(index / 3) + 1) * 5 + (index % 3 + 1);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
 const batterTypes = [
@@ -106,15 +113,16 @@ function resolve(room: Room) {
   const game = room.game;
   if (game.status !== "playing") return;
   const battingPlayer = actor(game);
-  const batting = game.choices[battingPlayer] ?? { kind: "bat" as const, cell: Math.floor(Math.random() * 25), swing: "contact" };
-  const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: Math.floor(Math.random() * 25), pitch: "fast" };
+  const batting = game.choices[battingPlayer] ?? { kind: "bat" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: "contact" };
+  const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
   const pitcher = game.teams[defender(game)].pitchers[game.teams[defender(game)].activePitcher];
   const batter = game.teams[battingPlayer].lineup[game.batter[game.half]];
   const plate = resolvePlateAppearance({
     batter,
     pitcher,
     targetCell: batting.cell,
-    pitchCell: pitching.cell,
+    pitchCell: zoneIndex(pitching.cell),
+    ballDirection: pitching.ball,
     swing: (batting.swing ?? "contact") as SwingType,
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
@@ -178,7 +186,7 @@ export default async function handler(req: any, res: any) {
         const waitingCode = await redis.get<string>(quickQueueKey);
         if (waitingCode) {
           const waitingRoom = await load(waitingCode);
-          if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting" && waitingRoom.players.p1?.name !== input.name) {
+          if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting") {
             const joining = { token: token(), name: input.name || "플레이어 2" };
             startRoom(waitingRoom, joining);
             await save(waitingRoom);
