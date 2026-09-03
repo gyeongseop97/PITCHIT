@@ -540,4 +540,27 @@ pitch=()=>{
   state.pitchBallDirection=null;
   return value;
 };
+</script><script id="shared-engine-solo-v1">
+// Single play now creates a private server room with an AI opponent. This
+// keeps every probability and rule in the same resolvePlateAppearance flow.
+const applyMatchBeforeSharedSoloMode=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeSharedSoloMode(data);
+  if(matchSession?.mode==='solo'){state.mode='solo';state.net=true;render();}
+  return value;
+};
+const startBeforeSharedSoloEngine=start;
+start=async mode=>{
+  if(mode!=='solo')return startBeforeSharedSoloEngine(mode);
+  startBeforeSharedSoloEngine(mode);
+  const action=$('swing');action.disabled=true;action.classList.add('waiting');action.textContent='AI 경기 준비 중…';
+  try{
+    const data=await requestMatch({action:'solo'});
+    matchSession={code:data.code,token:data.token,player:data.player,mode:'solo'};
+    applyMatch(data);
+    watchMatch();
+  }catch(error){
+    state.net=false;action.disabled=false;action.classList.remove('waiting');$('result').textContent=error.message||'AI 경기를 시작하지 못했습니다. 다시 시도해 주세요.';render();
+  }
+};
 </script></body></html>

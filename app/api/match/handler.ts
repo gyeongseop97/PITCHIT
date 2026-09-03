@@ -27,7 +27,7 @@ type Game = {
   history: PlayMemory[];
   event: string;
 };
-type Room = { code: string; mode: "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
+type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -62,6 +62,7 @@ const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
 const publicRoom = (room: Room) => ({
   code: room.code,
+  mode: room.mode,
   ready: room.game.status === "playing",
   players: { p1: room.players.p1?.name ?? null, p2: room.players.p2?.name ?? null },
   game: { ...room.game, choices: {} },
@@ -173,6 +174,19 @@ function resolve(room: Room) {
   }
   if (game.status === "playing") nextPitch(game);
 }
+function aiChoice(game: Game, player: PlayerId): Choice {
+  if (player === actor(game)) {
+    const swings: SwingType[] = ["contact", "power", "spot"];
+    return { kind: "bat", cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: swings[Math.floor(Math.random() * swings.length)] };
+  }
+  const balls: BallDirection[] = ["high", "low", "in", "out"];
+  return {
+    kind: "pitch",
+    cell: strikeCells[Math.floor(Math.random() * strikeCells.length)],
+    pitch: Math.random() < 0.45 ? "breaking" : "fast",
+    ...(Math.random() < 0.18 ? { ball: balls[Math.floor(Math.random() * balls.length)] } : {}),
+  };
+}
 async function readBody(req: any) {
   return typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body ?? {});
 }
@@ -206,6 +220,14 @@ export default async function handler(req: any, res: any) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") return res.status(204).end();
     const input = req.method === "GET" ? req.query : await readBody(req);
+    if (input.action === "solo") {
+      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어" }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
+      room.game.status = "playing";
+      room.game.event = "PITCHIT AI와 경기 시작! 20초 안에 작전을 선택하세요.";
+      nextPitch(room.game);
+      await save(room);
+      return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token });
+    }
     if (input.action === "quick") {
       const queueLock = await acquire(quickQueueLockKey);
       if (!queueLock) return res.status(409).json({ error: "매칭 대기열을 확인 중입니다. 다시 눌러 주세요." });
@@ -255,6 +277,7 @@ export default async function handler(req: any, res: any) {
       const expected = player === actor(room.game) ? "bat" : "pitch";
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
       room.game.choices[player] = input.choice;
+      if (room.mode === "solo") room.game.choices.p2 = aiChoice(room.game, "p2");
       if (room.game.choices.p1 && room.game.choices.p2) resolve(room);
     }
     await save(room);
