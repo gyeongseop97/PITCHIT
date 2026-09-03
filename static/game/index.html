@@ -590,4 +590,55 @@ render=()=>{
   tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
   let limit=document.getElementById('baitLimit');if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.append(limit)}limit.textContent=`사용 가능 ${remaining} / 10`;
 };
+</script><style id="tutorial-mode-v1">
+.tutorial{background:#f3bf3e;color:#102846;box-shadow:0 7px 0 #a77b12}.tutorialCoach{width:min(520px,100%);margin:8px auto;padding:12px 14px;border:2px solid #102846;background:#fffdf4;color:#183b62;box-shadow:0 4px 0 #d3b15b}.tutorialCoach b{color:#e33b31}.tutorialCoach small{display:block;margin-bottom:4px;color:#7a6531;font-weight:900;letter-spacing:.08em}.tutorialCoach p{margin:4px 0 0;font-size:13px;line-height:1.5}.zone button.tutorial-target{box-shadow:inset 0 0 0 3px #f0b728,0 0 0 2px #fff!important;animation:tutorialPulse 1s ease-in-out infinite}.zone button.tutorial-target:after{content:"여기";position:absolute;z-index:14;left:50%;top:-23px;transform:translateX(-50%);padding:2px 5px;border-radius:3px;background:#102846;color:#fff;font-size:10px;font-weight:900;white-space:nowrap}@keyframes tutorialPulse{50%{filter:brightness(1.13)}}.tutorialDone{position:fixed;z-index:90;inset:0;display:grid;place-items:center;padding:18px;background:#071a2bd9}.tutorialDone article{width:min(520px,100%);padding:26px;background:#fff;color:#102846;border:3px solid #f0b728;text-align:center;box-shadow:0 22px 64px #0009}.tutorialDone h2{margin:5px 0 12px;font-size:32px}.tutorialDone p{line-height:1.6;color:#405b76}.tutorialDone ul{margin:14px 0;padding:12px 20px;text-align:left;background:#f6f9fc;line-height:1.7;font-size:13px}.tutorialDone button{width:100%;padding:13px;border:0;background:#e33b31;color:#fff;font-weight:900;cursor:pointer}@media(max-width:760px){.tutorialCoach{width:min(74vw,34dvh,280px);padding:7px 9px;margin:3px auto}.tutorialCoach p{font-size:10px}.tutorialCoach small{font-size:8px}.zone button.tutorial-target:after{top:-16px;font-size:7px}.tutorialDone article{padding:19px}.tutorialDone h2{font-size:26px}.tutorialDone p,.tutorialDone ul{font-size:12px}}
+</style><script id="tutorial-mode-v1">
+const tutorialSteps=[
+  {side:'top',type:'contact',cell:12,title:'1. 정확한 타겟',text:'컨택 스윙과 중앙 칸을 선택하세요. 타겟을 정확히 읽으면 가장 안정적으로 타구를 만들 수 있습니다.',result:'정확 타겟 · 안타! 1루에 주자가 나갑니다.',apply(){state.r=0;state.hits=1;state.bases=[1,0,0];state.b=0;state.s=0;state.o=0;state.ball=12}},
+  {side:'top',type:'contact',cell:12,title:'2. 유인구를 거르기',text:'같은 중앙을 읽으세요. 상대의 높은 유인구는 노린 방향이 아니므로 볼입니다. 볼에는 스윙 판정이 없습니다.',result:'상단 유인구 · 볼. 타자는 스윙하지 않습니다.',bait:'high',apply(){state.b=1;state.ball=null;state.tutorialBait='high'}},
+  {side:'top',type:'power',cell:7,title:'3. 파워 스윙',text:'파워 스윙으로 표시된 칸을 선택하세요. 정확히 맞히면 컨택보다 장타 기대값이 높습니다.',result:'정확 타겟 · 외야를 가르는 2루타! 1루 주자가 홈을 밟습니다.',apply(){state.r=1;state.hits=2;state.bases=[0,1,0];state.b=0;state.s=0;state.ball=7}},
+  {side:'top',type:'spot',cell:4,title:'4. 스팟 스윙의 위험',text:'스팟 스윙은 한 칸만 공략합니다. 보상은 크지만 빗나가면 위험합니다.',result:'스팟 타겟을 살짝 벗어남 · 헛스윙 스트라이크.',apply(){state.s=1;state.ball=3}},
+  {side:'top',type:'contact',cell:12,title:'5. 범타도 존재합니다',text:'타격 범위 안에 들어와도 안타가 보장되지는 않습니다. 이번에는 땅볼 아웃입니다.',result:'컨택 성공 · 땅볼 아웃. 1아웃.',apply(){state.o=1;state.b=0;state.s=0;state.ball=12}},
+  {side:'top',type:'contact',cell:12,title:'6. 파울로 버티기',text:'타겟 주변 공은 헛스윙보다 파울이 늘어납니다. 정확도 높은 타자의 장점입니다.',result:'타겟 주변 · 파울. 2스트라이크에서도 타석은 계속됩니다.',apply(){state.s=2;state.ball=13}},
+  {side:'top',type:'contact',cell:12,title:'7. 공수 교대',text:'마지막 타구는 뜬공 아웃입니다. 3아웃이 되면 이제 당신이 투수입니다.',result:'뜬공 아웃 · 3아웃! 1회말, 수비로 전환합니다.',apply(){state.o=0;state.b=0;state.s=0;state.bases=[0,0,0];state.half='bottom';state.ball=12}},
+  {side:'bottom',type:'fast',cell:12,title:'8. 중앙 직구 승부',text:'패스트볼과 중앙 칸을 선택하세요. 맞을 위험은 있지만 구속으로 타이밍을 빼앗을 수 있습니다.',result:'패스트볼 · 땅볼 아웃. 1아웃.',apply(){state.o=1;state.ball=12}},
+  {side:'bottom',type:'breaking',cell:12,bait:'high',title:'9. 유인구 성공',text:'변화구를 고르고 스트라이크존 위의 상단 유인 버튼을 선택하세요. 상대가 상단을 노리면 헛스윙을 유도합니다.',result:'상단 변화구 유인 · 상대가 속아 헛스윙 스트라이크!',apply(){state.s=1;state.tutorialBait='high';state.ball=null}},
+  {side:'bottom',type:'fast',cell:0,title:'10. 제구 이탈 볼',text:'구석으로 승부합니다. 제구가 흔들린 공은 실제 위치가 벗어나며, 상대가 무엇을 노렸든 무조건 볼입니다.',result:'제구 이탈 · 볼. 타격 판정 없이 볼 카운트만 올라갑니다.',apply(){state.b=1;state.s=0;state.ball=1}},
+  {side:'bottom',type:'breaking',cell:20,title:'11. 실투',text:'이번에는 변화구를 구석에 던집니다. 실투는 상대가 노린 곳 근처로 들어가 안타 위험이 크게 높아집니다.',result:'실투 · 상대가 노린 코스에 들어가 안타를 맞았습니다.',apply(){state.away=1;state.awayHits=1;state.bases=[1,0,0];state.b=0;state.s=0;state.ball=18}},
+  {side:'bottom',type:'fast',cell:14,title:'12. 태그업',text:'3루 주자가 있는 상황입니다. 외야 뜬공 아웃이어도 주력에 따라 태그업 득점이 나올 수 있습니다.',result:'뜬공 아웃 · 3루 주자가 태그업으로 홈인!',apply(){state.away=2;state.o=2;state.bases=[0,0,0];state.ball=14}},
+  {side:'bottom',type:'fast',cell:2,title:'13. 튜토리얼 완료',text:'마지막으로 높은 직구를 선택하세요. 삼진으로 3아웃, 1이닝 튜토리얼을 마칩니다.',result:'삼진 아웃 · 3아웃! 모든 핵심 메커니즘을 경험했습니다.',apply(){state.o=0;state.b=0;state.s=0;state.ball=2;state.tutorialDone=true}}
+];
+let tutorialIndex=0;
+function tutorialStart(){
+  clearInterval(matchPoll);matchSession=null;state.net=false;state.finished=false;state.mode='tutorial';state.inning=1;state.half='top';state.r=0;state.away=0;state.hits=0;state.awayHits=0;state.walks=0;state.awayWalks=0;state.bases=[0,0,0];state.b=0;state.s=0;state.o=0;state.tutorialDone=false;tutorialIndex=0;state.tutorialReady={type:false,cell:false,ball:false};state.tutorialBait=null;document.getElementById('tutorialDone')?.remove();render();
+}
+function completeTutorial(){
+  let overlay=document.getElementById('tutorialDone');if(!overlay){overlay=document.createElement('div');overlay.id='tutorialDone';overlay.className='tutorialDone';document.body.append(overlay)}
+  overlay.innerHTML='<article><small>1이닝 튜토리얼 완료</small><h2>이제 읽고, 속이세요.</h2><p>정해진 장면을 통해 결과가 만들어지는 순서를 모두 경험했습니다.</p><ul><li>정확 타겟과 스윙 범위</li><li>유인구와 강제 볼</li><li>파울·실투·제구 이탈</li><li>주루·태그업·공수 교대</li></ul><button type="button" id="tutorialHome">실전 경기로 가기</button></article>';
+  overlay.querySelector('#tutorialHome').onclick=()=>{overlay.remove();state.mode='';history.pushState({},'',location.pathname);render()};
+}
+function runTutorialStep(){
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  const ready=state.tutorialReady||{};if(!ready.type||!ready.cell||(step.bait&&!ready.ball)){state.tutorialHint='표시된 작전을 모두 선택한 뒤 진행하세요.';render();return}
+  state.tutorialBait=null;step.apply();state.tutorialResult=step.result;state.tutorialHint='';tutorialIndex++;state.tutorialReady={type:false,cell:false,ball:false};
+  if(state.tutorialDone){render();completeTutorial()}else render();
+}
+const tutorialButton=document.createElement('button');tutorialButton.type='button';tutorialButton.className='mode tutorial';tutorialButton.dataset.mode='tutorial';tutorialButton.innerHTML='튜토리얼<small>1이닝으로 핵심 규칙 익히기</small>';document.querySelector('.modes').append(tutorialButton);tutorialButton.onclick=tutorialStart;
+const startBeforeTutorialMode=start;
+start=mode=>mode==='tutorial'?tutorialStart():startBeforeTutorialMode(mode);
+const renderBeforeTutorialMode=render;
+render=()=>{
+  renderBeforeTutorialMode();if(state.mode!=='tutorial')return;
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  $('modeTitle').textContent=`튜토리얼 · 1회${step.side==='top'?'초 공격':'말 수비'}`;
+  const coach=document.getElementById('tutorialCoach')||document.createElement('section');coach.id='tutorialCoach';coach.className='tutorialCoach';document.querySelector('.zoneWrap').before(coach);
+  coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length}</small><b>${step.title}</b><p>${state.tutorialResult?`<b>결과:</b> ${state.tutorialResult}<br>`:''}${state.tutorialHint?`<b>${state.tutorialHint}</b><br>`:''}${step.text}</p>`;
+  const isBat=step.side==='top',wantedType=step.type;
+  $('types').innerHTML=isBat?swings.map(([value,label])=>`<button data-tutorial-type="${value}" class="${state.swing===value?'on':''}">${label}</button>`).join(''):`<button data-tutorial-type="fast" class="${state.pitchType==='fast'?'on':''}">패스트볼</button><button data-tutorial-type="breaking" class="${state.pitchType==='breaking'?'on':''}">변화구</button>`;
+  document.querySelectorAll('[data-tutorial-type]').forEach(button=>button.onclick=()=>{const value=button.dataset.tutorialType;if(value!==wantedType){state.tutorialHint=`이번 장면은 ${wantedType==='contact'?'컨택 스윙':wantedType==='power'?'파워 스윙':wantedType==='spot'?'스팟 스윙':wantedType==='fast'?'패스트볼':'변화구'}을 선택해 보세요.`;render();return}if(isBat)state.swing=value;else state.pitchType=value;state.tutorialReady.type=true;state.tutorialHint='';render()});
+  const zone=$('zone');zone.querySelectorAll('[data-z]').forEach(button=>{const cell=+button.dataset.z;button.classList.toggle('tutorial-target',cell===step.cell);button.onclick=()=>{if(cell!==step.cell){state.tutorialHint='노란 테두리로 표시된 칸을 선택해 보세요.';render();return}state.pick=cell;state.tutorialReady.cell=true;state.tutorialHint='';render()}});
+  let tactics=document.getElementById('ballDirections');if(step.bait){if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}document.querySelector('.zoneWrap').append(tactics);tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-tutorial-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');tactics.querySelectorAll('[data-tutorial-ball]').forEach(button=>button.onclick=()=>{if(button.dataset.tutorialBall!==step.bait){state.tutorialHint='이번 장면의 안내 방향을 선택해 보세요.';render();return}state.pitchBallDirection=step.bait;state.tutorialReady.ball=true;state.tutorialHint='';render()})}else tactics?.remove();
+  document.getElementById('outsidePitchBall')?.remove();if(state.tutorialBait){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${state.tutorialBait}`;document.querySelector('.zoneWrap').append(ball)}
+  const action=$('swing'),ready=state.tutorialReady||{};action.disabled=!(ready.type&&ready.cell&&(!step.bait||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'작전을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
+};
 </script></body></html>
