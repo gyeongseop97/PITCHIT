@@ -275,4 +275,42 @@ render=()=>{
   let readout=document.getElementById('opponentReadout');
   if(readout&&state.opponentLastCell!==null&&state.opponentLastCell!==undefined&&(state.net||state.half==='bottom')){const row=Math.floor(state.opponentLastCell/5)+1,col=state.opponentLastCell%5+1;readout.textContent=`${state.opponentLastLabel||'상대 직전 타격 노림'} · ${row}행 ${col}열`;readout.style.display='block';const cell=$('zone').querySelector(`[data-z="${state.opponentLastCell}"]`);if(cell){cell.classList.add('opponent-last');cell.dataset.opponent=state.opponentLastIcon||'◎';}}
 };
+</script><style id="stadium-immersion-v1">
+.stadiumStats{display:flex;align-items:center;justify-content:flex-end;gap:9px;grid-column:1/-1;padding-top:9px;margin-top:3px;border-top:1px solid #ffffff33;font-size:11px;font-weight:900;letter-spacing:.05em}.stadiumStats span{white-space:nowrap}.stadiumStats b{color:#f7c74d;font-size:16px;margin-left:3px}.pitchReadout{margin:4px auto 9px;width:min(450px,100%);padding:8px 12px;border:1px solid #d8e1ec;background:#f8fbff;color:#17385e;text-align:center;font-size:13px;font-weight:900}.atBatCall{margin:0 auto 7px;width:min(450px,100%);color:#526b84;text-align:center;font-size:13px;font-weight:800}.atBatCall b{color:#e33b31}@media(max-width:760px){.stadiumStats{grid-column:1/-1;justify-content:center;gap:6px;font-size:9px;padding-top:5px}.stadiumStats b{font-size:13px}.pitchReadout{width:min(70vw,31dvh,250px);padding:4px 6px;margin:2px auto 4px;font-size:10px}.atBatCall{width:min(70vw,31dvh,250px);margin-bottom:3px;font-size:10px}}
+</style><script id="stadium-immersion-v1">
+const applyMatchBeforeStadium=applyMatch;
+applyMatch=function(data){
+  applyMatchBeforeStadium(data);
+  const game=data.game,me=matchSession?.player,side=me==='p1'?0:1;
+  state.hits=(game.hits||[0,0])[side];state.awayHits=(game.hits||[0,0])[side?0:1];
+  state.walks=(game.walks||[0,0])[side];state.awayWalks=(game.walks||[0,0])[side?0:1];
+  if(game.lastPlay){state.lastPitchInfo=`${game.lastPlay.pitchName||'패스트볼'} · ${game.lastPlay.speed||'-'} km/h`;state.serverEvent=stadiumMessage(game.event,state.lastPitchInfo);state.netOutcome=state.serverEvent;}
+  render();
+};
+const stadiumMessage=(event,pitch)=>{
+  const headline=event.includes('홈런')?'완벽한 타이밍! 담장을 넘겼습니다.':event.includes('루타')?'강한 타구가 외야를 가릅니다.':event.includes('안타')?'노린 코스를 정확히 공략했습니다.':event.includes('볼넷')?'침착하게 공을 골라 출루합니다.':event.includes('삼진')?'결정구에 타이밍을 빼앗겼습니다.':event.includes('땅볼')?'낮게 깔린 타구, 땅볼 아웃.':event.includes('뜬공')?'높이 뜬 타구, 뜬공 아웃.':event.includes('파울')?'끈질긴 파울로 승부를 이어갑니다.':event.includes('볼')?'유인구를 지켜봤습니다.':'노린 범위를 벗어난 공입니다.';
+  return `${pitch||''} · ${event} — ${headline}`;
+};
+const startBeforeStadium=start;
+start=mode=>{state.hits=0;state.awayHits=0;state.walks=0;state.awayWalks=0;state.lastPitchInfo='';startBeforeStadium(mode)};
+const setResultBeforeStadium=setResult;
+setResult=(text,kind)=>{
+  if(!state.net){
+    const opponent=text.includes('상대');
+    if(text.includes('볼넷')){if(opponent)state.awayWalks=(state.awayWalks||0)+1;else state.walks=(state.walks||0)+1;}
+    if(/안타|루타|홈런/.test(text)){if(opponent)state.awayHits=(state.awayHits||0)+1;else state.hits=(state.hits||0)+1;}
+    const staff=opponent?state.pitchers:(state.awayPitchers||state.pitchers);const index=opponent?state.activePitcher:(state.awayActivePitcher??state.activePitcher);const p=staff?.[index];const breaking=state.pitchType==='breaking';
+    const type=breaking?'변화구':'패스트볼';const speed=Math.round((breaking?102+(p?.m||50)*.22:127+(p?.v||50)*.25)+Math.random()*4);state.lastPitchInfo=`${type} · ${speed} km/h`;
+    text=stadiumMessage(text,state.lastPitchInfo);
+  }
+  setResultBeforeStadium(text,kind);
+};
+const renderBeforeStadium=render;
+render=()=>{
+  renderBeforeStadium();if(!state.mode)return;
+  const score=document.querySelector('.score');let stats=document.getElementById('stadiumStats');if(!stats){stats=document.createElement('div');stats.id='stadiumStats';stats.className='stadiumStats';score.append(stats)}
+  stats.innerHTML=`<span>MY <b>${state.r}</b></span><span>H <b>${state.hits||0}</b></span><span>BB <b>${state.walks||0}</b></span><span>│</span><span>AI <b>${state.away}</b></span><span>H <b>${state.awayHits||0}</b></span><span>BB <b>${state.awayWalks||0}</b></span>`;
+  let call=document.getElementById('atBatCall');if(!call){call=document.createElement('p');call.id='atBatCall';call.className='atBatCall';document.querySelector('.zoneWrap').before(call)}const hitter=state.half==='top'?state.batter:state.awayBatter||state.batter;call.innerHTML=`<b>${hitter?.n||'현재 타자'} ${hitter?.t||''}</b> · ${state.o}아웃 ${state.bases?.some(Boolean)?'주자 있음':'주자 없음'}`;
+  let pitchInfo=document.getElementById('pitchReadout');if(!pitchInfo){pitchInfo=document.createElement('div');pitchInfo.id='pitchReadout';pitchInfo.className='pitchReadout';document.querySelector('.zoneWrap').after(pitchInfo)}pitchInfo.textContent=state.lastPitchInfo?`방금 공 · ${state.lastPitchInfo}`:'투구 결과 후 구속과 구종이 표시됩니다.';
+};
 </script></body></html>

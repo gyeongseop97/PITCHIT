@@ -11,6 +11,8 @@ type Game = {
   inning: number;
   half: 0 | 1;
   scores: [number, number];
+  hits: [number, number];
+  walks: [number, number];
   balls: number;
   strikes: number;
   outs: number;
@@ -19,7 +21,7 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId } | null;
+  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number } | null;
   event: string;
 };
 type Room = { code: string; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -47,7 +49,7 @@ const makeTeam = (): Team => {
   return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
 };
 const freshGame = (): Game => ({
-  status: "waiting", inning: 1, half: 0, scores: [0, 0], balls: 0, strikes: 0, outs: 0,
+  status: "waiting", inning: 1, half: 0, scores: [0, 0], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
   bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
@@ -103,13 +105,17 @@ function resolve(room: Room) {
   const battingPlayer = actor(game);
   const batting = game.choices[battingPlayer] ?? { kind: "bat" as const, cell: Math.floor(Math.random() * 25), swing: "contact" };
   const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: Math.floor(Math.random() * 25), pitch: "fast" };
-  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer };
+  const pitcher = game.teams[defender(game)].pitchers[game.teams[defender(game)].activePitcher];
+  const isBreaking = pitching.pitch === "breaking";
+  const speed = Math.round((isBreaking ? 102 + pitcher.m * 0.22 : 127 + pitcher.v * 0.25) + Math.random() * 4);
+  const pitchName = isBreaking ? "변화구" : "패스트볼";
+  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName, speed };
   const distance = Math.abs(Math.floor(batting.cell / 5) - Math.floor(pitching.cell / 5)) + Math.abs((batting.cell % 5) - (pitching.cell % 5));
   const roll = Math.random();
   if (roll < 0.07) {
     game.balls++;
     game.event = game.balls >= 4 ? "볼넷" : "볼";
-    if (game.balls >= 4) { walk(game); endPlate(game); }
+    if (game.balls >= 4) { game.walks[game.half]++; walk(game); endPlate(game); }
   } else if (distance > 2 || roll < 0.25) {
     game.strikes++;
     game.event = game.strikes >= 3 ? "삼진 아웃" : "스트라이크";
@@ -119,11 +125,11 @@ function resolve(room: Room) {
     game.event = roll < 0.34 ? "땅볼 아웃" : "뜬공 아웃";
     endPlate(game);
   } else if (roll < 0.48) {
-    advance(game, 4); game.event = "홈런!"; endPlate(game);
+    game.hits[game.half]++; advance(game, 4); game.event = "홈런!"; endPlate(game);
   } else if (roll < 0.57) {
-    advance(game, 2); game.event = "2루타!"; endPlate(game);
+    game.hits[game.half]++; advance(game, 2); game.event = "2루타!"; endPlate(game);
   } else {
-    advance(game, 1); game.event = "안타!"; endPlate(game);
+    game.hits[game.half]++; advance(game, 1); game.event = "안타!"; endPlate(game);
   }
   if (game.status === "playing") nextPitch(game);
 }
