@@ -5,6 +5,7 @@ import { resolvePlateAppearance, type BallDirection, type BatterRatings, type Pi
 // use bait pitches mostly in strikeout counts.  This is intentionally not a
 // random-at-bat test: it approximates two players trying to read one another.
 const GAMES = Number(process.env.GAMES ?? 20_000);
+const STRATEGY = process.env.STRATEGY === "random" ? "random" : "adaptive";
 const CELLS = Array.from({ length: 25 }, (_, index) => index);
 const directions: BallDirection[] = ["high", "low", "in", "out"];
 const batterTypes: Array<{ t: string } & BatterRatings> = [
@@ -39,6 +40,7 @@ const directionFor = (target: number): BallDirection => {
   return col <= 2 ? "in" : "out";
 };
 function battingPlan(team: Team, memory: Memory, strikes: number): { cell: number; swing: SwingType } {
+  if (STRATEGY === "random") return { cell: choose(CELLS), swing: choose(["contact", "power", "spot"] as SwingType[]) };
   const batter = team.lineup[team.batter];
   const read = weightedRead(memory.pitch);
   // 62% pattern read, 23% near-pattern adjustment, 15% intentional feint.
@@ -50,6 +52,10 @@ function battingPlan(team: Team, memory: Memory, strikes: number): { cell: numbe
   return { cell, swing };
 }
 function pitchingPlan(team: Team, memory: Memory, balls: number, strikes: number, baitRemaining: number): { cell: number; pitch: PitchType; ball?: BallDirection } {
+  if (STRATEGY === "random") {
+    const ball = baitRemaining > 0 && Math.random() < .18 ? choose(directions) : undefined;
+    return { cell: choose(CELLS), pitch: Math.random() < .45 ? "breaking" : "fast", ball };
+  }
   const pitcher = team.pitchers[team.active];
   const expected = weightedRead(memory.bat);
   const counter = CELLS.filter(cell => distance(cell, expected) >= 3);
@@ -126,5 +132,5 @@ const stat = (name: string, line: Line) => ({
   실투: line.mistakes, 제구이탈볼: line.wild, 유인구: line.bait, 유인구헛스윙: line.baitChase, 유인성공률: line.bait ? +(line.baitChase / line.bait).toFixed(3) : 0,
   방어율: +(line.runsAllowed * 27 / line.outsPitched).toFixed(2), 투구수: line.pitches,
 });
-console.log(`전략적 1대1 시뮬레이션 ${GAMES.toLocaleString()}경기 · 평균 ${+(innings / (GAMES * 2)).toFixed(2)}이닝/팀 · 연장전 ${extras.toLocaleString()}회`);
+console.log(`${STRATEGY === "random" ? "완전 무작위" : "전략적"} 1대1 시뮬레이션 ${GAMES.toLocaleString()}경기 · 평균 ${+(innings / (GAMES * 2)).toFixed(2)}이닝/팀 · 연장전 ${extras.toLocaleString()}회`);
 console.table([stat("플레이어 A", a), stat("플레이어 B", b), stat("양 팀 합산/2", Object.fromEntries(Object.keys(a).map(key => [key, (a as any)[key] + (b as any)[key]])) as Line)]);
