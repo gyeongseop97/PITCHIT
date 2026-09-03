@@ -8,6 +8,7 @@ type Batter = { n: string; t: string; p: number; a: number; e: number; v: number
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
+type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; execution?: "command" | "bait" | "mistake" | "wild" };
 type Game = {
   status: "waiting" | "playing" | "finished";
   inning: number;
@@ -26,6 +27,7 @@ type Game = {
   choices: Partial<Record<PlayerId, Choice>>;
   lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; execution?: "command" | "bait" | "mistake" | "wild" } | null;
   history: PlayMemory[];
+  playLog: PlayLog[];
   event: string;
 };
 type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -57,7 +59,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -179,7 +181,35 @@ function resolve(room: Room) {
     const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
     game.hits[game.half]++; const extraAdvance = advance(game, bases, batter.v); game.event = `${plate.message}${extraAdvance}`; endPlate(game);
   }
+  game.playLog = [{
+    inning: game.inning,
+    half: game.half,
+    batCell: batting.cell,
+    pitchCell: pitching.cell,
+    actualCell: plate.actualCell,
+    attacker: battingPlayer,
+    swing: batting.swing ?? "contact",
+    pitch: pitching.ball ? `유인구 ${pitching.ball}` : (pitching.pitch ?? "fast"),
+    pitchName: plate.pitchName,
+    speed: plate.speed,
+    outcome: plate.outcome,
+    event: game.event,
+    execution: plate.execution,
+  }, ...(game.playLog ?? [])].slice(0, 120);
+  trackBalance(plate.outcome, batting.swing ?? "contact", pitching.ball ? "bait" : (pitching.pitch ?? "fast"));
   if (game.status === "playing") nextPitch(game);
+}
+
+const balanceKey = "pitchit:balance:v1";
+function trackBalance(outcome: string, swing: string, pitch: string) {
+  // Aggregate only anonymous game events. These counters are used to check
+  // live balance trends without storing player names, rooms, or choices.
+  void Promise.all([
+    redis.hincrby(balanceKey, "plateAppearances", 1),
+    redis.hincrby(balanceKey, `outcome:${outcome}`, 1),
+    redis.hincrby(balanceKey, `swing:${swing}`, 1),
+    redis.hincrby(balanceKey, `pitch:${pitch}`, 1),
+  ]).catch(() => undefined);
 }
 function aiChoice(game: Game, player: PlayerId): Choice {
   if (player === actor(game)) {
@@ -235,6 +265,10 @@ export default async function handler(req: any, res: any) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") return res.status(204).end();
     const input = req.method === "GET" ? req.query : await readBody(req);
+    if (input.action === "stats") {
+      const stats = await redis.hgetall<Record<string, number>>(balanceKey);
+      return res.status(200).json({ stats: stats ?? {} });
+    }
     if (input.action === "solo") {
       const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어" }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
       room.game.status = "playing";
@@ -278,6 +312,14 @@ export default async function handler(req: any, res: any) {
     const roomLock = needsRoomLock ? await acquire(roomLockKey) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
     try {
+    if (input.action === "cancel") {
+      const player = identify(room, input.token);
+      if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
+      if (room.mode !== "quick" || room.game.status !== "waiting" || player !== "p1") return res.status(409).json({ error: "취소할 수 없는 매칭입니다." });
+      if (await redis.get<string>(quickQueueKey) === room.code) await redis.del(quickQueueKey);
+      await redis.del(key(room.code));
+      return res.status(200).json({ cancelled: true });
+    }
     if (input.action === "join") {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
       startRoom(room, { token: token(), name: input.name || "플레이어 2" });

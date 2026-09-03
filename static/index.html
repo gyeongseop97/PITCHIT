@@ -793,4 +793,81 @@ applyMatch = function(data) {
 };
 const renderBeforeTeamNames = render;
 render = function() { renderBeforeTeamNames(); renderTeamNames(); };
+</script><style id="match-experience-v1">
+.quickControls{display:flex;gap:8px;margin-top:10px}.quickControls button{flex:1;padding:10px;border:1px solid #b9c9d8;background:#fff;color:#173b62;font-weight:900;cursor:pointer}.quickControls .quickAi{background:#e33b31;border-color:#e33b31;color:#fff}.quickControls button:disabled{opacity:.55;cursor:wait}.replayLog{margin:15px 0 0;text-align:left;border-top:1px solid #cedae5}.replayLog summary{padding:12px 0;cursor:pointer;color:#173b62;font-weight:900}.replayLog ol{max-height:220px;margin:0;padding:0;overflow:auto;list-style:none}.replayLog li{display:grid;grid-template-columns:54px 1fr;gap:8px;padding:9px 3px;border-top:1px solid #e2eaf1;color:#405b76;font-size:12px;line-height:1.35}.replayLog time{color:#e33b31;font-weight:900}.replayLog li b{display:block;color:#102846}.balanceNote{margin:12px 0 0;color:#61758a;font-size:11px;line-height:1.45}.queueCountdown{margin:8px 0 0;color:#607286;font-size:12px;text-align:center}@media(max-width:760px){.quickControls button{padding:9px 5px;font-size:12px}.replayLog li{grid-template-columns:48px 1fr;font-size:11px}.replayLog ol{max-height:185px}}
+</style><script id="match-experience-v1">
+// Persist an active room only on this device. A refresh can therefore return
+// to the same room, while no player name or room data is exposed elsewhere.
+const sessionStorageKey = 'pitchit:active-room:v1';
+function saveActiveRoom() {
+  try {
+    if (matchSession?.code && state.net && !state.finished) localStorage.setItem(sessionStorageKey, JSON.stringify({ ...matchSession, savedAt: Date.now() }));
+  } catch (_) {}
+}
+function clearActiveRoom() { try { localStorage.removeItem(sessionStorageKey); } catch (_) {} }
+const applyMatchBeforeExperience = applyMatch;
+applyMatch = function(data) {
+  const value = applyMatchBeforeExperience(data);
+  if (data?.game?.playLog) state.replayLog = data.game.playLog;
+  if (data?.game?.status === 'finished') clearActiveRoom(); else saveActiveRoom();
+  return value;
+};
+document.getElementById('back').addEventListener('click', clearActiveRoom);
+setTimeout(async () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(sessionStorageKey) || 'null');
+    if (!saved?.code || !saved?.token || Date.now() - saved.savedAt > 6 * 60 * 60 * 1000) return clearActiveRoom();
+    matchSession = saved;
+    const data = await requestMatch({ action: 'state', code: saved.code, token: saved.token });
+    if (!data.ready || data.game?.status === 'finished') return clearActiveRoom();
+    applyMatch(data); watchMatch();
+  } catch (_) { clearActiveRoom(); }
+}, 0);
+
+// A waiting room should never feel like a dead end: it can be cancelled, and
+// after a short wait a player can deliberately switch to an AI game.
+quickLobby = function() {
+  let box = document.getElementById('quickLobby');
+  if (!box) { box = document.createElement('section'); box.id = 'quickLobby'; box.className = 'panel'; document.querySelector('.modes').after(box); }
+  box.innerHTML = '<h3>빠른 대전</h3><p class="hint">온라인 상대를 찾습니다. 매칭되면 바로 3이닝 대결이 시작됩니다.</p><input id="quickName" placeholder="내 이름" maxlength="16"><button class="action" id="startQuick">자동 매칭 시작</button><p class="result" id="quickStatus">대전 상대를 찾을 준비가 됐습니다.</p><p class="queueCountdown" id="queueCountdown"></p><div class="quickControls" id="quickControls"></div>';
+  const startButton = document.getElementById('startQuick'), status = document.getElementById('quickStatus'), controls = document.getElementById('quickControls'), countdown = document.getElementById('queueCountdown');
+  let timer = null, poll = null, startedAt = 0;
+  const stop = () => { if (timer) clearInterval(timer); if (poll) clearInterval(poll); timer = poll = null; };
+  const reset = () => { stop(); startButton.disabled = false; startButton.textContent = '자동 매칭 시작'; controls.innerHTML = ''; countdown.textContent = ''; };
+  const useAi = async () => { stop(); if (matchSession?.code) { try { await requestMatch({ action: 'cancel', code: matchSession.code, token: matchSession.token }); } catch (_) {} } matchSession = null; box.remove(); start('solo'); };
+  const waitForOpponent = () => {
+    poll = setInterval(async () => {
+      try { const data = await requestMatch({ action: 'state', code: matchSession.code, token: matchSession.token }); if (data.ready) { stop(); beginMatch(data); } }
+      catch (_) { status.textContent = '매칭 연결이 끊겼습니다. 다시 시도해 주세요.'; reset(); }
+    }, 700);
+    timer = setInterval(() => {
+      const seconds = Math.max(0, 45 - Math.floor((Date.now() - startedAt) / 1000));
+      countdown.textContent = `자동 매칭 대기 ${seconds}초`;
+      if (seconds <= 30 && !document.getElementById('quickAi')) controls.innerHTML = '<button type="button" class="quickAi" id="quickAi">AI와 바로 시작</button><button type="button" id="cancelQuick">대기 취소</button>';
+      if (document.getElementById('quickAi')) document.getElementById('quickAi').onclick = useAi;
+      if (document.getElementById('cancelQuick')) document.getElementById('cancelQuick').onclick = async () => { try { await requestMatch({ action: 'cancel', code: matchSession.code, token: matchSession.token }); } catch (_) {} matchSession = null; clearActiveRoom(); status.textContent = '매칭 대기를 취소했습니다.'; reset(); };
+      if (seconds === 0) { stop(); status.textContent = '상대를 찾지 못했습니다. AI와 바로 시작하거나 다시 매칭해 주세요.'; controls.innerHTML = '<button type="button" class="quickAi" id="quickAi">AI와 바로 시작</button><button type="button" id="retryQuick">다시 매칭</button>'; document.getElementById('quickAi').onclick = useAi; document.getElementById('retryQuick').onclick = reset; }
+    }, 1000);
+  };
+  startButton.onclick = async () => {
+    startButton.disabled = true; startButton.textContent = '상대 찾는 중…'; status.innerHTML = '<span class="matchPulse"></span>온라인 상대를 찾고 있습니다…';
+    try { const data = await requestMatch({ action: 'quick', name: document.getElementById('quickName').value }); matchSession = { code: data.code, token: data.token, player: data.player, mode: 'quick' }; saveActiveRoom(); if (data.ready) beginMatch(data); else { startedAt = Date.now(); waitForOpponent(); } }
+    catch (error) { status.textContent = error.message || '매칭을 시작하지 못했습니다.'; reset(); }
+  };
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+document.querySelector('[data-mode="quick"]').onclick = quickLobby;
+
+// Add an at-bat replay to the existing final scoreboard rather than hiding
+// the important score and R/H/BB line the player first sees.
+const showGameSummaryBeforeReplay = showGameSummary;
+showGameSummary = function(game) {
+  showGameSummaryBeforeReplay(game);
+  const dialog = document.querySelector('.gameSummary'); if (!dialog || dialog.querySelector('.replayLog')) return;
+  const plays = game?.playLog || state.replayLog || [];
+  const list = plays.slice().reverse().map(play => `<li><time>${play.inning}회${play.half === 0 ? '초' : '말'}</time><span><b>${play.pitchName || ''} ${play.speed || ''}km/h · ${play.swing || '컨택'} 스윙</b>${play.event || ''}</span></li>`).join('') || '<li><span>기록을 불러오는 중입니다.</span></li>';
+  const replay = document.createElement('details'); replay.className = 'replayLog'; replay.innerHTML = `<summary>타석별 리플레이 · ${plays.length}개</summary><ol>${list}</ol>`;
+  dialog.querySelector('.summaryNote').after(replay);
+  const note = document.createElement('p'); note.className = 'balanceNote'; note.textContent = '경기 결과는 이름·초대코드 없이 익명 밸런스 통계에 반영됩니다.'; dialog.append(note);
+};
 </script></body></html>
