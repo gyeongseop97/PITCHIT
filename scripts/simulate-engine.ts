@@ -92,6 +92,12 @@ const locationReports = (["contact", "power", "spot"] as SwingType[]).flatMap(sw
     runScenario(`${swing} · 구석 투구`, 1, () => batter, () => standardPitcher, cell => cell, () => 0),
   ];
 });
+const centerBatters = (["contact", "power", "spot"] as SwingType[]).map(swing => ({ ...standardBatter, name: `가운데 ${swing}`, swing }));
+const cornerCells = [0, 4, 20, 24];
+const strategyReports = centerBatters.flatMap(batter => [
+  runScenario(`${batter.name} vs 중앙 투구`, 0, () => batter, () => standardPitcher, () => 12, () => 12),
+  runScenario(`${batter.name} vs 구석 투구`, 0, () => batter, () => standardPitcher, () => 12, () => choose(cornerCells)),
+]);
 
 console.table([
   runScenario("무작위 추측 (읽기 0%)", 0),
@@ -101,4 +107,5 @@ console.table([
   ...pitchers.map(pitcher => runScenario(`${pitcher.name} 투수 상대`, .35, undefined, () => pitcher)),
   ...qualityReports,
   ...locationReports,
+  ...strategyReports,
 ]);
