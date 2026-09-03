@@ -318,7 +318,7 @@ render=()=>{
 </style><style id="outcome-width-v1">
 .zoneOutcome{width:min(620px,calc(100vw - 40px));min-width:0;line-height:1.35;white-space:normal}.zoneWrap .zoneOutcome{max-width:none}@media(max-width:760px){.zoneOutcome{width:min(94vw,440px);font-size:16px!important;line-height:1.3}}
 </style><style id="mobile-invite-reveal-v1">
-#friendLobby.codeReady{border:2px solid #e33b31;box-shadow:0 10px 26px #142b451f}#friendStatus .inviteCode{display:block;margin:8px 0 5px;color:#e33b31;font:900 32px/1 Impact,"Arial Narrow",sans-serif;letter-spacing:.12em;text-align:center}@media(max-width:760px){#friendLobby{scroll-margin-top:14px;margin:14px 12px!important;padding:16px!important}#friendLobby .types{grid-template-columns:1fr 1fr}#friendLobby .types button{padding:12px 6px;font-size:13px}#friendLobby.codeReady{position:relative;background:#fff}}
+#friendLobby.codeReady{border:2px solid #e33b31;box-shadow:0 10px 26px #142b451f}#inviteCodeCard{margin:12px 0;padding:13px 10px;border:1px solid #f19a8f;background:#fff5f3;color:#e33b31;text-align:center;font:900 34px/1 Impact,"Arial Narrow",sans-serif;letter-spacing:.15em;box-shadow:inset 0 0 0 2px #fff}@media(max-width:760px){#friendLobby{scroll-margin-top:14px;margin:14px 12px!important;padding:16px!important}#friendLobby .types{grid-template-columns:1fr 1fr}#friendLobby .types button{padding:12px 6px;font-size:13px}#friendLobby.codeReady{position:relative;background:#fff}#inviteCodeCard{font-size:38px;padding:16px 10px}}
 </style><script id="mobile-invite-reveal-v1">
 const friendLobbyBeforeMobileInvite=friendLobby;
 friendLobby=function(){
@@ -331,13 +331,21 @@ friendLobby=function(){
     try{
       const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});
       matchSession={code:data.code,token:data.token,player:data.player};box.classList.add('codeReady');
-      status.innerHTML=`초대 코드를 친구에게 보내세요.<strong class="inviteCode">${data.code}</strong>친구 입장을 기다리는 중입니다.`;
-      box.scrollIntoView({behavior:'smooth',block:'center'});watchMatch();
+      status.textContent='초대 코드를 친구에게 보내세요. 친구 입장을 기다리는 중입니다.';
+      let card=document.getElementById('inviteCodeCard');if(!card){card=document.createElement('div');card.id='inviteCodeCard';status.after(card)}card.textContent=data.code;
+      box.scrollIntoView({behavior:'smooth',block:'center'});watchInviteRoom();
     }catch(error){status.textContent=error.message||'초대 코드 생성에 실패했습니다. 다시 시도해 주세요.'}
     finally{create.disabled=false;create.textContent='초대 코드 생성'}
   };
 };
 document.querySelector('[data-mode="friend"]').onclick=friendLobby;
+function watchInviteRoom(){
+  clearInterval(matchPoll);
+  matchPoll=setInterval(async()=>{
+    if(!matchSession)return;
+    try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){clearInterval(matchPoll)}
+  },700);
+}
 watchMatch=async function(){
   clearInterval(matchPoll);
   matchPoll=setInterval(async()=>{
