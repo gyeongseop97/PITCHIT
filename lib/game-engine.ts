@@ -15,17 +15,16 @@ export type PlateAppearance = {
   message: string;
 };
 
-export const isStrikeCell = (cell: number) => cell >= 0 && cell < 9;
-const zoneToGrid = (cell: number) => (Math.floor(cell / 3) + 1) * 5 + (cell % 3 + 1);
+export const isStrikeCell = (cell: number) => cell >= 0 && cell < 25;
 
 const cellDistance = (a: number, b: number) => Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs((a % 5) - (b % 5));
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 function nearbyCell(cell: number, random: () => number) {
-  const row = Math.floor(cell / 3);
-  const column = cell % 3;
+  const row = Math.floor(cell / 5);
+  const column = cell % 5;
   const direction = [[0, -1], [0, 1], [-1, 0], [1, 0]][Math.floor(random() * 4)];
-  return Math.max(0, Math.min(2, row + direction[0])) * 3 + Math.max(0, Math.min(2, column + direction[1]));
+  return Math.max(0, Math.min(4, row + direction[0])) * 5 + Math.max(0, Math.min(4, column + direction[1]));
 }
 
 /** Pure plate-appearance resolution. No state, Redis, DOM, or clock access. */
@@ -51,12 +50,12 @@ export function resolvePlateAppearance(input: {
     const baitExecution = clamp(0.48 + input.pitcher.c / 150 + (breaking ? input.pitcher.m / 320 : 0));
     const chaseChance = clamp((predictedDirection ? 0.64 : 0.13) + (64 - input.batter.e) / 260 + (breaking ? 0.07 : -0.03));
     if (random() < baitExecution) {
-      if (random() < chaseChance) return { outcome: "swinging_strike", actualCell: zoneToGrid(input.pitchCell), isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · ${direction === "high" ? "높은" : direction === "low" ? "낮은" : direction === "in" ? "몸쪽" : "바깥쪽"} 유인구에 타자가 속았습니다.` };
-      return { outcome: "ball", actualCell: zoneToGrid(input.pitchCell), isBall: true, pitchName, speed, message: `${pitchName} ${speed}km/h · 유인구를 잘 골라냈습니다.` };
+      if (random() < chaseChance) return { outcome: "swinging_strike", actualCell: input.pitchCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · ${direction === "high" ? "높은" : direction === "low" ? "낮은" : direction === "in" ? "몸쪽" : "바깥쪽"} 유인구에 타자가 속았습니다.` };
+      return { outcome: "ball", actualCell: input.pitchCell, isBall: true, pitchName, speed, message: `${pitchName} ${speed}km/h · 유인구를 잘 골라냈습니다.` };
     }
   }
   const missChance = clamp(0.28 - input.pitcher.c / 280 + (direction ? 0.11 : 0));
-  const actualCell = zoneToGrid(random() < missChance ? nearbyCell(input.pitchCell, random) : input.pitchCell);
+  const actualCell = random() < missChance ? nearbyCell(input.pitchCell, random) : input.pitchCell;
 
   const distance = cellDistance(input.targetCell, actualCell);
   const covered = input.swing === "contact"

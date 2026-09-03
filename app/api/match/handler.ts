@@ -35,13 +35,7 @@ const ttl = 60 * 60 * 6;
 const key = (code: string) => `pitchit:room:${code}`;
 const quickQueueKey = "pitchit:quick:queue";
 const quickQueueLockKey = "pitchit:quick:queue:lock";
-const strikeCells = [6, 7, 8, 11, 12, 13, 16, 17, 18];
-const zoneIndex = (legacyCell: number) => {
-  const row = Math.floor(legacyCell / 5) - 1;
-  const column = legacyCell % 5 - 1;
-  return Math.max(0, Math.min(2, row)) * 3 + Math.max(0, Math.min(2, column));
-};
-const legacyCell = (index: number) => (Math.floor(index / 3) + 1) * 5 + (index % 3 + 1);
+const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
 const batterTypes = [
@@ -121,7 +115,7 @@ function resolve(room: Room) {
     batter,
     pitcher,
     targetCell: batting.cell,
-    pitchCell: zoneIndex(pitching.cell),
+    pitchCell: pitching.cell,
     ballDirection: pitching.ball,
     swing: (batting.swing ?? "contact") as SwingType,
     pitch: (pitching.pitch ?? "fast") as PitchType,

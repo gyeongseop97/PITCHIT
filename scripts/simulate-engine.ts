@@ -10,7 +10,7 @@ const pitchers: PitcherRatings[] = [
 ];
 const stats: Record<string, number> = Object.fromEntries(["ab", "h", "bb", "so", "double", "triple", "hr", "out"].map(key => [key, 0]));
 const choose = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)];
-const strikeCells = Array.from({ length: 9 }, (_, cell) => cell);
+const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const centralTargets = [6, 7, 8, 11, 12, 13, 16, 17, 18];
 const outerTargets = Array.from({ length: 25 }, (_, cell) => cell).filter(cell => !centralTargets.includes(cell));
 
