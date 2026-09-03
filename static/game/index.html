@@ -493,4 +493,51 @@ const startBeforeGameSummary=start;
 start=mode=>{shownGameSummaryKey='';document.getElementById('gameSummaryOverlay')?.remove();state.finished=false;return startBeforeGameSummary(mode)};
 const renderBeforeGameSummary=render;
 render=()=>{renderBeforeGameSummary();if(state.mode&&!state.net&&state.finished)showGameSummary()};
+</script><script id="ball-execution-display-v2">
+const applyMatchBeforeBallExecutionDisplay=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeBallExecutionDisplay(data),play=data?.game?.lastPlay,me=matchSession?.player;
+  if(play&&me){
+    const opponentChoice=play.attacker===me?play.pitch:play.bat;
+    state.opponentLastCell=opponentChoice.kind==='pitch'?play.actualCell:opponentChoice.cell;
+    state.opponentLastIcon=opponentChoice.kind==='pitch'?'⚾':'◎';
+    state.opponentLastLabel=opponentChoice.kind==='pitch'?(play.execution==='mistake'?'상대 실투 실제 위치':play.execution==='wild'?'상대 제구 이탈 위치':'상대 실제 투구 위치'):'상대 직전 타격 노림';
+    if(play.execution==='mistake'||play.execution==='wild')state.lastPitchInfo=`${play.pitchName||'패스트볼'} · ${play.speed||'-'} km/h · ${play.execution==='mistake'?'실투':'제구 이탈'}`;
+  }
+  render();
+  return value;
+};
+const renderBeforeBallExecutionDisplay=render;
+render=()=>{
+  renderBeforeBallExecutionDisplay();
+  if(!state.mode||state.half!=='bottom')return;
+  let tactics=document.getElementById('ballDirections');
+  if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections';document.querySelector('.zoneWrap').after(tactics)}
+  tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
+  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
+};
+const pitchBeforeBallExecutionDisplay=pitch;
+pitch=()=>{
+  // Local modes use the same four-direction bait decision as online matches.
+  if(!state.net&&state.pitchBallDirection){
+    const direction=state.pitchBallDirection,row=Math.floor(state.pick/5),column=state.pick%5;
+    const actual=direction==='high'?column:direction==='low'?20+column:direction==='in'?row*5:row*5+4;
+    const hitter=state.awayBatter||state.batter,target=Math.floor(Math.random()*25),targetRow=Math.floor(target/5),targetColumn=target%5;
+    const predicted=direction==='high'?targetRow<=1:direction==='low'?targetRow>=3:direction==='in'?targetColumn<=1:targetColumn>=3;
+    const pitcher=state.pitchers?.[state.activePitcher]||{c:50,m:50};
+    const execution=Math.random()<Math.min(.93,.48+pitcher.c/150+pitcher.m/320);
+    if(execution){
+      state.ball=actual;state.opponentLastCell=target;state.opponentLastIcon='◎';state.opponentLastLabel='상대 직전 타격 노림';
+      const chase=Math.random()<Math.min(.9,(predicted?.64:.13)+(64-(hitter.e||50))/260+.07);
+      let text='',kind='ball',end=false;
+      if(chase){state.s++;text='유인구 · 상대가 속아 헛스윙 스트라이크';kind='strike';if(state.s>=3){state.o++;text='유인구 · 삼진 아웃!';kind='out';end=true}}
+      else{state.b++;text='유인구 · 상대가 골라낸 볼';if(state.b>=4){scoreWalk('away');text='유인구 · 볼넷으로 출루';end=true}}
+      if(end)text=finishAtBat(text,'away');
+      state.pitchBallDirection=null;setResult(text,kind);return;
+    }
+  }
+  const value=pitchBeforeBallExecutionDisplay();
+  state.pitchBallDirection=null;
+  return value;
+};
 </script></body></html>

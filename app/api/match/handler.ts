@@ -23,7 +23,7 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number } | null;
+  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; execution?: "command" | "bait" | "mistake" | "wild" } | null;
   history: PlayMemory[];
   event: string;
 };
@@ -142,9 +142,9 @@ function resolve(room: Room) {
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
   });
-  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell };
+  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, execution: plate.execution };
   game.history = [{ batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
-  game.event = plate.message;
+  game.event = `${plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : ""}${plate.message}`;
   if (plate.outcome === "ball") {
     game.balls++;
     if (game.balls >= 4) { game.walks[game.half]++; walk(game, batter.v); game.event = `${plate.message} · 볼넷`; endPlate(game); }
