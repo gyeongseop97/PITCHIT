@@ -588,6 +588,6 @@ render=()=>{
   const remaining=state.baitRemaining??10;
   tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" ${remaining<=0?'disabled':''} class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
   tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
-  let limit=document.getElementById('baitLimit');if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.append(limit)}limit.textContent=`유인구 ${remaining} / 10`;
+  let limit=document.getElementById('baitLimit');if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.append(limit)}limit.textContent=`사용 가능 ${remaining} / 10`;
 };
 </script></body></html>
