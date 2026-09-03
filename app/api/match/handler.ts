@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
+import { resolvePlateAppearance, type PitchType, type SwingType } from "../../../lib/game-engine";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
@@ -21,10 +22,10 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number } | null;
+  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number } | null;
   event: string;
 };
-type Room = { code: string; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
+type Room = { code: string; mode: "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -32,6 +33,8 @@ const redis = new Redis({
 });
 const ttl = 60 * 60 * 6;
 const key = (code: string) => `pitchit:room:${code}`;
+const quickQueueKey = "pitchit:quick:queue";
+const quickQueueLockKey = "pitchit:quick:queue:lock";
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
 const batterTypes = [
@@ -106,30 +109,32 @@ function resolve(room: Room) {
   const batting = game.choices[battingPlayer] ?? { kind: "bat" as const, cell: Math.floor(Math.random() * 25), swing: "contact" };
   const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: Math.floor(Math.random() * 25), pitch: "fast" };
   const pitcher = game.teams[defender(game)].pitchers[game.teams[defender(game)].activePitcher];
-  const isBreaking = pitching.pitch === "breaking";
-  const speed = Math.round((isBreaking ? 102 + pitcher.m * 0.22 : 127 + pitcher.v * 0.25) + Math.random() * 4);
-  const pitchName = isBreaking ? "변화구" : "패스트볼";
-  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName, speed };
-  const distance = Math.abs(Math.floor(batting.cell / 5) - Math.floor(pitching.cell / 5)) + Math.abs((batting.cell % 5) - (pitching.cell % 5));
-  const roll = Math.random();
-  if (roll < 0.07) {
+  const batter = game.teams[battingPlayer].lineup[game.batter[game.half]];
+  const plate = resolvePlateAppearance({
+    batter,
+    pitcher,
+    targetCell: batting.cell,
+    pitchCell: pitching.cell,
+    swing: (batting.swing ?? "contact") as SwingType,
+    pitch: (pitching.pitch ?? "fast") as PitchType,
+    count: { balls: game.balls, strikes: game.strikes },
+  });
+  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell };
+  game.event = plate.message;
+  if (plate.outcome === "ball") {
     game.balls++;
-    game.event = game.balls >= 4 ? "볼넷" : "볼";
-    if (game.balls >= 4) { game.walks[game.half]++; walk(game); endPlate(game); }
-  } else if (distance > 2 || roll < 0.25) {
+    if (game.balls >= 4) { game.walks[game.half]++; walk(game); game.event = `${plate.message} · 볼넷`; endPlate(game); }
+  } else if (plate.outcome === "foul") {
+    game.strikes = Math.min(2, game.strikes + 1);
+  } else if (plate.outcome === "swinging_strike") {
     game.strikes++;
-    game.event = game.strikes >= 3 ? "삼진 아웃" : "스트라이크";
-    if (game.strikes >= 3) { game.outs++; endPlate(game); }
-  } else if (roll < 0.43) {
+    if (game.strikes >= 3) { game.outs++; game.event = `${plate.message} · 삼진 아웃`; endPlate(game); }
+  } else if (plate.outcome === "groundout" || plate.outcome === "flyout") {
     game.outs++;
-    game.event = roll < 0.34 ? "땅볼 아웃" : "뜬공 아웃";
     endPlate(game);
-  } else if (roll < 0.48) {
-    game.hits[game.half]++; advance(game, 4); game.event = "홈런!"; endPlate(game);
-  } else if (roll < 0.57) {
-    game.hits[game.half]++; advance(game, 2); game.event = "2루타!"; endPlate(game);
   } else {
-    game.hits[game.half]++; advance(game, 1); game.event = "안타!"; endPlate(game);
+    const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
+    game.hits[game.half]++; advance(game, bases); endPlate(game);
   }
   if (game.status === "playing") nextPitch(game);
 }
@@ -138,6 +143,21 @@ async function readBody(req: any) {
 }
 async function load(code: string) { return redis.get<Room>(key(code)); }
 async function save(room: Room) { await redis.set(key(room.code), room, { ex: ttl }); }
+async function acquire(keyName: string) {
+  const lockToken = token();
+  const acquired = await redis.set(keyName, lockToken, { nx: true, ex: 3 });
+  return acquired ? lockToken : null;
+}
+async function release(keyName: string, lockToken: string) {
+  // Only the holder deletes the short-lived lock. The check prevents an expired lock from deleting a newer one.
+  if (await redis.get<string>(keyName) === lockToken) await redis.del(keyName);
+}
+function startRoom(room: Room, joining: { token: string; name: string }) {
+  room.players.p2 = joining;
+  room.game.status = "playing";
+  room.game.event = "매칭 완료! 20초 안에 작전을 선택하세요.";
+  nextPitch(room.game);
+}
 function identify(room: Room, supplied: string): PlayerId | null {
   return room.players.p1?.token === supplied ? "p1" : room.players.p2?.token === supplied ? "p2" : null;
 }
@@ -151,21 +171,46 @@ export default async function handler(req: any, res: any) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") return res.status(204).end();
     const input = req.method === "GET" ? req.query : await readBody(req);
+    if (input.action === "quick") {
+      const queueLock = await acquire(quickQueueLockKey);
+      if (!queueLock) return res.status(409).json({ error: "매칭 대기열을 확인 중입니다. 다시 눌러 주세요." });
+      try {
+        const waitingCode = await redis.get<string>(quickQueueKey);
+        if (waitingCode) {
+          const waitingRoom = await load(waitingCode);
+          if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting" && waitingRoom.players.p1?.name !== input.name) {
+            const joining = { token: token(), name: input.name || "플레이어 2" };
+            startRoom(waitingRoom, joining);
+            await save(waitingRoom);
+            await redis.del(quickQueueKey);
+            return res.json({ ...publicRoom(waitingRoom), player: "p2", token: joining.token });
+          }
+          await redis.del(quickQueueKey);
+        }
+        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1" }, p2: null }, game: freshGame() };
+        room.game.event = "상대를 찾는 중입니다…";
+        await save(room);
+        await redis.set(quickQueueKey, room.code, { ex: 45 });
+        return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token, searching: true });
+      } finally { await release(quickQueueLockKey, queueLock); }
+    }
     if (input.action === "create") {
-      const room: Room = { code: code(), players: { p1: { token: token(), name: input.name || "플레이어 1" }, p2: null }, game: freshGame() };
+      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1" }, p2: null }, game: freshGame() };
       await save(room);
       return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token });
     }
     const room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
+    const needsRoomLock = input.action === "join" || input.action === "choose";
+    const roomLockKey = `pitchit:room:${room.code}:lock`;
+    const roomLock = needsRoomLock ? await acquire(roomLockKey) : null;
+    if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
+    try {
     if (input.action === "join") {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
-      room.players.p2 = { token: token(), name: input.name || "플레이어 2" };
-      room.game.status = "playing";
-      room.game.event = "경기 시작! 20초 안에 작전을 선택하세요.";
-      nextPitch(room.game);
+      startRoom(room, { token: token(), name: input.name || "플레이어 2" });
       await save(room);
-      return res.json({ ...publicRoom(room), player: "p2", token: room.players.p2.token });
+      return res.json({ ...publicRoom(room), player: "p2", token: room.players.p2!.token });
     }
     const player = identify(room, input.token);
     if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
@@ -179,6 +224,9 @@ export default async function handler(req: any, res: any) {
     }
     await save(room);
     return res.json({ ...publicRoom(room), player, token: input.token });
+    } finally {
+      if (roomLock) await release(roomLockKey, roomLock);
+    }
   } catch (error) {
     return res.status(500).json({ error: "경기 서버 오류", detail: error instanceof Error ? error.message : "unknown" });
   }

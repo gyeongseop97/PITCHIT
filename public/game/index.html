@@ -360,4 +360,22 @@ watchMatch=async function(){
     }catch(error){clearInterval(matchPoll)}
   },700);
 };
+</script><style id="quick-match-v1">
+#quickLobby{margin-top:24px}#quickLobby .matchPulse{display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:50%;background:#e33b31;animation:quickPulse 1s ease-in-out infinite}@keyframes quickPulse{50%{transform:scale(.55);opacity:.45}}#quickLobby .cancelMatch{margin-top:8px;border:1px solid #cbd7e4;background:#fff;padding:8px 11px;color:#17385e;font-weight:800;cursor:pointer}@media(max-width:760px){#quickLobby{margin:14px 12px!important;padding:16px!important;scroll-margin-top:14px}}
+</style><script id="quick-match-v1">
+function quickLobby(){
+  let box=document.getElementById('quickLobby');
+  if(!box){box=document.createElement('section');box.id='quickLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}
+  box.innerHTML='<h3>빠른 대전</h3><p class="hint">온라인 상대를 자동으로 찾습니다. 매칭되면 바로 3이닝 경기가 시작됩니다.</p><input id="quickName" placeholder="내 이름" maxlength="16"><button class="action" id="startQuick">자동 매칭 시작</button><p class="result" id="quickStatus">대전 상대를 찾을 준비가 됐습니다.</p>';
+  requestAnimationFrame(()=>box.scrollIntoView({behavior:'smooth',block:'start'}));
+  document.getElementById('startQuick').onclick=async()=>{
+    const button=document.getElementById('startQuick'),status=document.getElementById('quickStatus');button.disabled=true;button.textContent='상대 찾는 중…';status.innerHTML='<span class="matchPulse"></span>온라인 상대를 찾고 있습니다…';
+    try{const data=await requestMatch({action:'quick',name:document.getElementById('quickName').value});matchSession={code:data.code,token:data.token,player:data.player};if(data.ready)beginMatch(data);else watchQuickMatch()}
+    catch(error){button.disabled=false;button.textContent='자동 매칭 시작';status.textContent=error.message||'매칭을 시작하지 못했습니다.'}
+  };
+}
+function watchQuickMatch(){
+  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){clearInterval(matchPoll);const status=document.getElementById('quickStatus');if(status)status.textContent='매칭 연결이 끊겼습니다. 다시 시도해 주세요.'}},700);
+}
+document.querySelector('[data-mode="quick"]').onclick=quickLobby;
 </script></body></html>
