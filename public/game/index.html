@@ -399,4 +399,17 @@ render=()=>{
 };
 const requestMatchBeforeBallTactics=requestMatch;
 requestMatch=body=>{if(body?.action==='choose'&&body.choice?.kind==='pitch'&&state.pitchBallDirection)body={...body,choice:{...body.choice,ball:state.pitchBallDirection}};return requestMatchBeforeBallTactics(body)};
+</script><script id="online-roster-order-v1">
+const applyMatchBeforeRosterOrder=applyMatch;
+applyMatch=function(data){
+  const game=data.game,me=matchSession?.player;
+  if(game?.teams&&me){
+    const mine=game.teams[me],other=game.teams[me==='p1'?'p2':'p1'],mineIndex=me==='p1'?0:1,otherIndex=mineIndex?0:1;
+    state.pitchers=mine.pitchers;state.activePitcher=mine.activePitcher;state.usedPitchers=mine.usedPitchers;
+    state.awayPitchers=other.pitchers;state.awayActivePitcher=other.activePitcher;state.awayUsedPitchers=other.usedPitchers;
+    state.onlineLineup=mine.lineup;state.onlineAwayLineup=other.lineup;
+    state.batter=mine.lineup[game.batter[mineIndex]];state.awayBatter=other.lineup[game.batter[otherIndex]];
+  }
+  return applyMatchBeforeRosterOrder(data);
+};
 </script></body></html>
