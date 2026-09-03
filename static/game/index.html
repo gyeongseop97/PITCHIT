@@ -201,7 +201,7 @@ render=()=>{
   if(!state.mode)return;
   const counts=document.querySelector('.counts');
   const pips=(label,value,max,type)=>`<div class="countGroup ${type}"><small>${label}</small>${Array.from({length:max},(_,i)=>`<i class="${i<value?'on':''}"></i>`).join('')}<b id="${type==='ball'?'balls':type==='strike'?'strikes':'outs'}">${value}</b></div>`;
-  counts.innerHTML=pips('B',state.b,4,'ball')+pips('S',state.s,3,'strike')+pips('O',state.o,2,'out');
+  counts.innerHTML=pips('B',state.b,3,'ball')+pips('S',state.s,2,'strike')+pips('O',state.o,2,'out');
   let lineupPanel=document.getElementById('mobileLineup');
   if(!lineupPanel){lineupPanel=document.createElement('details');lineupPanel.id='mobileLineup';lineupPanel.className='mobileLineup';document.querySelector('.board>aside.panel').after(lineupPanel)}
   const attacking=state.half==='top', battingLineup=attacking?lineup:(state.awayLineup||lineup), batTurn=attacking?state.turn:(state.awayTurn??state.turn);
