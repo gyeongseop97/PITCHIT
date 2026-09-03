@@ -123,4 +123,41 @@ render=()=>{
   outcome.style.display=message?'block':'none';
   outcome.className='zoneOutcome '+(message.includes('안타')||message.includes('홈런')||message.includes('루타')?'hit':message.includes('아웃')?'out':message.includes('볼')?'ball':'strike');
 };
+</script><style id="multiplayer-feedback-v3-style">
+.zoneOutcome{top:4%;transform:translate(-50%,0);min-width:48%;padding:8px 16px;font-size:clamp(18px,3.6vw,30px)}
+</style>
+<script id="multiplayer-feedback-v3">
+let outcomeTimer=null;
+function revealOutcome(text,local=false){
+  if(local){state.localOutcome=text;state.localOutcomeUntil=Date.now()+3000}
+  else{state.netOutcome=text;state.netOutcomeUntil=Date.now()+3000}
+  clearTimeout(outcomeTimer);
+  outcomeTimer=setTimeout(()=>{if(local)state.localOutcome='';else state.netOutcome='';render()},3050);
+}
+const setResultBeforeOutcome=setResult;
+setResult=(text,kind)=>{revealOutcome(text,true);setResultBeforeOutcome(text,kind)};
+const applyMatchBeforeFeedbackV3=applyMatch;
+applyMatch=function(data){
+  const previousDeadline=matchDeadline;
+  applyMatchBeforeFeedbackV3(data);
+  const g=data.game,me=matchSession?.player;
+  if(g.lastPlay&&me){
+    const opponentChoice=g.lastPlay.attacker===me?g.lastPlay.pitch:g.lastPlay.bat;
+    state.opponentLastCell=opponentChoice.cell;
+    state.opponentLastIcon=opponentChoice.kind==='pitch'?'⚾':'◎';
+    state.opponentLastLabel=opponentChoice.kind==='pitch'?'상대 직전 투구':'상대 직전 타격 노림';
+  }
+  if(previousDeadline&&previousDeadline!==g.deadline&&g.lastPlay)revealOutcome(g.event);
+  render();
+};
+const renderBeforeFeedbackV3=render;
+render=()=>{
+  renderBeforeFeedbackV3();
+  const outcome=document.getElementById('zoneOutcome');
+  if(!outcome)return;
+  const active=state.net?((state.netOutcomeUntil||0)>Date.now()?state.netOutcome:'') : ((state.localOutcomeUntil||0)>Date.now()?state.localOutcome:'');
+  outcome.textContent=active||'';
+  outcome.style.display=active?'block':'none';
+  outcome.className='zoneOutcome '+(active.includes('안타')||active.includes('홈런')||active.includes('루타')?'hit':active.includes('아웃')?'out':active.includes('볼')?'ball':'strike');
+};
 </script></body></html>

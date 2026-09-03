@@ -15,7 +15,7 @@ type Game = {
   batter: [number, number];
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice } | null;
+  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId } | null;
   event: string;
 };
 type Room = { code: string; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -78,9 +78,10 @@ function endPlate(game: Game) {
 function resolve(room: Room) {
   const game = room.game;
   if (game.status !== "playing") return;
-  const batting = game.choices[actor(game)] ?? { kind: "bat" as const, cell: Math.floor(Math.random() * 25), swing: "contact" };
+  const battingPlayer = actor(game);
+  const batting = game.choices[battingPlayer] ?? { kind: "bat" as const, cell: Math.floor(Math.random() * 25), swing: "contact" };
   const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: Math.floor(Math.random() * 25), pitch: "fast" };
-  game.lastPlay = { bat: batting, pitch: pitching };
+  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer };
   const distance = Math.abs(Math.floor(batting.cell / 5) - Math.floor(pitching.cell / 5)) + Math.abs((batting.cell % 5) - (pitching.cell % 5));
   const roll = Math.random();
   if (roll < 0.07) {
