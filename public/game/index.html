@@ -284,7 +284,7 @@ applyMatch=function(data){
   const game=data.game,me=matchSession?.player,side=me==='p1'?0:1;
   state.hits=(game.hits||[0,0])[side];state.awayHits=(game.hits||[0,0])[side?0:1];
   state.walks=(game.walks||[0,0])[side];state.awayWalks=(game.walks||[0,0])[side?0:1];
-  if(game.lastPlay){state.lastPitchInfo=`${game.lastPlay.pitchName||'패스트볼'} · ${game.lastPlay.speed||'-'} km/h`;state.serverEvent=stadiumMessage(game.event,state.lastPitchInfo);state.netOutcome=state.serverEvent;}
+  if(game.lastPlay){state.lastPitchInfo=`${game.lastPlay.pitchName||'패스트볼'} · ${game.lastPlay.speed||'-'} km/h`;state.serverEvent=stadiumMessage(game.event,'');state.netOutcome=state.serverEvent;}
   render();
 };
 const stadiumMessage=(event,pitch)=>{
@@ -301,7 +301,7 @@ setResult=(text,kind)=>{
     if(/안타|루타|홈런/.test(text)){if(opponent)state.awayHits=(state.awayHits||0)+1;else state.hits=(state.hits||0)+1;}
     const staff=opponent?state.pitchers:(state.awayPitchers||state.pitchers);const index=opponent?state.activePitcher:(state.awayActivePitcher??state.activePitcher);const p=staff?.[index];const breaking=state.pitchType==='breaking';
     const type=breaking?'변화구':'패스트볼';const speed=Math.round((breaking?102+(p?.m||50)*.22:127+(p?.v||50)*.25)+Math.random()*4);state.lastPitchInfo=`${type} · ${speed} km/h`;
-    text=stadiumMessage(text,state.lastPitchInfo);
+    text=stadiumMessage(text,'');
   }
   setResultBeforeStadium(text,kind);
 };
@@ -964,5 +964,16 @@ render=function(){
   const available=(state.pitchers||[]).map((p,i)=>!state.usedPitchers?.includes(i)?`<button type="button" data-score-pitcher="${i}">${p.n}<br><small>${p.t} · 구속 ${p.v} / 제구 ${p.c}</small></button>`:'').join('');
   panel.style.display='block';panel.innerHTML=`<h4>투수 교체</h4><div class="pitcherSwapChoices">${available||'<span>교체 가능한 투수가 없습니다.</span>'}</div><p class="pitcherSwapNotice">교체된 투수는 다시 등판할 수 없습니다.</p>`;
   panel.querySelectorAll('[data-score-pitcher]').forEach(button=>button.onclick=(event)=>{event.preventDefault();event.stopPropagation();const i=+button.dataset.scorePitcher;if(state.usedPitchers?.includes(i))return;state.activePitcher=i;state.usedPitchers=[...(state.usedPitchers||[]),i];state.pitcherSwapOpen=false;state.pitcherSwapNotice=`${state.pitchers[i].n} 투수가 등판했습니다.`;render()});
+};
+</script><style id="single-readout-v1">
+/* 구속·구종은 전광판, 온라인 결과는 존 위 중계에만 표시한다. */
+#result{display:none!important}
+</style><script id="single-readout-v1">
+const renderBeforeSingleReadout=render;
+render=function(){
+  renderBeforeSingleReadout();
+  if(!state.mode)return;
+  const outcome=document.getElementById('zoneOutcome');
+  if(state.net&&outcome)outcome.style.display='none';
 };
 </script></body></html>
