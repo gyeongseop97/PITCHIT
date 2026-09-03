@@ -134,7 +134,15 @@ export function resolvePlateAppearance(input: {
   const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;
   const extraChance = clamp(0.04 + power * 0.20 + barrelQuality + (breaking ? 0.025 : -0.015));
   const locationHitBonus = 0.05 - actualCenterDistance * 0.022;
-  const hitChance = clamp(0.245 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.05 : 0));
+  // Reading the exact square should feel rewarding in every swing type.
+  // Neighbouring coloured squares still earn a smaller boost: they are
+  // forgiving contact, not the same thing as a perfect barrel.
+  const readHitBonus = perfectTarget
+    ? (input.swing === "contact" ? 0.025 : input.swing === "power" ? 0.022 : 0.018)
+    : nearTarget && covered
+      ? (input.swing === "contact" ? 0.018 : input.swing === "power" ? 0.016 : 0)
+      : 0;
+  const hitChance = clamp(0.245 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus + readHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.05 : 0));
   const roll = random();
   if (roll < extraChance * 0.18) return { outcome: "homerun", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 완벽한 타이밍, 홈런!` };
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
