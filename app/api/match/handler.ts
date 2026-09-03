@@ -75,19 +75,22 @@ function advance(game: Game, runs: number, batterSpeed: number) {
   const next: [number, number, number] = [0, 0, 0];
   let extraAdvance = "";
   for (let i = 2; i >= 0; i--) if (game.bases[i]) {
-    const destination = i + runs;
+    const runnerSpeed = game.bases[i];
+    let destination = i + runs;
+    // Short PITCHIT games need hits to create momentum.  A single can score
+    // a runner from second or send one from first to third; a fast runner is
+    // more likely to take the extra base.  Doubles can score a runner from
+    // first, rather than leaving every one at third.
+    if (runs === 1 && i === 1 && Math.random() < Math.min(.90, .58 + (runnerSpeed - 40) / 75)) destination = 3;
+    if (runs === 1 && i === 0 && Math.random() < Math.min(.36, .06 + (runnerSpeed - 40) / 70)) { destination = 3; extraAdvance = " · 주력으로 1루에서 홈까지 질주합니다!"; }
+    else if (runs === 1 && i === 0 && Math.random() < Math.min(.82, .45 + (runnerSpeed - 40) / 80)) destination = 2;
+    if (runs === 2 && i === 0 && Math.random() < Math.min(.96, .74 + (runnerSpeed - 40) / 80)) destination = 3;
     if (destination >= 3) game.scores[side]++;
-    else next[destination as 0 | 1 | 2] = game.bases[i];
+    else next[destination as 0 | 1 | 2] = runnerSpeed;
   }
   if (runs >= 4) game.scores[side]++;
   else next[(runs - 1) as 0 | 1 | 2] = batterSpeed;
-  // A fast runner can take an extra base on a single. This is automatic, so
-  // the batting choice remains focused on reading the pitch.
-  if (runs === 1 && next[2] && Math.random() < Math.min(0.26, Math.max(0.03, (next[2] - 36) / 175))) {
-    game.scores[side]++;
-    next[2] = 0;
-    extraAdvance = " · 주력으로 2루에서 홈까지 파고듭니다!";
-  }
+  if (runs === 1 && next[2] && Math.random() < Math.min(.20, Math.max(.02, (next[2] - 58) / 130))) { game.scores[side]++; next[2] = 0; extraAdvance = " · 주력으로 2루에서 홈까지 파고듭니다!"; }
   game.bases = next;
   return extraAdvance;
 }

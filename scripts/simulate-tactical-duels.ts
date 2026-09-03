@@ -5,7 +5,8 @@ import { resolvePlateAppearance, type BallDirection, type BatterRatings, type Pi
 // use bait pitches mostly in strikeout counts.  This is intentionally not a
 // random-at-bat test: it approximates two players trying to read one another.
 const GAMES = Number(process.env.GAMES ?? 20_000);
-const STRATEGY = process.env.STRATEGY === "random" ? "random" : "adaptive";
+const STRATEGY = process.env.STRATEGY === "random" || process.env.STRATEGY === "read" ? process.env.STRATEGY : "adaptive";
+const READ_RATE = Math.min(.95, Math.max(0, Number(process.env.READ_RATE ?? .35)));
 const CELLS = Array.from({ length: 25 }, (_, index) => index);
 const directions: BallDirection[] = ["high", "low", "in", "out"];
 const batterTypes: Array<{ t: string } & BatterRatings> = [
@@ -40,7 +41,7 @@ const directionFor = (target: number): BallDirection => {
   return col <= 2 ? "in" : "out";
 };
 function battingPlan(team: Team, memory: Memory, strikes: number): { cell: number; swing: SwingType } {
-  if (STRATEGY === "random") return { cell: choose(CELLS), swing: choose(["contact", "power", "spot"] as SwingType[]) };
+  if (STRATEGY === "random" || STRATEGY === "read") return { cell: choose(CELLS), swing: choose(["contact", "power", "spot"] as SwingType[]) };
   const batter = team.lineup[team.batter];
   const read = weightedRead(memory.pitch);
   // 62% pattern read, 23% near-pattern adjustment, 15% intentional feint.
@@ -52,7 +53,7 @@ function battingPlan(team: Team, memory: Memory, strikes: number): { cell: numbe
   return { cell, swing };
 }
 function pitchingPlan(team: Team, memory: Memory, balls: number, strikes: number, baitRemaining: number): { cell: number; pitch: PitchType; ball?: BallDirection } {
-  if (STRATEGY === "random") {
+  if (STRATEGY === "random" || STRATEGY === "read") {
     const ball = baitRemaining > 0 && Math.random() < .18 ? choose(directions) : undefined;
     return { cell: choose(CELLS), pitch: Math.random() < .45 ? "breaking" : "fast", ball };
   }
@@ -74,9 +75,16 @@ function maybeChangePitcher(team: Team, inning: number) {
 }
 function advance(bases: number[], basesTaken: number, speed: number): number {
   let runs = 0; const next = [0, 0, 0];
-  for (let index = 2; index >= 0; index--) if (bases[index]) { const destination = index + basesTaken; if (destination >= 3) runs++; else next[destination] = bases[index]; }
+  for (let index = 2; index >= 0; index--) if (bases[index]) {
+    const runnerSpeed = bases[index]; let destination = index + basesTaken;
+    if (basesTaken === 1 && index === 1 && Math.random() < Math.min(.90, .58 + (runnerSpeed - 40) / 75)) destination = 3;
+    if (basesTaken === 1 && index === 0 && Math.random() < Math.min(.36, .06 + (runnerSpeed - 40) / 70)) destination = 3;
+    else if (basesTaken === 1 && index === 0 && Math.random() < Math.min(.82, .45 + (runnerSpeed - 40) / 80)) destination = 2;
+    if (basesTaken === 2 && index === 0 && Math.random() < Math.min(.96, .74 + (runnerSpeed - 40) / 80)) destination = 3;
+    if (destination >= 3) runs++; else next[destination] = runnerSpeed;
+  }
   if (basesTaken >= 4) runs++; else next[basesTaken - 1] = speed;
-  if (basesTaken === 1 && next[2] && Math.random() < Math.min(.26, Math.max(.03, (next[2] - 36) / 175))) { next[2] = 0; runs++; }
+  if (basesTaken === 1 && next[2] && Math.random() < Math.min(.20, Math.max(.02, (next[2] - 58) / 130))) { next[2] = 0; runs++; }
   bases.splice(0, 3, ...next); return runs;
 }
 function forceWalk(bases: number[], speed: number): number {
@@ -87,8 +95,11 @@ function playHalf(offense: Team, defense: Team, hitting: Line, pitching: Line, b
   const bases = extraRunner ? [0, 55, 0] : [0, 0, 0];
   while (outs < 3) {
     maybeChangePitcher(defense, inning);
-    const bat = battingPlan(offense, battingMemory, strikes);
+    let bat = battingPlan(offense, battingMemory, strikes);
     const pitch = pitchingPlan(defense, pitchingMemory, balls, strikes, baitRemaining);
+    // This mode does not give the batter perfect information: it represents a
+    // player reading a repeated sequence correctly on roughly 35% of pitches.
+    if (STRATEGY === "read" && !pitch.ball && Math.random() < READ_RATE) bat = { ...bat, cell: pitch.cell };
     if (pitch.ball) { pitching.bait++; defense.baitUsed++; baitRemaining--; }
     const batter = offense.lineup[offense.batter], pitcher = defense.pitchers[defense.active];
     const result = resolvePlateAppearance({ batter, pitcher, targetCell: bat.cell, pitchCell: pitch.cell, ballDirection: pitch.ball, swing: bat.swing, pitch: pitch.pitch, count: { balls, strikes } });
@@ -132,5 +143,5 @@ const stat = (name: string, line: Line) => ({
   실투: line.mistakes, 제구이탈볼: line.wild, 유인구: line.bait, 유인구헛스윙: line.baitChase, 유인성공률: line.bait ? +(line.baitChase / line.bait).toFixed(3) : 0,
   방어율: +(line.runsAllowed * 27 / line.outsPitched).toFixed(2), 투구수: line.pitches,
 });
-console.log(`${STRATEGY === "random" ? "완전 무작위" : "전략적"} 1대1 시뮬레이션 ${GAMES.toLocaleString()}경기 · 평균 ${+(innings / (GAMES * 2)).toFixed(2)}이닝/팀 · 연장전 ${extras.toLocaleString()}회`);
+console.log(`${STRATEGY === "random" ? "완전 무작위" : STRATEGY === "read" ? `읽기 성공률 ${Math.round(READ_RATE * 100)}%` : "전략적"} 1대1 시뮬레이션 ${GAMES.toLocaleString()}경기 · 평균 ${+(innings / (GAMES * 2)).toFixed(2)}이닝/팀 · 연장전 ${extras.toLocaleString()}회`);
 console.table([stat("플레이어 A", a), stat("플레이어 B", b), stat("양 팀 합산/2", Object.fromEntries(Object.keys(a).map(key => [key, (a as any)[key] + (b as any)[key]])) as Line)]);
