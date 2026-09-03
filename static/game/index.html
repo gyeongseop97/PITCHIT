@@ -440,4 +440,30 @@ render=()=>{
   if(!hint){hint=document.createElement('p');hint.id='patternHistoryHint';hint.className='patternHistoryHint';zone.parentElement.after(hint)}
   hint.innerHTML='<b>심리전 기록</b> · 진한 표식은 직전 선택, 옅은 표식은 최근 5개 패턴입니다.';
 };
+</script><style id="expanded-guide-v2">
+.guideDialog .guideLead{margin:14px 0 0;padding:11px 13px;border-left:4px solid #e33b31;background:#fff5f3;color:#284968;font-size:13px;line-height:1.6}.guideDialog .guideCard.wide{grid-column:1/-1;background:#f3f8fe}.guideDialog .tip{margin:8px 0 0;padding:8px 9px;background:#fff;border:1px solid #d8e2ed;color:#284968;font-size:12px;line-height:1.5}.guideDialog .tip b{color:#e33b31}@media(max-width:760px){.guideDialog .guideCard.wide{grid-column:auto}.guideDialog .guideLead{font-size:12px}.guideDialog .tip{font-size:11px}}
+</style><script id="expanded-guide-v2">
+Object.assign(guideContent,{
+  info:{title:'PITCHIT 게임 정보',body:`
+    <p class="guideLead">PITCHIT은 공 하나마다 <b>상대의 다음 선택을 읽는</b> 야구 심리전입니다. 타자는 노릴 위치와 스윙을, 투수는 구종·코스·유인구를 동시에 결정합니다.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>경기 흐름</h3><ul><li>기본 경기는 <b>3이닝</b>입니다.</li><li>3아웃마다 공수 교대, 타순은 1번부터 순환합니다.</li><li>동점이면 <b>4회부터 무사 2루 승부치기</b>로 시작합니다.</li></ul></section>
+      <section class="guideCard"><h3>점수판 읽기</h3><ul><li><b>B / S / O</b>는 초록·노랑·빨강 원으로 표시됩니다.</li><li>주자 다이아몬드의 불이 켜진 베이스에 주자가 있습니다.</li><li>스코어보드에는 양 팀 <b>득점·안타·볼넷</b>이 누적됩니다.</li></ul></section>
+      <section class="guideCard"><h3>플레이 모드</h3><ul><li><b>싱글 플레이</b>: AI 상대로 규칙과 심리전 연습</li><li><b>빠른 대전</b>: 온라인 대기열에서 자동 매칭</li><li><b>친구와 플레이</b>: 초대 코드로 친구와 실시간 대결</li></ul></section>
+      <section class="guideCard"><h3>온라인 대전</h3><ul><li>양쪽 모두 선택하면 결과가 공개됩니다.</li><li>턴 제한은 <b>20초</b>이며, 시간 초과 시 자동 선택됩니다.</li><li>선택을 마치면 버튼이 비활성화되고 상대의 선택을 기다립니다.</li></ul></section>
+      <section class="guideCard wide"><h3>최근 패턴을 읽으세요</h3><p>존 위 표식은 상대의 선택 기록입니다. <b>진한 표식은 직전 선택</b>, 옅은 표식은 최근 5개 기록입니다. 공격 중에는 상대가 던진 실제 코스, 수비 중에는 상대가 노린 타격 위치를 봅니다.</p><p class="tip"><b>예시:</b> 상대가 2~3번 연속 바깥쪽을 노렸다면, 다음 공에 바깥쪽 유인구를 섞어 볼 수 있습니다. 반대로 상대 투수가 같은 모서리를 반복하면 그 근처를 파워 스윙으로 노려보세요.</p></section>
+    </div>`},
+  guide:{title:'플레이 가이드 & 요령',body:`
+    <p class="guideLead">정답은 하나가 아닙니다. <b>카운트, 능력치, 최근 5개 패턴</b>을 함께 보고 상대가 다음에 할 선택을 한 발 앞서 읽어 보세요.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>1. 타격: 5×5 존 선택</h3><p>타자는 공이 올 것 같은 한 칸을 고릅니다. 정확히 맞출수록 강한 타구가 늘고, 색칠된 주변 범위는 타격은 가능하지만 파울·약한 타구 비중이 높습니다.</p><p class="tip"><b>기본:</b> 상대 패턴을 읽지 못했을 때는 중앙 부근 컨택 스윙이 안정적입니다.</p></section>
+      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 중심 3×3. 가장 넓고 안정적이나 최고의 타구 확률은 낮습니다.</li><li><b>파워</b>: 십자 5칸. 맞히면 컨택보다 장타 기대값이 큽니다.</li><li><b>스팟</b>: 한 칸. 가장 위험하지만 정확히 읽으면 최고 타구 확률입니다.</li></ul><p class="tip"><b>예시:</b> 3볼처럼 유리한 카운트에서 상대의 한 코스를 확신하면 파워·스팟이 보상받습니다.</p></section>
+      <section class="guideCard"><h3>2. 투구: 존 승부</h3><p>직구 또는 변화구를 골라 5×5의 코스를 정합니다. 중앙은 맞을 위험이 크지만, 모서리는 안타를 줄이는 대신 볼·실투 위험이 조금 올라갑니다.</p><ul><li><b>직구</b>: 장타 위험은 낮지만 스윙 유도도 낮음</li><li><b>변화구</b>: 스윙을 더 이끌어내지만 맞으면 장타 위험이 큼</li></ul></section>
+      <section class="guideCard"><h3>유인구: 상·하·좌·우</h3><p>존 바깥 유인구는 별도 선택입니다. 타자가 그 방향을 노렸다면 헛스윙 스트라이크가 될 수 있고, 반대쪽을 읽었다면 볼이 됩니다.</p><p class="tip"><b>예시:</b> 타자가 바깥 열을 반복해 노리면 바깥 유인구보다 몸쪽 승부가 안전합니다. 2스트라이크에서는 유인구가 조금 더 효과적입니다.</p></section>
+      <section class="guideCard"><h3>3. 카운트별 판단</h3><ul><li><b>0–2</b>: 투수는 유인구·구석 승부, 타자는 파울로 버티는 선택을 고려하세요.</li><li><b>3볼</b>: 투수의 구석 공은 볼 위험이 조금 더 큽니다. 타자는 좋은 코스 하나를 과감하게 노릴 만합니다.</li><li><b>2스트라이크</b>: 정확 타겟 주변 공은 헛스윙보다 파울이 늘어납니다.</li></ul></section>
+      <section class="guideCard"><h3>4. 능력치 활용</h3><ul><li><b>파워</b>: 2루타·홈런 확률 상승</li><li><b>정확도</b>: 헛스윙·파울·범타 감소, 안타 상승</li><li><b>선구안</b>: 빗나간 공을 볼로 골라낼 가능성</li><li><b>주력</b>: 내야안타·3루타, 단타 추가 진루에 유리</li></ul></section>
+      <section class="guideCard"><h3>투수 능력치 활용</h3><ul><li><b>구속</b>: 타자의 타이밍을 흔듭니다.</li><li><b>제구</b>: 목표 코스 이탈·볼·실투를 줄입니다.</li><li><b>구위</b>: 맞아도 아웃 타구를 만들 확률을 높입니다.</li><li><b>변화</b>: 변화구의 헛스윙 유도력을 높입니다.</li></ul></section>
+      <section class="guideCard wide"><h3>주루와 승부치기</h3><p>주루는 별도 조작 없이 <b>주력 능력치에 따라 자동</b>으로 처리됩니다. 빠른 주자는 단타에 추가 진루할 수 있고, 3루 주자는 외야 뜬공에서 태그업 득점할 수 있습니다. 동점 연장에서는 무사 2루이므로, 공격은 한 점을 만드는 컨택·주루를, 수비는 삼진 또는 병살성 땅볼을 노리는 것이 핵심입니다.</p><p class="tip"><b>한 줄 요령:</b> 상대의 직전 선택 하나가 아니라 최근 5개 흐름을 보고, 확신이 없으면 컨택·중앙 근처, 확신이 생기면 파워 또는 스팟으로 보상을 노리세요.</p></section>
+    </div>`}
+});
 </script></body></html>
