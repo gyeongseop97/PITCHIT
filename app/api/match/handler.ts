@@ -146,10 +146,13 @@ function resolve(room: Room) {
   });
   game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, execution: plate.execution };
   game.history = [{ batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
-  game.event = `${plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : ""}${plate.message}`;
+  const executionNotice = plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : "";
+  game.event = `${executionNotice}${plate.message}`;
   if (plate.outcome === "ball") {
+    // A command miss is a forced take: it has already been ruled a ball by
+    // the shared engine, regardless of the hitter's target or swing type.
     game.balls++;
-    if (game.balls >= 4) { game.walks[game.half]++; walk(game, batter.v); game.event = `${plate.message} · 볼넷`; endPlate(game); }
+    if (game.balls >= 4) { game.walks[game.half]++; walk(game, batter.v); game.event = `${executionNotice}${plate.message} · 볼넷`; endPlate(game); }
   } else if (plate.outcome === "foul") {
     game.strikes = Math.min(2, game.strikes + 1);
   } else if (plate.outcome === "swinging_strike") {
