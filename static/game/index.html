@@ -578,6 +578,13 @@ start=async mode=>{
 .outsidePitchBall.out{right:1%!important;top:44%!important;transform:none!important}
 /* Selection buttons exist only inside .zone, so the transparent outer ring
    cannot be used as a batting target. */
+.ballDirections button{z-index:12!important;width:30px!important;height:30px!important;padding:0!important;border-radius:50%!important;background:#f8fbff!important;color:#173b62!important;font-size:17px!important;line-height:1!important;box-shadow:0 1px 0 #b5c5d4!important}
+.ballDirections button[data-ball="high"]{left:50%!important;top:1%!important;transform:translateX(-50%)!important}
+.ballDirections button[data-ball="low"]{left:50%!important;top:auto!important;bottom:1%!important;transform:translateX(-50%)!important}
+.ballDirections button[data-ball="in"]{left:1%!important;top:50%!important;transform:translateY(-50%)!important}
+.ballDirections button[data-ball="out"]{left:auto!important;right:1%!important;top:50%!important;transform:translateY(-50%)!important}
+.ballDirections button.on{background:#183b62!important;color:#fff!important;box-shadow:inset 0 -3px #e33b31!important}.baitLimit{position:static!important;width:min(450px,100%);margin:5px auto 0!important;padding:4px 8px!important;border-radius:0!important;background:#f2f6fa!important;color:#36556f!important;text-align:center;font-size:10px!important;box-shadow:none!important;transform:none!important}
+@media(max-width:760px){.ballDirections button{width:24px!important;height:24px!important;font-size:14px!important}.baitLimit{width:min(70vw,31dvh,250px);margin:2px auto 0!important;padding:3px 4px!important;font-size:8px!important}}
 </style><script id="outside-bait-ui-v1">
 const applyMatchBeforeOutsideBaitUi=applyMatch;
 applyMatch=function(data){
@@ -595,13 +602,15 @@ render=()=>{
   zone.querySelectorAll('.ball').forEach(cell=>{if(lastBall)cell.classList.remove('ball')});
   document.getElementById('outsidePitchBall')?.remove();
   if(lastBall){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${lastBall}`;ball.title='스트라이크존 밖 실제 투구 위치';wrap.append(ball)}
-  if(state.half!=='bottom')return;
-  let tactics=document.getElementById('ballDirections');if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}
+  let tactics=document.getElementById('ballDirections'),limit=document.getElementById('baitLimit');
+  if(state.half!=='bottom'&&state.mode!=='tutorial'){tactics?.remove();limit?.remove();return;}
+  if(state.mode==='tutorial')return;
+  if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}
   wrap.append(tactics);
   const remaining=state.baitRemaining??10;
-  tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" ${remaining<=0?'disabled':''} class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
-  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
-  let limit=document.getElementById('baitLimit');if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.append(limit)}limit.textContent=`사용 가능 ${remaining} / 10`;
+  tactics.innerHTML=['high:↑','low:↓','in:←','out:→'].map(item=>{const [value,label]=item.split(':');const name=value==='high'?'상단':value==='low'?'하단':value==='in'?'몸쪽':'바깥쪽',selected=state.pitchBallDirection===value;return `<button data-ball="${value}" title="${name} 유인구" aria-label="${name} 유인구" aria-pressed="${selected}" ${remaining<=0?'disabled':''} class="${selected?'on':''}">${label}</button>`}).join('');
+  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{const direction=button.dataset.ball;state.pitchBallDirection=state.pitchBallDirection===direction?null:direction;render()});
+  if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.after(limit)}limit.textContent=`유인구 ${remaining} / 10 · 방향을 다시 누르면 일반 투구`;
 };
 </script><style id="tutorial-mode-v1">
 .tutorial{background:#f3bf3e;color:#102846;box-shadow:0 7px 0 #a77b12}.tutorialCoach{width:min(520px,100%);margin:8px auto;padding:12px 14px;border:2px solid #102846;background:#fffdf4;color:#183b62;box-shadow:0 4px 0 #d3b15b}.tutorialCoach b{color:#e33b31}.tutorialCoach small{display:block;margin-bottom:4px;color:#7a6531;font-weight:900;letter-spacing:.08em}.tutorialCoach p{margin:4px 0 0;font-size:13px;line-height:1.5}.zone button.pick:not(.tutorial-target){position:relative;z-index:2;box-shadow:inset 0 0 0 3px #f0d047,0 0 0 2px #fff!important;animation:cursorPulse 1s ease-in-out infinite}.zone button.tutorial-target{box-shadow:inset 0 0 0 3px #f0b728,0 0 0 2px #fff!important;animation:tutorialPulse 1s ease-in-out infinite}.zone button.tutorial-target:after{content:"여기";position:absolute;z-index:14;left:50%;top:-23px;transform:translateX(-50%);padding:2px 5px;border-radius:3px;background:#102846;color:#fff;font-size:10px;font-weight:900;white-space:nowrap}@keyframes tutorialPulse{50%{filter:brightness(1.13)}}@keyframes cursorPulse{50%{box-shadow:inset 0 0 0 3px #fff08a,0 0 0 4px #f0b728!important;filter:brightness(1.08)}}.tutorialDone{position:fixed;z-index:90;inset:0;display:grid;place-items:center;padding:18px;background:#071a2bd9}.tutorialDone article{width:min(520px,100%);padding:26px;background:#fff;color:#102846;border:3px solid #f0b728;text-align:center;box-shadow:0 22px 64px #0009}.tutorialDone h2{margin:5px 0 12px;font-size:32px}.tutorialDone p{line-height:1.6;color:#405b76}.tutorialDone ul{margin:14px 0;padding:12px 20px;text-align:left;background:#f6f9fc;line-height:1.7;font-size:13px}.tutorialDone button{width:100%;padding:13px;border:0;background:#e33b31;color:#fff;font-weight:900;cursor:pointer}@media(max-width:760px){.tutorialCoach{width:min(74vw,34dvh,280px);padding:7px 9px;margin:3px auto}.tutorialCoach p{font-size:10px}.tutorialCoach small{font-size:8px}.zone button.tutorial-target:after{top:-16px;font-size:7px}.tutorialDone article{padding:19px}.tutorialDone h2{font-size:26px}.tutorialDone p,.tutorialDone ul{font-size:12px}}
