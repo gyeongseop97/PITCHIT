@@ -2,10 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "npx next build",
-  "outputDirectory": ".next",
-  "functions": {
-    "api/match.ts": {
-      "maxDuration": 30
-    }
-  }
+  "outputDirectory": ".next"
 }
