@@ -212,4 +212,11 @@ render=()=>{
   if(!readout){readout=document.createElement('p');readout.id='opponentReadout';readout.className='opponentReadout';document.querySelector('.zoneWrap').after(readout)}
   if(state.net&&state.opponentLastCell!==null&&state.opponentLastCell!==undefined){const row=Math.floor(state.opponentLastCell/5)+1,col=state.opponentLastCell%5+1;readout.textContent=`${state.opponentLastLabel} · ${row}행 ${col}열`;readout.style.display='block'}else readout.style.display='none';
 };
-</script></body></html>
+</script><style id="scoreboard-counts-v3">
+@media(max-width:760px){
+  .score{grid-template-columns:38px 60px 64px minmax(100px,1fr);align-items:center}
+  .counts{flex-direction:column;align-items:flex-start;justify-content:center;gap:3px}
+  .countGroup{min-height:10px;gap:3px}.countGroup small{width:8px;font-size:8px}.countGroup i{width:7px;height:7px}
+  .score>div:last-child{min-width:100px}.score>div:last-child small{white-space:nowrap;font-size:8px}.score>div:last-child b{font-size:21px}
+}
+</style></body></html>
