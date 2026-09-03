@@ -906,4 +906,39 @@ function recordFinishedGame(game) {
 }
 const showGameSummaryBeforeCareer = showGameSummary;
 showGameSummary = function(game) { recordFinishedGame(game); showGameSummaryBeforeCareer(game); };
+</script><style id="broadcast-and-ai-v1">
+.broadcastCall{width:min(620px,100%);margin:8px auto 12px;padding:10px 16px;border-left:5px solid #e33b31;background:linear-gradient(90deg,#102846,#1a4678);color:#fff;box-shadow:0 6px 14px #10284622;font-size:15px;font-weight:900;line-height:1.4;animation:broadcastIn .26s ease-out}.broadcastCall small{display:block;margin-bottom:2px;color:#9bc7f3;font-size:10px;letter-spacing:.13em}.pitchFlight{position:absolute;z-index:15;width:18%;aspect-ratio:1;left:50%;top:-16%;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 5px 4px #10284688);pointer-events:none;animation:pitchFlight .62s cubic-bezier(.18,.78,.3,1) forwards}.zoneWrap.resultFlash .zone{animation:zoneFlash .52s ease-out}.zoneWrap.resultFlash.hit .zone{box-shadow:0 0 0 4px #e33b31,0 0 28px #e33b3180}.zoneWrap.resultFlash.out .zone{box-shadow:0 0 0 4px #173b62,0 0 25px #173b6280}@keyframes pitchFlight{0%{transform:translate(-50%,0) scale(.45);opacity:.2}70%{opacity:1}100%{left:calc(14% + var(--pitch-x) * 14.4%);top:calc(14% + var(--pitch-y) * 14.4%);transform:translate(-50%,-50%) scale(1.05);opacity:0}}@keyframes broadcastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}@keyframes zoneFlash{50%{filter:brightness(1.2)}}.aiScout{margin:8px 0 0;padding:10px 11px;border:1px solid #b9cadc;background:#f3f8fe;color:#264966;font-size:12px;line-height:1.45}.aiScout b{color:#e33b31}@media(max-width:760px){.broadcastCall{width:min(70vw,31dvh,250px);margin:3px auto 5px;padding:6px 8px;font-size:10px}.broadcastCall small{font-size:7px}.aiScout{font-size:10px;padding:7px}.pitchFlight{width:20%}}
+</style><script id="broadcast-and-ai-v1">
+const aiStyleHint = { '공격형': '중앙 승부와 강한 스윙을 선호합니다.', '모서리형': '구석 코스를 반복해서 공략합니다.', '유인구형': '변화구와 유인구 비중이 높습니다.', '혼합형': '구종과 코스를 고르게 섞습니다.' };
+function distanceBetween(a, b) { return Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs(a % 5 - b % 5); }
+function broadcastText(game) {
+  const play = game?.lastPlay; if (!play) return '';
+  const outcome = game.event || ''; const actual = play.actualCell;
+  const contact = distanceBetween(play.bat.cell, actual);
+  const reason = play.execution === 'mistake' ? '실투가 노린 타격 범위로 몰렸습니다.' : play.execution === 'wild' ? '제구가 흔들려 존을 벗어났습니다.' : play.execution === 'bait' ? '유인구 승부입니다.' : contact === 0 ? '예측이 정확히 맞았습니다.' : contact <= 1 ? '타겟 주변을 건드렸습니다.' : '타격 범위를 벗어났습니다.';
+  const call = /홈런/.test(outcome) ? '쭉쭉 뻗습니다! 담장을 넘겼습니다!' : /3루타/.test(outcome) ? '외야 깊숙이 빠집니다! 3루까지 갑니다!' : /2루타/.test(outcome) ? '강한 타구, 외야를 가릅니다!' : /안타/.test(outcome) ? '깔끔하게 공략했습니다, 안타!' : /삼진/.test(outcome) ? '헛스윙! 삼진으로 돌려세웁니다!' : /땅볼/.test(outcome) ? '낮게 깔린 타구, 땅볼 처리!' : /뜬공/.test(outcome) ? '높이 뜬 타구, 뜬공 처리!' : /파울/.test(outcome) ? '끈질기게 걷어냅니다, 파울!' : /볼넷/.test(outcome) ? '침착하게 골라냅니다, 볼넷!' : /볼/.test(outcome) ? '유인에 넘어가지 않았습니다, 볼!' : '스트라이크!';
+  return { title: `${play.pitchName} ${play.speed}km/h`, call, reason, actual };
+}
+let broadcastKey = '';
+function showBroadcast(game) {
+  const data = broadcastText(game); if (!data) return;
+  const key = `${game.deadline}:${game.event}:${data.actual}`; if (key === broadcastKey) return; broadcastKey = key;
+  let call = document.getElementById('broadcastCall'); if (!call) { call = document.createElement('section'); call.id = 'broadcastCall'; call.className = 'broadcastCall'; document.querySelector('.zoneWrap').before(call); }
+  call.innerHTML = `<small>LIVE PLAY-BY-PLAY · ${data.title}</small>${data.call}<br><small>${data.reason}</small>`;
+  const wrap = document.querySelector('.zoneWrap'); const flight = document.createElement('i'); flight.className = 'pitchFlight'; flight.style.setProperty('--pitch-x', data.actual % 5); flight.style.setProperty('--pitch-y', Math.floor(data.actual / 5)); wrap.append(flight); wrap.classList.remove('resultFlash','hit','out'); wrap.classList.add('resultFlash', /안타|루타|홈런/.test(game.event) ? 'hit' : /아웃|삼진/.test(game.event) ? 'out' : ''); setTimeout(() => { flight.remove(); wrap.classList.remove('resultFlash','hit','out'); }, 700);
+}
+const applyMatchBeforeBroadcast = applyMatch;
+applyMatch = function(data) {
+  const value = applyMatchBeforeBroadcast(data);
+  if (data?.game?.lastPlay) showBroadcast(data.game);
+  if (matchSession?.mode === 'solo' && data?.game?.aiStyle) { state.aiStyle = data.game.aiStyle; render(); }
+  return value;
+};
+const renderBeforeBroadcast = render;
+render = function() {
+  renderBeforeBroadcast();
+  if (state.mode !== 'solo' || !state.aiStyle) return;
+  const side = document.querySelector('.infoPanel'); if (!side || side.querySelector('.aiScout')) return;
+  const scout = document.createElement('p'); scout.className = 'aiScout'; scout.innerHTML = `<b>AI 성향 · ${state.aiStyle}</b><br>${aiStyleHint[state.aiStyle] || ''}`; side.prepend(scout);
+};
 </script></body></html>

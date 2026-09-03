@@ -28,6 +28,7 @@ type Game = {
   lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; execution?: "command" | "bait" | "mistake" | "wild" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
+  aiStyle: "공격형" | "모서리형" | "유인구형" | "혼합형";
   event: string;
 };
 type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -59,7 +60,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "유인구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -217,16 +218,28 @@ function trackBalance(outcome: string, swing: string, pitch: string) {
   ]).catch(() => undefined);
 }
 function aiChoice(game: Game, player: PlayerId): Choice {
+  const corners = [0, 4, 20, 24], center = [6, 7, 8, 11, 12, 13, 16, 17, 18], edges = [1, 3, 5, 9, 15, 19, 21, 23];
+  const pick = (cells: number[]) => cells[Math.floor(Math.random() * cells.length)];
+  const pitcher = game.teams[player].pitchers[game.teams[player].activePitcher];
   if (player === actor(game)) {
     const swings: SwingType[] = ["contact", "power", "spot"];
-    return { kind: "bat", cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: swings[Math.floor(Math.random() * swings.length)] };
+    // Aggressive AI hitters sit on the middle; corner/bait personalities
+    // hunt an edge more often. A repeated pattern remains readable.
+    const cell = game.aiStyle === "공격형" ? pick(center) : game.aiStyle === "모서리형" ? pick(edges) : pick(strikeCells);
+    return { kind: "bat", cell, swing: game.aiStyle === "공격형" && Math.random() < .42 ? "power" : swings[Math.floor(Math.random() * swings.length)] };
   }
   const balls: BallDirection[] = ["high", "low", "in", "out"];
+  const type = pitcher?.t ?? "구위형";
+  const style = game.aiStyle;
+  const cornerHeavy = style === "모서리형" || type === "제구형";
+  const baitHeavy = style === "유인구형" || type === "변화형";
+  const fastHeavy = type === "구속형";
+  const target = cornerHeavy ? pick(Math.random() < .72 ? corners : edges) : type === "구위형" ? pick([11, 12, 13, 16, 17, 18]) : pick(style === "공격형" ? center : strikeCells);
   return {
     kind: "pitch",
-    cell: strikeCells[Math.floor(Math.random() * strikeCells.length)],
-    pitch: Math.random() < 0.45 ? "breaking" : "fast",
-    ...(Math.random() < 0.18 ? { ball: balls[Math.floor(Math.random() * balls.length)] } : {}),
+    cell: target,
+    pitch: baitHeavy ? (Math.random() < .76 ? "breaking" : "fast") : fastHeavy ? (Math.random() < .78 ? "fast" : "breaking") : (Math.random() < .48 ? "breaking" : "fast"),
+    ...(Math.random() < (baitHeavy ? .28 : style === "공격형" ? .08 : .14) ? { ball: balls[Math.floor(Math.random() * balls.length)] } : {}),
   };
 }
 async function readBody(req: any) {
