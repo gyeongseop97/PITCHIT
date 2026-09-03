@@ -666,7 +666,7 @@ runTutorialStep=()=>{
 const renderBeforeStableTutorialFlow=render;
 render=()=>{
   renderBeforeStableTutorialFlow();
-  if(state.mode!=='tutorial')return;
+  if(state.mode!=='tutorial'){document.getElementById('tutorialCoach')?.remove();document.getElementById('tutorialDone')?.remove();return;}
   const step=tutorialSteps[tutorialIndex];if(!step)return;
   // Disable swing/pitch switching during a fixed scenario, but keep the
   // prepared action visibly selected so the lesson stays easy to follow.
