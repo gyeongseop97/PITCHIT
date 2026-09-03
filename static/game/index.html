@@ -724,4 +724,22 @@ applyMatch = function(data) {
   resultBannerDeadline = game.deadline;
   if (completedTurn) revealOutcome(state.serverEvent || game.event || '투구 결과가 나왔습니다.');
 };
+</script><script id="match-presentation-polish-v1">
+// The home buttons should describe the mode that actually opens. Keeping
+// this here also updates the static GitHub Pages build without duplicating
+// the legacy markup above.
+document.querySelector('[data-mode="quick"] small').textContent = '온라인 상대 자동 매칭';
+document.querySelector('[data-mode="friend"] small').textContent = '초대 코드 실시간 대결';
+
+// The engine message already starts with the pitch type and velocity. Use it
+// directly so the scoreboard and result banner never repeat that prefix.
+const applyMatchBeforePresentationPolish = applyMatch;
+applyMatch = function(data) {
+  applyMatchBeforePresentationPolish(data);
+  if (data.game?.lastPlay && data.game?.event) {
+    state.serverEvent = data.game.event;
+    if ((state.netOutcomeUntil || 0) > Date.now()) state.netOutcome = data.game.event;
+    render();
+  }
+};
 </script></body></html>
