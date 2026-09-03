@@ -3,6 +3,9 @@ import { randomBytes } from "node:crypto";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
+type Batter = { n: string; t: string; p: number; a: number; e: number; v: number };
+type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
+type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type Game = {
   status: "waiting" | "playing" | "finished";
   inning: number;
@@ -13,6 +16,7 @@ type Game = {
   outs: number;
   bases: [number, number, number];
   batter: [number, number];
+  teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
   lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId } | null;
@@ -28,9 +32,23 @@ const ttl = 60 * 60 * 6;
 const key = (code: string) => `pitchit:room:${code}`;
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
+const batterTypes = [
+  { t: "컨택형", p: 45, a: 85, e: 55, v: 45 }, { t: "파워형", p: 85, a: 48, e: 52, v: 45 },
+  { t: "주루형", p: 45, a: 57, e: 48, v: 80 }, { t: "선구안형", p: 48, a: 58, e: 82, v: 42 },
+];
+const pitcherTypes = [
+  { t: "구속형", v: 86, c: 52, s: 50, m: 42 }, { t: "제구형", v: 48, c: 88, s: 48, m: 46 },
+  { t: "구위형", v: 53, c: 50, s: 87, m: 40 }, { t: "변화형", v: 50, c: 54, s: 45, m: 86 },
+];
+const makeTeam = (): Team => {
+  const lineup = Array.from({ length: 9 }, (_, index) => ({ ...batterTypes[Math.floor(Math.random() * batterTypes.length)], n: `${index + 1}번 타자` }));
+  const pitchers = [...pitcherTypes].sort(() => Math.random() - 0.5).map((pitcher, index) => ({ ...pitcher, n: `${index + 1}번 투수` }));
+  const activePitcher = Math.floor(Math.random() * pitchers.length);
+  return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
+};
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], deadline: 0, choices: {}, lastPlay: null, event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -73,7 +91,11 @@ function endPlate(game: Game) {
   game.outs = 0;
   game.bases = [0, 0, 0];
   if (game.half === 0) game.half = 1;
-  else { game.half = 0; game.inning++; }
+  else if (game.inning >= 3) {
+    game.status = "finished";
+    game.deadline = 0;
+    game.event = game.scores[0] === game.scores[1] ? "3이닝 종료 · 무승부" : `3이닝 종료 · ${game.scores[0] > game.scores[1] ? "p1" : "p2"} 승리`;
+  } else { game.half = 0; game.inning++; }
 }
 function resolve(room: Room) {
   const game = room.game;
@@ -103,7 +125,7 @@ function resolve(room: Room) {
   } else {
     advance(game, 1); game.event = "안타!"; endPlate(game);
   }
-  nextPitch(game);
+  if (game.status === "playing") nextPitch(game);
 }
 async function readBody(req: any) {
   return typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body ?? {});
@@ -138,6 +160,7 @@ export default async function handler(req: any, res: any) {
     if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
     if (room.game.status === "playing" && Date.now() >= room.game.deadline) resolve(room);
     if (input.action === "choose") {
+      if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
       room.game.choices[player] = input.choice;

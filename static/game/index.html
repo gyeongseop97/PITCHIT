@@ -241,4 +241,38 @@ const guideContent={
 };
 function openGuide(kind){const data=guideContent[kind];let overlay=document.getElementById('guideOverlay');if(!overlay){overlay=document.createElement('div');overlay.id='guideOverlay';overlay.className='guideOverlay';document.body.append(overlay)}overlay.innerHTML=`<section class="guideDialog" role="dialog" aria-modal="true"><header><h2>${data.title}</h2><button class="guideClose" aria-label="닫기">닫기</button></header>${data.body}</section>`;overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.querySelector('.guideClose').onclick=()=>overlay.remove()}
 const guideActions=document.createElement('div');guideActions.className='homeGuideActions';guideActions.innerHTML='<button type="button" data-guide="info">게임 정보</button><button type="button" data-guide="guide">플레이 가이드</button>';document.querySelector('.modes').after(guideActions);guideActions.querySelectorAll('[data-guide]').forEach(button=>button.onclick=()=>openGuide(button.dataset.guide));
+</script><script id="roster-and-inning-v1">
+const applyMatchBeforeRosters=applyMatch;
+applyMatch=function(data){
+  applyMatchBeforeRosters(data);
+  const game=data.game,me=matchSession?.player;
+  if(game.teams&&me){
+    const mine=game.teams[me],opponent=game.teams[me==='p1'?'p2':'p1'],myIndex=me==='p1'?0:1,opponentIndex=myIndex?0:1;
+    state.pitchers=mine.pitchers;state.activePitcher=mine.activePitcher;state.usedPitchers=mine.usedPitchers;
+    state.awayPitchers=opponent.pitchers;state.awayActivePitcher=opponent.activePitcher;state.awayUsedPitchers=opponent.usedPitchers;
+    state.batter=mine.lineup[game.batter[myIndex]];state.awayBatter=opponent.lineup[game.batter[opponentIndex]];
+    state.onlineLineup=mine.lineup;state.onlineAwayLineup=opponent.lineup;
+  }
+  state.gameHalf=game.half;state.finished=game.status==='finished';render();
+};
+const finishAtBatBeforeInningEnd=finishAtBat;
+finishAtBat=(text,offense)=>{
+  const wasBottom=state.half==='bottom';
+  const result=finishAtBatBeforeInningEnd(text,offense);
+  if(wasBottom&&state.inning>3){state.inning=3;state.finished=true;return text+' · 3이닝 종료!';}
+  return result;
+};
+const pitchBeforeOpponentTarget=pitch;
+pitch=()=>{state.opponentLastCell=Math.floor(Math.random()*25);state.opponentLastIcon='◎';state.opponentLastLabel='상대 직전 타격 노림';pitchBeforeOpponentTarget()};
+const renderBeforeRosterAndInning=render;
+render=()=>{
+  renderBeforeRosterAndInning();
+  if(!state.mode)return;
+  const inningHalf=state.gameHalf===0?'초':state.gameHalf===1?'말':state.half==='bottom'?'말':'초';
+  const halfText=document.querySelector('.score>div:first-child small:last-child');if(halfText)halfText.textContent=inningHalf;
+  const action=$('swing');
+  if(state.finished){action.disabled=true;action.classList.add('waiting');action.textContent='경기 종료';}
+  let readout=document.getElementById('opponentReadout');
+  if(readout&&state.opponentLastCell!==null&&state.opponentLastCell!==undefined&&(state.net||state.half==='bottom')){const row=Math.floor(state.opponentLastCell/5)+1,col=state.opponentLastCell%5+1;readout.textContent=`${state.opponentLastLabel||'상대 직전 타격 노림'} · ${row}행 ${col}열`;readout.style.display='block';const cell=$('zone').querySelector(`[data-z="${state.opponentLastCell}"]`);if(cell){cell.classList.add('opponent-last');cell.dataset.opponent=state.opponentLastIcon||'◎';}}
+};
 </script></body></html>
