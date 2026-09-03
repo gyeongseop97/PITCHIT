@@ -69,4 +69,645 @@ newPitchers=()=>{newPitchersBeforeTeams();state.awayLineup=makeLineup();state.aw
 finishAtBat=(text,offense)=>{resetCount();if(offense==="my"){state.turn=(state.turn+1)%lineup.length;state.batter=lineup[state.turn]}else{state.awayTurn=(state.awayTurn+1)%state.awayLineup.length;state.awayBatter=state.awayLineup[state.awayTurn]}if(state.o<3)return text;state.o=0;state.bases=[0,0,0];if(state.half==="top"){state.half="bottom";return text+" · 3아웃! 공수 교대, 이제 수비입니다."}state.half="top";state.inning++;return text+" · 3아웃! 공수 교대, 다시 공격입니다."};
 renderGameInfo=()=>{if(!state.mode||!state.pitchers)return;const side=document.querySelector("aside.panel"),attacking=state.half==="top",battingLineup=attacking?lineup:state.awayLineup,batter=attacking?state.batter:state.awayBatter,batTurn=attacking?state.turn:state.awayTurn,pitchingStaff=attacking?state.awayPitchers:state.pitchers,active=attacking?state.awayActivePitcher:state.activePitcher,used=attacking?state.awayUsedPitchers:state.usedPitchers,p=pitchingStaff[active];side.className="panel infoPanel";side.innerHTML=`<section class="infoCard"><h3>${attacking?'우리팀 공격 정보':'상대팀 공격 정보'}</h3><h4>현재 타자 · ${batter.n} ${batter.t}</h4><p>파워 ${batter.p} · 정확도 ${batter.a}<br>선구안 ${batter.e} · 주력 ${batter.v}</p><h4>타순</h4><div class="infoLineup">${battingLineup.map((x,i)=>`<span class="${i===batTurn?'now':''}">${i+1}. ${x.t.replace('형','')}</span>`).join('')}</div></section><section class="infoCard"><h3>${attacking?'상대팀 수비 정보':'우리팀 수비 정보'}</h3><h4>현재 투수 · ${p.n}</h4><p>구속 ${p.v} · 제구 ${p.c}<br>구위 ${p.s} · 변화 ${p.m}</p><h4>${attacking?'상대 불펜':'우리 불펜'}</h4><div class="bullpen">${pitchingStaff.map((x,i)=>`<button data-reliever="${i}" class="${i===active?'active':''}" ${attacking||used.includes(i)?'disabled':''}>${x.t} · 구속 ${x.v} / 제구 ${x.c}</button>`).join('')}</div><div class="defenseNote">${attacking?'상대 투수진을 공략하세요.':'수비 중: 사용하지 않은 우리 투수만 교체할 수 있습니다.'}</div></section>`;if(!attacking)side.querySelectorAll('[data-reliever]').forEach(button=>button.onclick=()=>{const i=+button.dataset.reliever;if(state.usedPitchers.includes(i))return;state.activePitcher=i;state.usedPitchers.push(i);$("result").textContent=`투수 교체 · ${state.pitchers[i].n} 등판`;$("art").className="art";render()})};
 if(state.mode&&!state.awayLineup)newPitchers();render();
+</script><script id="multiplayer-room-v1">
+let matchSession=null,matchPoll=null;
+const matchApi=location.hostname.endsWith('github.io')?'https://pitchit-baseball.vercel.app/api/match':'/api/match';let requestMatch=async(body)=>{const response=await fetch(matchApi,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error||'서버 연결 실패');return data};
+function friendLobby(){let box=document.getElementById('friendLobby');if(!box){box=document.createElement('section');box.id='friendLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}box.innerHTML='<h3>친구와 실시간 대전</h3><p class="hint">방을 만들거나 친구의 초대 코드를 입력하세요. 경기 중 선택 시간은 20초입니다.</p><input id="friendName" placeholder="내 이름" maxlength="16"><div class="types"><button id="createRoom">초대 코드 생성</button><button id="joinRoom">초대 코드 입력</button></div><p class="result" id="friendStatus">서버 연결 준비 완료</p>';document.getElementById('createRoom').onclick=async()=>{try{const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};document.getElementById('friendStatus').textContent=`초대 코드: ${data.code} · 친구의 입장을 기다리는 중`;watchMatch()}catch(e){document.getElementById('friendStatus').textContent=e.message}};document.getElementById('joinRoom').onclick=async()=>{const code=prompt('친구에게 받은 6자리 초대 코드를 입력하세요.');if(!code)return;try{const data=await requestMatch({action:'join',code,name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};beginMatch(data)}catch(e){document.getElementById('friendStatus').textContent=e.message}}}
+function applyMatch(data){if(!matchSession)return;const g=data.game,me=matchSession.player,index=me==='p1'?0:1;state.mode='friend';state.net=true;state.inning=g.inning;state.r=g.scores[index];state.away=g.scores[index?0:1];state.b=g.balls;state.s=g.strikes;state.o=g.outs;state.bases=g.bases;state.turn=g.batter[index];state.awayTurn=g.batter[index?0:1];state.batter=lineup[state.turn];state.awayBatter=state.awayLineup?.[state.awayTurn]||state.batter;state.half=(g.half===0?'p1':'p2')===me?'top':'bottom';state.deadline=g.deadline;state.serverEvent=g.event;render()}
+function beginMatch(data){document.getElementById('friendLobby')?.remove();applyMatch(data);watchMatch()}
+async function watchMatch(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data);else document.getElementById('friendStatus').textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}catch(e){clearInterval(matchPoll)}},700)}
+async function submitMatch(){if(!matchSession)return;const kind=state.half==='top'?'bat':'pitch';try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data);$('result').textContent='작전을 전송했습니다. 상대 선택 또는 제한 시간을 기다리는 중입니다.'}catch(e){$('result').textContent=e.message}}
+const renderBeforeMultiplayer=render;render=()=>{renderBeforeMultiplayer();if(!state.net)return;$('swing').onclick=submitMatch;$('reveal').textContent=state.serverEvent||'상대의 선택을 기다리는 중입니다.';const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));$('swing').textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;};
+document.querySelector('[data-mode="friend"]').onclick=friendLobby;
+</script><style id="multiplayer-feedback-style">
+.zone button.opponent-last{position:relative;background:#dbeafe!important;box-shadow:inset 0 0 0 3px #1d4ed8!important}.zone button.opponent-last:after{content:attr(data-opponent);position:absolute;inset:0;display:grid;place-items:center;font-size:31px;filter:drop-shadow(0 1px 1px #fff)}.zoneOutcome{position:absolute;z-index:7;left:50%;top:50%;transform:translate(-50%,-50%);min-width:58%;padding:13px 18px;text-align:center;border:3px solid #fff;border-radius:12px;background:rgba(13,42,76,.93);color:#fff;font-weight:1000;font-size:clamp(24px,5vw,42px);letter-spacing:-.04em;box-shadow:0 10px 24px rgba(4,20,42,.35);pointer-events:none}.zoneOutcome.hit{background:rgba(205,46,37,.95)}.zoneOutcome.out{background:rgba(24,51,83,.95)}.zoneOutcome.ball{background:rgba(154,88,14,.95)}.zoneOutcome.strike{background:rgba(52,85,123,.95)}.action.waiting,.action:disabled{background:#94a3b8!important;box-shadow:0 5px 0 #64748b!important;cursor:wait!important;transform:none!important}
+</style>
+<script id="multiplayer-feedback-v2">
+let matchSubmitted=false,matchDeadline=0,shownNetEvent='';
+const applyMatchBeforeFeedback=applyMatch;
+applyMatch=function(data){
+  applyMatchBeforeFeedback(data);
+  const g=data.game;
+  const amBatting=state.half==='top';
+  state.opponentLastCell=g.lastPlay?(amBatting?g.lastPlay.pitch.cell:g.lastPlay.bat.cell):null;
+  state.opponentLastIcon=amBatting?'⚾':'◎';
+  state.opponentLastLabel=amBatting?'상대 직전 투구':'상대 직전 타격 노림';
+  if(matchDeadline&&matchDeadline!==g.deadline)matchSubmitted=false;
+  matchDeadline=g.deadline;
+  if(g.lastPlay&&shownNetEvent!==g.event){shownNetEvent=g.event;state.netOutcome=g.event;}
+  render();
+};
+async function submitMatch(){
+  if(!matchSession||matchSubmitted)return;
+  matchSubmitted=true;render();
+  const kind=state.half==='top'?'bat':'pitch';
+  try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data)}
+  catch(e){matchSubmitted=false;$('result').textContent=e.message;render()}
+}
+const renderBeforeFeedback=render;
+render=()=>{
+  renderBeforeFeedback();
+  if(!state.net)return;
+  const button=$('swing');
+  const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));
+  button.disabled=matchSubmitted;
+  button.classList.toggle('waiting',matchSubmitted);
+  button.textContent=matchSubmitted?'선택 완료 · 상대방의 선택을 기다리는 중':(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;
+  $('result').textContent=matchSubmitted?'선택을 전송했습니다. 상대방의 선택 또는 제한 시간을 기다리는 중입니다.':(state.serverEvent||'작전을 선택하세요.');
+  const prior=$('zone').querySelector(`[data-z="${state.opponentLastCell}"]`);
+  if(prior){prior.classList.add('opponent-last');prior.dataset.opponent=state.opponentLastIcon;prior.title=state.opponentLastLabel;}
+  let outcome=document.getElementById('zoneOutcome');
+  if(!outcome){outcome=document.createElement('div');outcome.id='zoneOutcome';outcome.className='zoneOutcome';document.querySelector('.zoneWrap').append(outcome)}
+  const message=state.netOutcome||'';
+  outcome.textContent=message;
+  outcome.style.display=message?'block':'none';
+  outcome.className='zoneOutcome '+(message.includes('안타')||message.includes('홈런')||message.includes('루타')?'hit':message.includes('아웃')?'out':message.includes('볼')?'ball':'strike');
+};
+</script><style id="multiplayer-feedback-v3-style">
+.zoneOutcome{top:4%;transform:translate(-50%,0);min-width:48%;padding:8px 16px;font-size:clamp(18px,3.6vw,30px)}
+</style>
+<script id="multiplayer-feedback-v3">
+let outcomeTimer=null;
+function revealOutcome(text,local=false){
+  if(local){state.localOutcome=text;state.localOutcomeUntil=Date.now()+3000}
+  else{state.netOutcome=text;state.netOutcomeUntil=Date.now()+3000}
+  clearTimeout(outcomeTimer);
+  outcomeTimer=setTimeout(()=>{if(local)state.localOutcome='';else state.netOutcome='';render()},3050);
+}
+const setResultBeforeOutcome=setResult;
+setResult=(text,kind)=>{revealOutcome(text,true);setResultBeforeOutcome(text,kind)};
+const applyMatchBeforeFeedbackV3=applyMatch;
+applyMatch=function(data){
+  const previousDeadline=matchDeadline;
+  applyMatchBeforeFeedbackV3(data);
+  const g=data.game,me=matchSession?.player;
+  if(g.lastPlay&&me){
+    const opponentChoice=g.lastPlay.attacker===me?g.lastPlay.pitch:g.lastPlay.bat;
+    state.opponentLastCell=opponentChoice.cell;
+    state.opponentLastIcon=opponentChoice.kind==='pitch'?'⚾':'◎';
+    state.opponentLastLabel=opponentChoice.kind==='pitch'?'상대 직전 투구':'상대 직전 타격 노림';
+  }
+  if(previousDeadline&&previousDeadline!==g.deadline&&g.lastPlay)revealOutcome(g.event);
+  render();
+};
+const renderBeforeFeedbackV3=render;
+render=()=>{
+  renderBeforeFeedbackV3();
+  const outcome=document.getElementById('zoneOutcome');
+  if(!outcome)return;
+  const active=state.net?((state.netOutcomeUntil||0)>Date.now()?state.netOutcome:'') : ((state.localOutcomeUntil||0)>Date.now()?state.localOutcome:'');
+  outcome.textContent=active||'';
+  outcome.style.display=active?'block':'none';
+  outcome.className='zoneOutcome '+(active.includes('안타')||active.includes('홈런')||active.includes('루타')?'hit':active.includes('아웃')?'out':active.includes('볼')?'ball':'strike');
+};
+</script><style id="mobile-layout-v1">
+.types{grid-template-columns:repeat(3,minmax(0,1fr))}.types.two{grid-template-columns:repeat(2,minmax(0,1fr))}.types button{text-align:center}
+.mobileDuelInfo{display:none}
+@media(max-width:760px){
+  body{background:#fff}.game{padding:7px;min-height:100dvh}.top{gap:8px;padding-bottom:6px}.top h2{font-size:16px}.back{padding:6px 8px;font-size:12px}
+  .board{display:block;margin-top:7px}.board>aside.panel{display:none}.score{grid-template-columns:39px 64px 1fr 78px;gap:4px;padding:7px 8px;min-height:76px}.score small{font-size:8px}.score b{font-size:20px}.bases{width:64px;height:60px;transform:scale(.58);transform-origin:center}.counts{gap:3px}.counts span{width:29px;height:29px;font-size:9px}.counts b{font-size:13px}
+  .mobileDuelInfo{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0}.mobileDuelInfo article{min-width:0;padding:7px 8px;border:1px solid #d6e1ec;background:#f8fbff}.mobileDuelInfo article:last-child{background:#fff7f5;border-color:#f1c9c2}.mobileDuelInfo small{display:block;color:#64748b;font-size:9px;font-weight:900;letter-spacing:.08em}.mobileDuelInfo b{display:block;margin:2px 0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mobileDuelInfo span{display:block;color:#526b84;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .panel{padding:8px}.panel h3{margin-bottom:2px;font-size:18px}.panel>.hint{display:none}.types{gap:4px;margin:5px 0}.types button{min-width:0;padding:9px 3px;font-size:12px;white-space:nowrap}.zoneWrap{width:min(70vw,31dvh,250px);padding:0;margin:5px auto;background-size:100% 100%}.zone{left:14%;top:14%;width:72%;height:72%}.zone button{font-size:17px}.zoneOutcome{top:1%;padding:5px 10px;font-size:16px}.hint#reveal{display:none}.action{padding:11px;font-size:15px;box-shadow:0 3px 0 #95241e}.result{display:none}.art{display:none!important}
+}
+</style>
+<script id="mobile-layout-v1">
+const renderBeforeMobileLayout=render;
+render=()=>{
+  renderBeforeMobileLayout();
+  if(!state.mode)return;
+  const typesBox=$('types');
+  typesBox.classList.toggle('two',typesBox.children.length===2);
+  let strip=document.getElementById('mobileDuelInfo');
+  if(!strip){strip=document.createElement('section');strip.id='mobileDuelInfo';strip.className='mobileDuelInfo';document.querySelector('.score').after(strip)}
+  const attacking=state.half==='top';
+  const batter=attacking?state.batter:(state.awayBatter||state.batter);
+  const staff=attacking?(state.awayPitchers||state.pitchers):state.pitchers;
+  const active=attacking?(state.awayActivePitcher??state.activePitcher):state.activePitcher;
+  const pitcher=staff?.[active];
+  strip.innerHTML=`<article><small>현재 타자</small><b>${batter?.n||''} · ${batter?.t||''}</b><span>P ${batter?.p??'-'} · 정확 ${batter?.a??'-'} · 선구 ${batter?.e??'-'} · 주력 ${batter?.v??'-'}</span></article><article><small>현재 투수</small><b>${pitcher?.n||''} · ${pitcher?.t||''}</b><span>구속 ${pitcher?.v??'-'} · 제구 ${pitcher?.c??'-'} · 구위 ${pitcher?.s??'-'} · 변화 ${pitcher?.m??'-'}</span></article>`;
+};
+</script><style id="mobile-game-fixes-v2">
+.counts{gap:10px}.countGroup{display:flex;align-items:center;gap:3px}.countGroup small{font-size:9px;color:#dce8f4;font-weight:900}.countGroup i{display:block;width:8px;height:8px;border-radius:50%;border:1px solid #7890a8;background:transparent}.countGroup.ball i.on{background:#39b86b;border-color:#8ff2b2;box-shadow:0 0 7px #39b86b}.countGroup.strike i.on{background:#f1c640;border-color:#fff0a1;box-shadow:0 0 7px #f1c640}.countGroup.out i.on{background:#ea4b43;border-color:#ffc1bc;box-shadow:0 0 7px #ea4b43}.countGroup b{display:none}.opponentReadout{margin:4px auto 0;max-width:250px;padding:5px 8px;text-align:center;color:#1d4e89;background:#e9f2ff;border:1px solid #aac8ed;font-size:11px;font-weight:900}.mobileLineup{display:none}
+@media(max-width:760px){
+ .bases{width:58px;height:54px;transform:none}.bases i{width:19px;height:19px}.bases #b2{left:19px;top:0}.bases #b3{left:1px;top:32px}.bases #b1{right:1px;top:32px}.bases i.on:after{font-size:11px}.counts{gap:4px;justify-content:center}.countGroup{gap:2px}.countGroup small{font-size:8px}.countGroup i{width:6px;height:6px}.mobilePitchSwap{margin-top:4px;width:100%;border:1px solid #d38b80;background:#fff;color:#a42f26;padding:4px;font-size:10px;font-weight:900}.mobileBullpen{grid-column:1/-1;padding:6px;background:#fff7f5;border:1px solid #f1c9c2}.mobileBullpen button{margin:2px;border:1px solid #d8a49b;background:#fff;padding:4px;font-size:10px;font-weight:800}.mobileLineup{display:block;margin:8px 0 0;padding:9px;border:1px solid #d8e2ed;background:#fff}.mobileLineup summary{cursor:pointer;font-size:13px;font-weight:900}.mobileLineup ol{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:8px 0 0;padding-left:20px;font-size:11px}.mobileLineup li.now{color:#e33b31;font-weight:900}
+}
+</style>
+<script id="mobile-game-fixes-v2">
+const startBeforeNetReset=start;
+start=mode=>{state.net=false;state.netOutcome='';state.localOutcome='';state.opponentLastCell=null;matchSubmitted=false;startBeforeNetReset(mode)};
+const renderBeforeGameFixes=render;
+render=()=>{
+  renderBeforeGameFixes();
+  if(!state.mode)return;
+  const counts=document.querySelector('.counts');
+  const pips=(label,value,max,type)=>`<div class="countGroup ${type}"><small>${label}</small>${Array.from({length:max},(_,i)=>`<i class="${i<value?'on':''}"></i>`).join('')}<b id="${type==='ball'?'balls':type==='strike'?'strikes':'outs'}">${value}</b></div>`;
+  counts.innerHTML=pips('B',state.b,3,'ball')+pips('S',state.s,2,'strike')+pips('O',state.o,2,'out');
+  let lineupPanel=document.getElementById('mobileLineup');
+  if(!lineupPanel){lineupPanel=document.createElement('details');lineupPanel.id='mobileLineup';lineupPanel.className='mobileLineup';document.querySelector('.board>aside.panel').after(lineupPanel)}
+  const attacking=state.half==='top', battingLineup=attacking?lineup:(state.awayLineup||lineup), batTurn=attacking?state.turn:(state.awayTurn??state.turn);
+  lineupPanel.innerHTML=`<summary>타순 보기</summary><ol>${battingLineup.map((player,i)=>`<li class="${i===batTurn?'now':''}">${player.t}</li>`).join('')}</ol>`;
+  const strip=document.getElementById('mobileDuelInfo');
+  if(strip&&!attacking){const staff=state.pitchers||[];const available=staff.map((p,i)=>!state.usedPitchers?.includes(i)?`<button data-mobile-pitcher="${i}">${p.t}</button>`:'').join('');strip.querySelector('article:last-child').insertAdjacentHTML('beforeend',`<button class="mobilePitchSwap" id="mobilePitchSwap">투수 교체</button>`);strip.querySelector('#mobilePitchSwap').onclick=()=>{let box=strip.querySelector('.mobileBullpen');if(!box){box=document.createElement('div');box.className='mobileBullpen';strip.append(box)}box.innerHTML=available||'교체 가능한 투수가 없습니다.';box.querySelectorAll('[data-mobile-pitcher]').forEach(button=>button.onclick=()=>{const i=+button.dataset.mobilePitcher;state.activePitcher=i;state.usedPitchers.push(i);setResult(`투수 교체 · ${state.pitchers[i].n} 등판`,'strike')})}}
+  let readout=document.getElementById('opponentReadout');
+  if(!readout){readout=document.createElement('p');readout.id='opponentReadout';readout.className='opponentReadout';document.querySelector('.zoneWrap').after(readout)}
+  if(state.net&&state.opponentLastCell!==null&&state.opponentLastCell!==undefined){const row=Math.floor(state.opponentLastCell/5)+1,col=state.opponentLastCell%5+1;readout.textContent=`${state.opponentLastLabel} · ${row}행 ${col}열`;readout.style.display='block'}else readout.style.display='none';
+};
+</script><style id="scoreboard-counts-v3">
+@media(max-width:760px){
+  .score{grid-template-columns:38px 60px 64px minmax(100px,1fr);align-items:center}
+  .counts{flex-direction:column;align-items:flex-start;justify-content:center;gap:3px}
+  .countGroup{min-height:10px;gap:3px}.countGroup small{width:8px;font-size:8px}.countGroup i{width:7px;height:7px}
+  .score>div:last-child{min-width:100px}.score>div:last-child small{white-space:nowrap;font-size:8px}.score>div:last-child b{font-size:21px}
+}
+</style><script id="result-overlay-fix-v4">
+const renderBeforeResultOverlayFix=render;
+render=()=>{
+  renderBeforeResultOverlayFix();
+  if(!state.mode)return;
+  let outcome=document.getElementById('zoneOutcome');
+  if(!outcome){outcome=document.createElement('div');outcome.id='zoneOutcome';outcome.className='zoneOutcome';document.querySelector('.zoneWrap').append(outcome)}
+  const active=state.net?((state.netOutcomeUntil||0)>Date.now()?state.netOutcome:'') : ((state.localOutcomeUntil||0)>Date.now()?state.localOutcome:'');
+  outcome.textContent=active||'';
+  outcome.style.display=active?'block':'none';
+  outcome.className='zoneOutcome '+(active.includes('안타')||active.includes('홈런')||active.includes('루타')?'hit':active.includes('아웃')?'out':active.includes('볼')?'ball':'strike');
+};
+</script><style id="home-guide-v1">
+.homeGuideActions{display:flex;gap:10px;margin-top:18px}.homeGuideActions button{padding:11px 15px;border:1px solid #9db1c7;background:#fff;color:#102846;font-weight:900;cursor:pointer;transition:.18s}.homeGuideActions button:hover{background:#102846;color:#fff;transform:translateY(-2px)}.guideOverlay{position:fixed;z-index:30;inset:0;display:grid;place-items:center;padding:18px;background:#08192bb8}.guideDialog{width:min(680px,100%);max-height:min(760px,92dvh);overflow:auto;padding:24px;background:#fff;color:#102846;box-shadow:0 20px 70px #0008}.guideDialog header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #102846;padding-bottom:12px}.guideDialog h2{margin:0;font-size:24px}.guideClose{border:0;background:#e33b31;color:#fff;padding:8px 11px;font-weight:900;cursor:pointer}.guideGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}.guideCard{padding:14px;border:1px solid #d8e2ed;background:#f8fbff}.guideCard h3{margin:0 0 8px;font-size:16px}.guideCard p,.guideCard li{font-size:13px;line-height:1.55;color:#405b76}.guideCard ul{margin:6px 0;padding-left:18px}@media(max-width:760px){.homeGuideActions{margin-top:14px}.homeGuideActions button{flex:1;padding:10px 6px;font-size:13px}.guideDialog{padding:18px;max-height:90dvh}.guideDialog h2{font-size:20px}.guideGrid{grid-template-columns:1fr;gap:8px}.guideCard{padding:11px}}
+</style>
+<script id="home-guide-v1">
+const guideContent={
+  info:{title:'게임 정보',body:`<div class="guideGrid"><section class="guideCard"><h3>경기 진행</h3><p>3이닝 승부입니다. 3아웃이면 공수가 바뀌고, 점수가 높은 팀이 승리합니다.</p><p>점수판에는 이닝, 주자, B/S/O, 양 팀 점수가 표시됩니다.</p></section><section class="guideCard"><h3>플레이 모드</h3><ul><li><b>싱글 플레이</b>: AI를 상대로 연습</li><li><b>빠른 대전</b>: AI와 한 판 승부</li><li><b>친구와 플레이</b>: 초대 코드로 실시간 대전</li></ul></section><section class="guideCard"><h3>친구 대전</h3><p>방을 만들고 초대 코드를 공유하세요. 매 턴 20초 안에 선택하며, 시간이 지나면 자동 선택됩니다.</p></section><section class="guideCard"><h3>심리전</h3><p>결과 후 상대의 직전 투구 또는 타격 노림 위치가 표시됩니다. 다음 선택의 힌트로 활용하세요.</p></section></div>`},
+  guide:{title:'플레이 가이드',body:`<div class="guideGrid"><section class="guideCard"><h3>타격</h3><p>스윙 유형과 5×5 존의 노릴 칸을 선택하세요.</p><ul><li><b>파워 스윙</b>: 장타 확률 상승, 범위는 좁음</li><li><b>컨택 스윙</b>: 3×3 범위, 안타에 유리</li><li><b>스팟 스윙</b>: 한 칸 집중 공략</li></ul></section><section class="guideCard"><h3>투구</h3><p>직구 또는 변화구와 목표 칸을 고릅니다. 모서리일수록 볼·실투 위험이 높고, 제구가 높을수록 목표 칸에 정확히 들어갑니다.</p></section><section class="guideCard"><h3>타자 능력치</h3><ul><li><b>파워</b>: 2루타·홈런 확률</li><li><b>정확도</b>: 헛스윙·아웃 감소, 안타 증가</li><li><b>선구안</b>: 노린 칸 밖 공을 볼로 판단</li><li><b>주력</b>: 내야안타·3루타 확률</li></ul></section><section class="guideCard"><h3>투수 능력치</h3><ul><li><b>구속</b>: 헛스윙 유도</li><li><b>제구</b>: 볼·실투 감소</li><li><b>구위</b>: 타구를 아웃으로 만들 확률</li><li><b>변화</b>: 변화구의 헛스윙 유도</li></ul></section></div>`}
+};
+function openGuide(kind){const data=guideContent[kind];let overlay=document.getElementById('guideOverlay');if(!overlay){overlay=document.createElement('div');overlay.id='guideOverlay';overlay.className='guideOverlay';document.body.append(overlay)}overlay.innerHTML=`<section class="guideDialog" role="dialog" aria-modal="true"><header><h2>${data.title}</h2><button class="guideClose" aria-label="닫기">닫기</button></header>${data.body}</section>`;overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.querySelector('.guideClose').onclick=()=>overlay.remove()}
+const guideActions=document.createElement('div');guideActions.className='homeGuideActions';guideActions.innerHTML='<button type="button" data-guide="info">게임 정보</button><button type="button" data-guide="guide">플레이 가이드</button>';document.querySelector('.modes').after(guideActions);guideActions.querySelectorAll('[data-guide]').forEach(button=>button.onclick=()=>openGuide(button.dataset.guide));
+</script><script id="roster-and-inning-v1">
+const applyMatchBeforeRosters=applyMatch;
+applyMatch=function(data){
+  applyMatchBeforeRosters(data);
+  const game=data.game,me=matchSession?.player;
+  if(game.teams&&me){
+    const mine=game.teams[me],opponent=game.teams[me==='p1'?'p2':'p1'],myIndex=me==='p1'?0:1,opponentIndex=myIndex?0:1;
+    state.pitchers=mine.pitchers;state.activePitcher=mine.activePitcher;state.usedPitchers=mine.usedPitchers;
+    state.awayPitchers=opponent.pitchers;state.awayActivePitcher=opponent.activePitcher;state.awayUsedPitchers=opponent.usedPitchers;
+    state.batter=mine.lineup[game.batter[myIndex]];state.awayBatter=opponent.lineup[game.batter[opponentIndex]];
+    state.onlineLineup=mine.lineup;state.onlineAwayLineup=opponent.lineup;
+  }
+  state.gameHalf=game.half;state.finished=game.status==='finished';render();
+};
+const finishAtBatBeforeInningEnd=finishAtBat;
+finishAtBat=(text,offense)=>{
+  const wasBottom=state.half==='bottom';
+  const result=finishAtBatBeforeInningEnd(text,offense);
+  if(wasBottom&&state.inning>3){state.inning=3;state.finished=true;return text+' · 3이닝 종료!';}
+  return result;
+};
+const pitchBeforeOpponentTarget=pitch;
+pitch=()=>{state.opponentLastCell=Math.floor(Math.random()*25);state.opponentLastIcon='◎';state.opponentLastLabel='상대 직전 타격 노림';pitchBeforeOpponentTarget()};
+const renderBeforeRosterAndInning=render;
+render=()=>{
+  renderBeforeRosterAndInning();
+  if(!state.mode)return;
+  const inningHalf=state.gameHalf===0?'초':state.gameHalf===1?'말':state.half==='bottom'?'말':'초';
+  const halfText=document.querySelector('.score>div:first-child small:last-child');if(halfText)halfText.textContent=inningHalf;
+  const action=$('swing');
+  if(state.finished){action.disabled=true;action.classList.add('waiting');action.textContent='경기 종료';}
+  let readout=document.getElementById('opponentReadout');
+  if(readout&&state.opponentLastCell!==null&&state.opponentLastCell!==undefined&&(state.net||state.half==='bottom')){const row=Math.floor(state.opponentLastCell/5)+1,col=state.opponentLastCell%5+1;readout.textContent=`${state.opponentLastLabel||'상대 직전 타격 노림'} · ${row}행 ${col}열`;readout.style.display='block';const cell=$('zone').querySelector(`[data-z="${state.opponentLastCell}"]`);if(cell){cell.classList.add('opponent-last');cell.dataset.opponent=state.opponentLastIcon||'◎';}}
+};
+</script><style id="stadium-immersion-v1">
+.stadiumStats{display:flex;align-items:center;justify-content:flex-end;gap:9px;grid-column:1/-1;padding-top:9px;margin-top:3px;border-top:1px solid #ffffff33;font-size:11px;font-weight:900;letter-spacing:.05em}.stadiumStats span{white-space:nowrap}.stadiumStats b{color:#f7c74d;font-size:16px;margin-left:3px}.pitchReadout{margin:4px auto 9px;width:min(450px,100%);padding:8px 12px;border:1px solid #d8e1ec;background:#f8fbff;color:#17385e;text-align:center;font-size:13px;font-weight:900}.atBatCall{margin:0 auto 7px;width:min(450px,100%);color:#526b84;text-align:center;font-size:13px;font-weight:800}.atBatCall b{color:#e33b31}@media(max-width:760px){.stadiumStats{grid-column:1/-1;justify-content:center;gap:6px;font-size:9px;padding-top:5px}.stadiumStats b{font-size:13px}.pitchReadout{width:min(70vw,31dvh,250px);padding:4px 6px;margin:2px auto 4px;font-size:10px}.atBatCall{width:min(70vw,31dvh,250px);margin-bottom:3px;font-size:10px}}
+</style><script id="stadium-immersion-v1">
+const applyMatchBeforeStadium=applyMatch;
+applyMatch=function(data){
+  applyMatchBeforeStadium(data);
+  const game=data.game,me=matchSession?.player,side=me==='p1'?0:1;
+  state.hits=(game.hits||[0,0])[side];state.awayHits=(game.hits||[0,0])[side?0:1];
+  state.walks=(game.walks||[0,0])[side];state.awayWalks=(game.walks||[0,0])[side?0:1];
+  if(game.lastPlay){state.lastPitchInfo=`${game.lastPlay.pitchName||'패스트볼'} · ${game.lastPlay.speed||'-'} km/h`;state.serverEvent=stadiumMessage(game.event,state.lastPitchInfo);state.netOutcome=state.serverEvent;}
+  render();
+};
+const stadiumMessage=(event,pitch)=>{
+  const headline=event.includes('홈런')?'완벽한 타이밍! 담장을 넘겼습니다.':event.includes('루타')?'강한 타구가 외야를 가릅니다.':event.includes('안타')?'노린 코스를 정확히 공략했습니다.':event.includes('볼넷')?'침착하게 공을 골라 출루합니다.':event.includes('삼진')?'결정구에 타이밍을 빼앗겼습니다.':event.includes('땅볼')?'낮게 깔린 타구, 땅볼 아웃.':event.includes('뜬공')?'높이 뜬 타구, 뜬공 아웃.':event.includes('파울')?'끈질긴 파울로 승부를 이어갑니다.':event.includes('볼')?'유인구를 지켜봤습니다.':'노린 범위를 벗어난 공입니다.';
+  return `${pitch||''} · ${event} — ${headline}`;
+};
+const startBeforeStadium=start;
+start=mode=>{state.hits=0;state.awayHits=0;state.walks=0;state.awayWalks=0;state.lastPitchInfo='';startBeforeStadium(mode)};
+const setResultBeforeStadium=setResult;
+setResult=(text,kind)=>{
+  if(!state.net){
+    const opponent=text.includes('상대');
+    if(text.includes('볼넷')){if(opponent)state.awayWalks=(state.awayWalks||0)+1;else state.walks=(state.walks||0)+1;}
+    if(/안타|루타|홈런/.test(text)){if(opponent)state.awayHits=(state.awayHits||0)+1;else state.hits=(state.hits||0)+1;}
+    const staff=opponent?state.pitchers:(state.awayPitchers||state.pitchers);const index=opponent?state.activePitcher:(state.awayActivePitcher??state.activePitcher);const p=staff?.[index];const breaking=state.pitchType==='breaking';
+    const type=breaking?'변화구':'패스트볼';const speed=Math.round((breaking?102+(p?.m||50)*.22:127+(p?.v||50)*.25)+Math.random()*4);state.lastPitchInfo=`${type} · ${speed} km/h`;
+    text=stadiumMessage(text,state.lastPitchInfo);
+  }
+  setResultBeforeStadium(text,kind);
+};
+const renderBeforeStadium=render;
+render=()=>{
+  renderBeforeStadium();if(!state.mode)return;
+  const score=document.querySelector('.score');let stats=document.getElementById('stadiumStats');if(!stats){stats=document.createElement('div');stats.id='stadiumStats';stats.className='stadiumStats';score.append(stats)}
+  stats.innerHTML=`<span>MY <b>${state.r}</b></span><span>H <b>${state.hits||0}</b></span><span>BB <b>${state.walks||0}</b></span><span>│</span><span>AI <b>${state.away}</b></span><span>H <b>${state.awayHits||0}</b></span><span>BB <b>${state.awayWalks||0}</b></span>`;
+  let call=document.getElementById('atBatCall');if(!call){call=document.createElement('p');call.id='atBatCall';call.className='atBatCall';document.querySelector('.zoneWrap').before(call)}const hitter=state.half==='top'?state.batter:state.awayBatter||state.batter;call.innerHTML=`<b>${hitter?.n||'현재 타자'} ${hitter?.t||''}</b> · ${state.o}아웃 ${state.bases?.some(Boolean)?'주자 있음':'주자 없음'}`;
+  let pitchInfo=document.getElementById('pitchReadout');if(!pitchInfo){pitchInfo=document.createElement('div');pitchInfo.id='pitchReadout';pitchInfo.className='pitchReadout';document.querySelector('.zoneWrap').after(pitchInfo)}pitchInfo.textContent=state.lastPitchInfo?`방금 공 · ${state.lastPitchInfo}`:'투구 결과 후 구속과 구종이 표시됩니다.';
+};
+</script><style id="stadium-scoreboard-v2">
+.score{position:relative;isolation:isolate;grid-template-columns:88px 142px minmax(142px,1fr) 158px!important;gap:12px;padding:25px 18px 14px!important;background:linear-gradient(135deg,#101216,#050608 55%,#132030)!important;border:5px solid #1e2732;box-shadow:inset 0 0 0 2px #536171,inset 0 12px 30px #000,0 7px 16px #0a172733;color:#f5f7ef!important;font-family:Impact,"Arial Narrow",Arial,sans-serif}.score:before{content:"PITCHIT  •  LIVE SCOREBOARD";position:absolute;left:0;right:0;top:0;height:20px;padding:4px 12px;background:#23303d;border-bottom:1px solid #6a7782;color:#dce8ef;font:700 9px/12px Arial,sans-serif;letter-spacing:.2em}.score>div:first-child{padding:4px 11px;border-right:1px solid #637080;background:#0e131b;text-align:center}.score>div:first-child b{display:block;color:#efff41;font-size:36px;line-height:1;text-shadow:0 0 9px #adca23}.score>div:first-child small:last-child{color:#cfdae3;font-size:12px}.bases{filter:drop-shadow(0 0 5px #334a61)}.bases i{background:#111c29;border-color:#94b5c8}.bases i.on{background:#f4d72f;border-color:#fff;box-shadow:0 0 10px #f6db34}.counts{padding-left:12px;border-left:1px solid #536171}.countGroup{display:flex!important;align-items:center;gap:5px}.countGroup small{font:bold 13px Impact,Arial,sans-serif;letter-spacing:.08em}.countGroup b{margin-left:5px;color:#fff;font-size:16px}.countGroup i{width:13px;height:13px;border-radius:50%;background:#17202a;border:1px solid #667683;box-shadow:inset 0 1px 3px #000}.countGroup.ball i.on{background:#1dff41;border-color:#9affab;box-shadow:0 0 9px #18e73d}.countGroup.strike i.on{background:#ffe630;border-color:#fff58b;box-shadow:0 0 9px #ffe530}.countGroup.out i.on{background:#ff3131;border-color:#ffaaa8;box-shadow:0 0 9px #f72d2d}.score>div:nth-child(4){align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding-left:13px;border-left:1px solid #536171;background:#10151d}.score>div:nth-child(4) small{color:#bfcbd7;font:700 9px Arial,sans-serif;letter-spacing:.14em}.score>div:nth-child(4) b{color:#f5fd3f;font-size:32px;line-height:1;text-shadow:0 0 8px #8fa90e}.stadiumStats{justify-content:center!important;gap:18px!important;padding:10px 8px 0!important;margin:0!important;border-top:1px solid #536171!important;color:#d7e1e6;font:700 11px Arial,sans-serif!important;letter-spacing:.08em}.stadiumStats span:nth-child(5){margin-left:12px}.stadiumStats b{color:#f6fb38!important;font:900 19px Impact,"Arial Narrow",sans-serif!important;text-shadow:0 0 7px #9fb717}@media(max-width:760px){.score{grid-template-columns:39px 56px minmax(69px,1fr) minmax(76px,1fr)!important;gap:3px;padding:22px 5px 7px!important;border-width:3px}.score:before{height:16px;padding:2px 6px;font-size:7px;line-height:11px}.score>div:first-child{padding:2px 3px}.score>div:first-child b{font-size:24px}.score>div:nth-child(4){padding-left:5px}.score>div:nth-child(4) b{font-size:20px}.score>div:nth-child(4) small{font-size:7px}.counts{padding-left:3px}.countGroup{gap:2px!important}.countGroup small{font-size:9px}.countGroup i{width:8px;height:8px}.countGroup b{margin-left:2px;font-size:12px}.stadiumStats{gap:5px!important;padding-top:5px!important;font-size:8px!important}.stadiumStats span:nth-child(5){margin-left:3px}.stadiumStats b{font-size:13px!important}.bases{transform:scale(.53)!important}}
+</style><style id="outcome-width-v1">
+.zoneOutcome{width:min(620px,calc(100vw - 40px));min-width:0;line-height:1.35;white-space:normal}.zoneWrap .zoneOutcome{max-width:none}@media(max-width:760px){.zoneOutcome{width:min(94vw,440px);font-size:16px!important;line-height:1.3}}
+</style><style id="mobile-invite-reveal-v1">
+#friendLobby.codeReady{border:2px solid #e33b31;box-shadow:0 10px 26px #142b451f}#inviteCodeCard{margin:12px 0;padding:13px 10px;border:1px solid #f19a8f;background:#fff5f3;color:#e33b31;text-align:center;font:900 34px/1 Impact,"Arial Narrow",sans-serif;letter-spacing:.15em;box-shadow:inset 0 0 0 2px #fff}@media(max-width:760px){#friendLobby{scroll-margin-top:14px;margin:14px 12px!important;padding:16px!important}#friendLobby .types{grid-template-columns:1fr 1fr}#friendLobby .types button{padding:12px 6px;font-size:13px}#friendLobby.codeReady{position:relative;background:#fff}#inviteCodeCard{font-size:38px;padding:16px 10px}}
+</style><script id="mobile-invite-reveal-v1">
+const friendLobbyBeforeMobileInvite=friendLobby;
+friendLobby=function(){
+  friendLobbyBeforeMobileInvite();
+  const box=document.getElementById('friendLobby'),create=document.getElementById('createRoom'),status=document.getElementById('friendStatus');
+  requestAnimationFrame(()=>box?.scrollIntoView({behavior:'smooth',block:'start'}));
+  if(!create||!status)return;
+  create.onclick=async()=>{
+    create.disabled=true;create.textContent='코드 생성 중…';status.textContent='대전 방을 만들고 있습니다…';
+    try{
+      const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});
+      matchSession={code:data.code,token:data.token,player:data.player};box.classList.add('codeReady');
+      status.textContent='초대 코드를 친구에게 보내세요. 친구 입장을 기다리는 중입니다.';
+      let card=document.getElementById('inviteCodeCard');if(!card){card=document.createElement('div');card.id='inviteCodeCard';status.after(card)}card.textContent=data.code;
+      box.scrollIntoView({behavior:'smooth',block:'center'});watchInviteRoom();
+    }catch(error){status.textContent=error.message||'초대 코드 생성에 실패했습니다. 다시 시도해 주세요.'}
+    finally{create.disabled=false;create.textContent='초대 코드 생성'}
+  };
+};
+document.querySelector('[data-mode="friend"]').onclick=friendLobby;
+function watchInviteRoom(){
+  clearInterval(matchPoll);
+  matchPoll=setInterval(async()=>{
+    if(!matchSession)return;
+    try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){clearInterval(matchPoll)}
+  },700);
+}
+watchMatch=async function(){
+  clearInterval(matchPoll);
+  matchPoll=setInterval(async()=>{
+    if(!matchSession)return;
+    try{
+      const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});
+      if(data.ready)beginMatch(data);
+      else{
+        const box=document.getElementById('friendLobby'),status=document.getElementById('friendStatus');
+        if(status&&!box?.classList.contains('codeReady'))status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`;
+      }
+    }catch(error){clearInterval(matchPoll)}
+  },700);
+};
+</script><style id="quick-match-v1">
+#quickLobby{margin-top:24px}#quickLobby .matchPulse{display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:50%;background:#e33b31;animation:quickPulse 1s ease-in-out infinite}@keyframes quickPulse{50%{transform:scale(.55);opacity:.45}}#quickLobby .cancelMatch{margin-top:8px;border:1px solid #cbd7e4;background:#fff;padding:8px 11px;color:#17385e;font-weight:800;cursor:pointer}@media(max-width:760px){#quickLobby{margin:14px 12px!important;padding:16px!important;scroll-margin-top:14px}}
+</style><script id="quick-match-v1">
+function quickLobby(){
+  let box=document.getElementById('quickLobby');
+  if(!box){box=document.createElement('section');box.id='quickLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}
+  box.innerHTML='<h3>빠른 대전</h3><p class="hint">온라인 상대를 자동으로 찾습니다. 매칭되면 바로 3이닝 경기가 시작됩니다.</p><input id="quickName" placeholder="내 이름" maxlength="16"><button class="action" id="startQuick">자동 매칭 시작</button><p class="result" id="quickStatus">대전 상대를 찾을 준비가 됐습니다.</p>';
+  requestAnimationFrame(()=>box.scrollIntoView({behavior:'smooth',block:'start'}));
+  document.getElementById('startQuick').onclick=async()=>{
+    const button=document.getElementById('startQuick'),status=document.getElementById('quickStatus');button.disabled=true;button.textContent='상대 찾는 중…';status.innerHTML='<span class="matchPulse"></span>온라인 상대를 찾고 있습니다…';
+    try{const data=await requestMatch({action:'quick',name:document.getElementById('quickName').value});matchSession={code:data.code,token:data.token,player:data.player};if(data.ready)beginMatch(data);else watchQuickMatch()}
+    catch(error){button.disabled=false;button.textContent='자동 매칭 시작';status.textContent=error.message||'매칭을 시작하지 못했습니다.'}
+  };
+}
+function watchQuickMatch(){
+  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){clearInterval(matchPoll);const status=document.getElementById('quickStatus');if(status)status.textContent='매칭 연결이 끊겼습니다. 다시 시도해 주세요.'}},700);
+}
+document.querySelector('[data-mode="quick"]').onclick=quickLobby;
+</script><style id="strike-ball-zone-v1">
+.zoneRuleHint{width:min(450px,100%);margin:4px auto 8px;padding:7px 10px;border-left:3px solid #e33b31;background:#f8fbff;color:#42617b;font-size:12px;font-weight:800}.zone button.ball-space:not(.pick):not(.range):not(.opponent-last){background:#edf4fa}.zone button.strike-space:not(.pick):not(.range):not(.opponent-last){background:#fff}.zone button.ball-space:before{content:"B";color:#90a5b8;font-size:10px;font-weight:900}@media(max-width:760px){.zoneRuleHint{width:min(70vw,31dvh,250px);padding:4px 6px;margin:2px auto;font-size:9px}.zone button.ball-space:before{font-size:7px}}
+</style><script id="strike-ball-zone-v1">
+const decorateStrikeZone=()=>{const zone=document.getElementById('zone');if(!zone)return;zone.querySelectorAll('[data-z]').forEach(cell=>{cell.classList.remove('strike-space','ball-space')});let hint=document.getElementById('zoneRuleHint');if(!hint){hint=document.createElement('p');hint.id='zoneRuleHint';hint.className='zoneRuleHint';zone.parentElement.before(hint)}hint.textContent='타격과 투구 모두 정확한 5×5 스트라이크존에서 선택합니다.';};
+new MutationObserver(decorateStrikeZone).observe(document.getElementById('zone'),{childList:true});decorateStrikeZone();
+</script><style id="three-by-three-v1">
+.zoneRuleHint{display:none}.ballDirections{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:min(450px,100%);margin:8px auto}.ballDirections button{min-height:38px;border:1px solid #cbd7e4;background:#f7fbff;color:#284968;font-weight:900;cursor:pointer}.ballDirections button.on{background:#183b62;color:#fff;box-shadow:inset 0 -3px #e33b31}@media(max-width:760px){.ballDirections{width:min(70vw,31dvh,250px);gap:3px;margin:3px auto}.ballDirections button{min-height:28px;padding:3px 1px;font-size:9px}}
+</style><script id="three-by-three-v1">
+const renderBeforeThreeByThree=render;
+render=()=>{
+  renderBeforeThreeByThree();if(!state.mode)return;
+  const zone=document.getElementById('zone');if(zone)zone.classList.remove('pitching3');
+  let tactics=document.getElementById('ballDirections');
+  if(state.net&&state.half==='bottom'){
+    if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections';document.querySelector('.zoneWrap').after(tactics)}
+    tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
+    tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
+  }else if(tactics)tactics.remove();
+};
+const requestMatchBeforeBallTactics=requestMatch;
+requestMatch=body=>{if(body?.action==='choose'&&body.choice?.kind==='pitch'&&state.pitchBallDirection)body={...body,choice:{...body.choice,ball:state.pitchBallDirection}};return requestMatchBeforeBallTactics(body)};
+</script><script id="online-roster-order-v1">
+const applyMatchBeforeRosterOrder=applyMatch;
+applyMatch=function(data){
+  const game=data.game,me=matchSession?.player;
+  if(game?.teams&&me){
+    const mine=game.teams[me],other=game.teams[me==='p1'?'p2':'p1'],mineIndex=me==='p1'?0:1,otherIndex=mineIndex?0:1;
+    state.pitchers=mine.pitchers;state.activePitcher=mine.activePitcher;state.usedPitchers=mine.usedPitchers;
+    state.awayPitchers=other.pitchers;state.awayActivePitcher=other.activePitcher;state.awayUsedPitchers=other.usedPitchers;
+    state.onlineLineup=mine.lineup;state.onlineAwayLineup=other.lineup;state.awayLineup=other.lineup;
+    state.batter=mine.lineup[game.batter[mineIndex]];state.awayBatter=other.lineup[game.batter[otherIndex]];
+  }
+  return applyMatchBeforeRosterOrder(data);
+};
+</script><style id="pattern-history-v1">
+.zone button.pattern-memory{position:relative;overflow:visible}.zone button.pattern-memory:before{content:"";position:absolute;inset:18%;border:2px dashed rgba(25,87,150,var(--memory-opacity,.2));border-radius:50%;pointer-events:none}.zone button.pattern-memory.memory-pitch:before{border-radius:50%;border-style:solid;background:rgba(245,78,58,var(--memory-opacity,.2));border-color:rgba(200,52,38,var(--memory-opacity,.2))}.zone button.pattern-memory.memory-bat:before{border-radius:4px;transform:rotate(45deg);background:rgba(36,112,190,var(--memory-opacity,.2));border-color:rgba(25,87,150,var(--memory-opacity,.2))}.zone button.pattern-memory.memory-latest:before{inset:10%;border-width:3px;box-shadow:0 0 0 2px rgba(255,255,255,.75)}.patternHistoryHint{width:min(450px,100%);margin:6px auto 0;color:#58708a;font-size:11px;font-weight:800;text-align:center}.patternHistoryHint b{color:#173b62}@media(max-width:760px){.patternHistoryHint{width:min(70vw,31dvh,250px);font-size:8px;margin:2px auto 0}}
+</style><script id="pattern-history-v1">
+const applyMatchBeforePatternHistory=applyMatch;
+applyMatch=function(data){
+  if(data?.game?.history) state.playHistory=data.game.history;
+  return applyMatchBeforePatternHistory(data);
+};
+const renderBeforePatternHistory=render;
+render=()=>{
+  renderBeforePatternHistory();
+  if(!state.net||!Array.isArray(state.playHistory)||!matchSession)return;
+  const zone=$('zone');if(!zone)return;
+  const me=matchSession.player;
+  state.playHistory.slice(0,5).forEach((play,index)=>{
+    // Show the opposing decision: their pitch while I bat, their read while I pitch.
+    const opponentBatted=play.attacker!==me;
+    const cellIndex=opponentBatted?play.batCell:play.actualCell;
+    const cell=zone.querySelector(`[data-z="${cellIndex}"]`);if(!cell)return;
+    cell.classList.add('pattern-memory',opponentBatted?'memory-bat':'memory-pitch');
+    if(index===0)cell.classList.add('memory-latest');
+    cell.style.setProperty('--memory-opacity',index===0?'.88':'.20');
+    cell.title=`${index===0?'직전':'최근 '+(index+1)+'번째'} 상대 ${opponentBatted?'타격 노림':'투구 위치'}`;
+  });
+  let hint=document.getElementById('patternHistoryHint');
+  if(!hint){hint=document.createElement('p');hint.id='patternHistoryHint';hint.className='patternHistoryHint';zone.parentElement.after(hint)}
+  hint.innerHTML='<b>심리전 기록</b> · 진한 표식은 직전 선택, 옅은 표식은 최근 5개 패턴입니다.';
+};
+</script><style id="expanded-guide-v2">
+.guideDialog .guideLead{margin:14px 0 0;padding:11px 13px;border-left:4px solid #e33b31;background:#fff5f3;color:#284968;font-size:13px;line-height:1.6}.guideDialog .guideCard.wide{grid-column:1/-1;background:#f3f8fe}.guideDialog .tip{margin:8px 0 0;padding:8px 9px;background:#fff;border:1px solid #d8e2ed;color:#284968;font-size:12px;line-height:1.5}.guideDialog .tip b{color:#e33b31}@media(max-width:760px){.guideDialog .guideCard.wide{grid-column:auto}.guideDialog .guideLead{font-size:12px}.guideDialog .tip{font-size:11px}}
+</style><script id="expanded-guide-v2">
+Object.assign(guideContent,{
+  info:{title:'PITCHIT 게임 정보',body:`
+    <p class="guideLead">PITCHIT은 공 하나마다 <b>상대의 다음 선택을 읽는</b> 야구 심리전입니다. 타자는 노릴 위치와 스윙을, 투수는 구종·코스·유인구를 동시에 결정합니다.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>경기 흐름</h3><ul><li>기본 경기는 <b>3이닝</b>입니다.</li><li>3아웃마다 공수 교대, 타순은 1번부터 순환합니다.</li><li>동점이면 <b>4회부터 무사 2루 승부치기</b>로 시작합니다.</li></ul></section>
+      <section class="guideCard"><h3>점수판 읽기</h3><ul><li><b>B / S / O</b>는 초록·노랑·빨강 원으로 표시됩니다.</li><li>주자 다이아몬드의 불이 켜진 베이스에 주자가 있습니다.</li><li>스코어보드에는 양 팀 <b>득점·안타·볼넷</b>이 누적됩니다.</li></ul></section>
+      <section class="guideCard"><h3>플레이 모드</h3><ul><li><b>싱글 플레이</b>: AI 상대로 규칙과 심리전 연습</li><li><b>빠른 대전</b>: 온라인 대기열에서 자동 매칭</li><li><b>친구와 플레이</b>: 초대 코드로 친구와 실시간 대결</li></ul></section>
+      <section class="guideCard"><h3>온라인 대전</h3><ul><li>양쪽 모두 선택하면 결과가 공개됩니다.</li><li>턴 제한은 <b>20초</b>이며, 시간 초과 시 자동 선택됩니다.</li><li>선택을 마치면 버튼이 비활성화되고 상대의 선택을 기다립니다.</li></ul></section>
+      <section class="guideCard wide"><h3>최근 패턴을 읽으세요</h3><p>존 위 표식은 상대의 선택 기록입니다. <b>진한 표식은 직전 선택</b>, 옅은 표식은 최근 5개 기록입니다. 공격 중에는 상대가 던진 실제 코스, 수비 중에는 상대가 노린 타격 위치를 봅니다.</p><p class="tip"><b>예시:</b> 상대가 2~3번 연속 바깥쪽을 노렸다면, 다음 공에 바깥쪽 유인구를 섞어 볼 수 있습니다. 반대로 상대 투수가 같은 모서리를 반복하면 그 근처를 파워 스윙으로 노려보세요.</p></section>
+    </div>`},
+  guide:{title:'플레이 가이드 & 요령',body:`
+    <p class="guideLead">정답은 하나가 아닙니다. <b>카운트, 능력치, 최근 5개 패턴</b>을 함께 보고 상대가 다음에 할 선택을 한 발 앞서 읽어 보세요.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>1. 타격: 5×5 존 선택</h3><p>타자는 공이 올 것 같은 한 칸을 고릅니다. 정확히 맞출수록 강한 타구가 늘고, 색칠된 주변 범위는 타격은 가능하지만 파울·약한 타구 비중이 높습니다.</p><p class="tip"><b>기본:</b> 상대 패턴을 읽지 못했을 때는 중앙 부근 컨택 스윙이 안정적입니다.</p></section>
+      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 중심 3×3. 가장 넓고 안정적이나 최고의 타구 확률은 낮습니다.</li><li><b>파워</b>: 십자 5칸. 맞히면 컨택보다 장타 기대값이 큽니다.</li><li><b>스팟</b>: 한 칸. 가장 위험하지만 정확히 읽으면 최고 타구 확률입니다.</li></ul><p class="tip"><b>예시:</b> 3볼처럼 유리한 카운트에서 상대의 한 코스를 확신하면 파워·스팟이 보상받습니다.</p></section>
+      <section class="guideCard"><h3>2. 투구: 존 승부</h3><p>직구 또는 변화구를 골라 5×5의 코스를 정합니다. 중앙은 맞을 위험이 크지만, 모서리는 안타를 줄이는 대신 볼·실투 위험이 조금 올라갑니다.</p><ul><li><b>직구</b>: 장타 위험은 낮지만 스윙 유도도 낮음</li><li><b>변화구</b>: 스윙을 더 이끌어내지만 맞으면 장타 위험이 큼</li></ul></section>
+      <section class="guideCard"><h3>유인구: 상·하·좌·우</h3><p>존 바깥 유인구는 별도 선택입니다. 타자가 그 방향을 노렸다면 헛스윙 스트라이크가 될 수 있고, 반대쪽을 읽었다면 볼이 됩니다.</p><p class="tip"><b>예시:</b> 타자가 바깥 열을 반복해 노리면 바깥 유인구보다 몸쪽 승부가 안전합니다. 2스트라이크에서는 유인구가 조금 더 효과적입니다.</p></section>
+      <section class="guideCard"><h3>3. 카운트별 판단</h3><ul><li><b>0–2</b>: 투수는 유인구·구석 승부, 타자는 파울로 버티는 선택을 고려하세요.</li><li><b>3볼</b>: 투수의 구석 공은 볼 위험이 조금 더 큽니다. 타자는 좋은 코스 하나를 과감하게 노릴 만합니다.</li><li><b>2스트라이크</b>: 정확 타겟 주변 공은 헛스윙보다 파울이 늘어납니다.</li></ul></section>
+      <section class="guideCard"><h3>4. 능력치 활용</h3><ul><li><b>파워</b>: 2루타·홈런 확률 상승</li><li><b>정확도</b>: 헛스윙·파울·범타 감소, 안타 상승</li><li><b>선구안</b>: 빗나간 공을 볼로 골라낼 가능성</li><li><b>주력</b>: 내야안타·3루타, 단타 추가 진루에 유리</li></ul></section>
+      <section class="guideCard"><h3>투수 능력치 활용</h3><ul><li><b>구속</b>: 타자의 타이밍을 흔듭니다.</li><li><b>제구</b>: 목표 코스 이탈·볼·실투를 줄입니다.</li><li><b>구위</b>: 맞아도 아웃 타구를 만들 확률을 높입니다.</li><li><b>변화</b>: 변화구의 헛스윙 유도력을 높입니다.</li></ul></section>
+      <section class="guideCard wide"><h3>주루와 승부치기</h3><p>주루는 별도 조작 없이 <b>주력 능력치에 따라 자동</b>으로 처리됩니다. 빠른 주자는 단타에 추가 진루할 수 있고, 3루 주자는 외야 뜬공에서 태그업 득점할 수 있습니다. 동점 연장에서는 무사 2루이므로, 공격은 한 점을 만드는 컨택·주루를, 수비는 삼진 또는 병살성 땅볼을 노리는 것이 핵심입니다.</p><p class="tip"><b>한 줄 요령:</b> 상대의 직전 선택 하나가 아니라 최근 5개 흐름을 보고, 확신이 없으면 컨택·중앙 근처, 확신이 생기면 파워 또는 스팟으로 보상을 노리세요.</p></section>
+    </div>`}
+});
+</script><style id="game-summary-v1">
+.gameSummaryOverlay{position:fixed;z-index:80;inset:0;display:grid;place-items:center;padding:18px;background:rgba(4,15,30,.76);backdrop-filter:blur(4px)}.gameSummary{width:min(500px,100%);padding:28px;background:linear-gradient(145deg,#fff,#f1f6fb);color:#102846;border:3px solid #102846;box-shadow:0 22px 64px #0008;text-align:center}.gameSummary .eyebrow{margin:0 0 6px;font-size:11px}.gameSummary h2{margin:0;font-size:clamp(32px,8vw,48px);letter-spacing:-.05em}.gameSummary.loss h2{color:#e33b31}.gameSummary .finalScore{margin:15px 0 18px;padding:13px;background:#102846;color:#fff;font:900 clamp(36px,9vw,55px)/1 Impact,"Arial Narrow",Arial,sans-serif;letter-spacing:.04em}.gameSummary .summaryStats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}.gameSummary .summaryStats article{padding:10px;background:#fff;border:1px solid #ccd9e6;text-align:left}.gameSummary .summaryStats small{display:block;color:#667b91;font-weight:900;letter-spacing:.08em}.gameSummary .summaryStats b{display:block;margin-top:4px;font-size:19px}.gameSummary .summaryNote{margin:0 0 17px;padding:10px;background:#fff6e9;border-left:4px solid #e33b31;text-align:left;color:#405b76;font-size:13px;line-height:1.5}.gameSummaryActions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.gameSummaryActions button{padding:13px;border:0;background:#102846;color:#fff;font-weight:900;cursor:pointer}.gameSummaryActions button:last-child{background:#e33b31}@media(max-width:760px){.gameSummary{padding:22px 17px}.gameSummary .summaryStats article{padding:8px}.gameSummary .summaryNote{font-size:12px}}
+</style><script id="game-summary-v1">
+let shownGameSummaryKey='';
+function showGameSummary(game){
+  const mine=state.r||0, opponent=state.away||0;
+  const result=mine>opponent?'승리':mine<opponent?'패배':'무승부';
+  const key=`${state.net?'net':'local'}:${mine}:${opponent}:${state.inning}:${result}`;
+  if(shownGameSummaryKey===key)return;
+  shownGameSummaryKey=key;
+  const mineHits=state.hits||0,mineWalks=state.walks||0,opponentHits=state.awayHits||0,opponentWalks=state.awayWalks||0;
+  let overlay=document.getElementById('gameSummaryOverlay');
+  if(!overlay){overlay=document.createElement('div');overlay.id='gameSummaryOverlay';overlay.className='gameSummaryOverlay';document.body.append(overlay)}
+  overlay.innerHTML=`<section class="gameSummary ${result==='패배'?'loss':''}" role="dialog" aria-modal="true"><p class="eyebrow">FINAL · ${state.inning} INNINGS</p><h2>${result}</h2><div class="finalScore">${mine} : ${opponent}</div><div class="summaryStats"><article><small>MY TEAM</small><b>${mine} R · ${mineHits} H · ${mineWalks} BB</b></article><article><small>OPPONENT</small><b>${opponent} R · ${opponentHits} H · ${opponentWalks} BB</b></article></div><p class="summaryNote"><b>경기 요약</b><br>${game?.event||state.serverEvent||$('result')?.textContent||'3이닝 승부가 종료되었습니다.'}</p><div class="gameSummaryActions"><button type="button" data-summary-home>홈으로</button><button type="button" data-summary-replay>다시 하기</button></div></section>`;
+  overlay.querySelector('[data-summary-home]').onclick=()=>{overlay.remove();shownGameSummaryKey='';state.finished=false;state.mode='';state.net=false;matchSession=null;history.pushState({},'',location.pathname);render()};
+  overlay.querySelector('[data-summary-replay]').onclick=()=>{overlay.remove();shownGameSummaryKey='';state.finished=false;state.net=false;matchSession=null;start('solo')};
+}
+const applyMatchBeforeGameSummary=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeGameSummary(data);
+  if(data?.game?.status==='finished')showGameSummary(data.game);
+  return value;
+};
+const startBeforeGameSummary=start;
+start=mode=>{shownGameSummaryKey='';document.getElementById('gameSummaryOverlay')?.remove();state.finished=false;return startBeforeGameSummary(mode)};
+const renderBeforeGameSummary=render;
+render=()=>{renderBeforeGameSummary();if(state.mode&&!state.net&&state.finished)showGameSummary()};
+</script><script id="ball-execution-display-v2">
+const applyMatchBeforeBallExecutionDisplay=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeBallExecutionDisplay(data),play=data?.game?.lastPlay,me=matchSession?.player;
+  if(play&&me){
+    const opponentChoice=play.attacker===me?play.pitch:play.bat;
+    state.opponentLastCell=opponentChoice.kind==='pitch'?play.actualCell:opponentChoice.cell;
+    state.opponentLastIcon=opponentChoice.kind==='pitch'?'⚾':'◎';
+    state.opponentLastLabel=opponentChoice.kind==='pitch'?(play.execution==='mistake'?'상대 실투 실제 위치':play.execution==='wild'?'상대 제구 이탈 위치':'상대 실제 투구 위치'):'상대 직전 타격 노림';
+    if(play.execution==='mistake'||play.execution==='wild')state.lastPitchInfo=`${play.pitchName||'패스트볼'} · ${play.speed||'-'} km/h · ${play.execution==='mistake'?'실투':'제구 이탈'}`;
+  }
+  render();
+  return value;
+};
+const renderBeforeBallExecutionDisplay=render;
+render=()=>{
+  renderBeforeBallExecutionDisplay();
+  if(!state.mode||state.half!=='bottom')return;
+  let tactics=document.getElementById('ballDirections');
+  if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections';document.querySelector('.zoneWrap').after(tactics)}
+  tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
+  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
+};
+const pitchBeforeBallExecutionDisplay=pitch;
+pitch=()=>{
+  // Local modes use the same four-direction bait decision as online matches.
+  if(!state.net&&state.pitchBallDirection){
+    const direction=state.pitchBallDirection,row=Math.floor(state.pick/5),column=state.pick%5;
+    const actual=direction==='high'?column:direction==='low'?20+column:direction==='in'?row*5:row*5+4;
+    const hitter=state.awayBatter||state.batter,target=Math.floor(Math.random()*25),targetRow=Math.floor(target/5),targetColumn=target%5;
+    const predicted=direction==='high'?targetRow<=1:direction==='low'?targetRow>=3:direction==='in'?targetColumn<=1:targetColumn>=3;
+    const pitcher=state.pitchers?.[state.activePitcher]||{c:50,m:50};
+    const execution=Math.random()<Math.min(.93,.48+pitcher.c/150+pitcher.m/320);
+    if(execution){
+      state.ball=actual;state.opponentLastCell=target;state.opponentLastIcon='◎';state.opponentLastLabel='상대 직전 타격 노림';
+      const chase=Math.random()<Math.min(.9,(predicted?.64:.13)+(64-(hitter.e||50))/260+.07);
+      let text='',kind='ball',end=false;
+      if(chase){state.s++;text='유인구 · 상대가 속아 헛스윙 스트라이크';kind='strike';if(state.s>=3){state.o++;text='유인구 · 삼진 아웃!';kind='out';end=true}}
+      else{state.b++;text='유인구 · 상대가 골라낸 볼';if(state.b>=4){scoreWalk('away');text='유인구 · 볼넷으로 출루';end=true}}
+      if(end)text=finishAtBat(text,'away');
+      state.pitchBallDirection=null;setResult(text,kind);return;
+    }
+  }
+  const value=pitchBeforeBallExecutionDisplay();
+  state.pitchBallDirection=null;
+  return value;
+};
+</script><script id="shared-engine-solo-v1">
+// Single play now creates a private server room with an AI opponent. This
+// keeps every probability and rule in the same resolvePlateAppearance flow.
+const applyMatchBeforeSharedSoloMode=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeSharedSoloMode(data);
+  if(matchSession?.mode==='solo'){state.mode='solo';state.net=true;render();}
+  return value;
+};
+const startBeforeSharedSoloEngine=start;
+start=async mode=>{
+  if(mode!=='solo')return startBeforeSharedSoloEngine(mode);
+  startBeforeSharedSoloEngine(mode);
+  const action=$('swing');action.disabled=true;action.classList.add('waiting');action.textContent='AI 경기 준비 중…';
+  try{
+    const data=await requestMatch({action:'solo'});
+    matchSession={code:data.code,token:data.token,player:data.player,mode:'solo'};
+    applyMatch(data);
+    watchMatch();
+  }catch(error){
+    state.net=false;action.disabled=false;action.classList.remove('waiting');$('result').textContent=error.message||'AI 경기를 시작하지 못했습니다. 다시 시도해 주세요.';render();
+  }
+};
+</script><style id="outside-bait-ui-v1">
+.zoneWrap{overflow:visible}.ballDirections{position:absolute!important;inset:0!important;width:auto!important;height:auto!important;margin:0!important;display:block!important;z-index:12;pointer-events:none}.ballDirections button{position:absolute!important;min-height:0!important;width:68px!important;height:30px!important;padding:3px!important;border:1px solid #8fa7bd!important;background:#f8fbff!important;color:#173b62!important;font-size:10px!important;font-weight:900!important;box-shadow:0 2px 0 #b5c5d4;pointer-events:auto}.ballDirections button[data-ball="high"]{left:50%;top:-35px;transform:translateX(-50%)}.ballDirections button[data-ball="low"]{left:50%;bottom:-35px;transform:translateX(-50%)}.ballDirections button[data-ball="in"]{left:-72px;top:50%;transform:translateY(-50%)}.ballDirections button[data-ball="out"]{right:-72px;top:50%;transform:translateY(-50%)}.ballDirections button.on{background:#183b62!important;color:#fff!important;box-shadow:inset 0 -3px #e33b31!important}.ballDirections button:disabled{opacity:.4;cursor:not-allowed}.baitLimit{position:absolute;z-index:13;left:50%;bottom:-65px;transform:translateX(-50%);margin:0;padding:4px 8px;border-radius:12px;background:#102846;color:#fff;font-size:10px;font-weight:900;white-space:nowrap}.outsidePitchBall{position:absolute;z-index:11;width:17%;aspect-ratio:1;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 3px 3px #10284666);pointer-events:none}.outsidePitchBall.high{left:50%;top:-11%;transform:translateX(-50%)}.outsidePitchBall.low{left:50%;bottom:-11%;transform:translateX(-50%)}.outsidePitchBall.in{left:-11%;top:50%;transform:translateY(-50%)}.outsidePitchBall.out{right:-11%;top:50%;transform:translateY(-50%)}@media(max-width:760px){.ballDirections button{width:48px!important;height:22px!important;font-size:7px!important}.ballDirections button[data-ball="high"]{top:-26px}.ballDirections button[data-ball="low"]{bottom:-26px}.ballDirections button[data-ball="in"]{left:-51px}.ballDirections button[data-ball="out"]{right:-51px}.baitLimit{bottom:-48px;font-size:8px;padding:3px 6px}.outsidePitchBall{width:19%}.outsidePitchBall.high{top:-9%}.outsidePitchBall.low{bottom:-9%}.outsidePitchBall.in{left:-9%}.outsidePitchBall.out{right:-9%}}
+</style><style id="transparent-ball-ring-v1">
+/* The field is visually a 7×7 board: the middle 5×5 is the only selectable
+   strike zone, while the single-cell outer ring intentionally has no grid. */
+.zoneWrap{--zone-cell:14.2857%;isolation:isolate}
+.zoneWrap:before{content:"";position:absolute;z-index:1;inset:0;pointer-events:none}
+.zone{z-index:2}
+.outsidePitchBall{z-index:10!important;width:12%!important;height:12%;aspect-ratio:1;background-size:contain!important}
+.outsidePitchBall.high{left:44%!important;top:1%!important;transform:none!important}
+.outsidePitchBall.low{left:44%!important;bottom:1%!important;transform:none!important}
+.outsidePitchBall.in{left:1%!important;top:44%!important;transform:none!important}
+.outsidePitchBall.out{right:1%!important;top:44%!important;transform:none!important}
+/* Selection buttons exist only inside .zone, so the transparent outer ring
+   cannot be used as a batting target. */
+.ballDirections button{z-index:12!important;width:30px!important;height:30px!important;padding:0!important;border-radius:50%!important;background:#f8fbff!important;color:#173b62!important;font-size:17px!important;line-height:1!important;box-shadow:0 1px 0 #b5c5d4!important}
+.ballDirections button[data-ball="high"]{left:50%!important;top:1%!important;transform:translateX(-50%)!important}
+.ballDirections button[data-ball="low"]{left:50%!important;top:auto!important;bottom:1%!important;transform:translateX(-50%)!important}
+.ballDirections button[data-ball="in"]{left:1%!important;top:50%!important;transform:translateY(-50%)!important}
+.ballDirections button[data-ball="out"]{left:auto!important;right:1%!important;top:50%!important;transform:translateY(-50%)!important}
+.ballDirections button.on{background:#183b62!important;color:#fff!important;box-shadow:inset 0 -3px #e33b31!important}.baitLimit{position:static!important;width:min(450px,100%);margin:5px auto 0!important;padding:4px 8px!important;border-radius:0!important;background:#f2f6fa!important;color:#36556f!important;text-align:center;font-size:10px!important;box-shadow:none!important;transform:none!important}
+@media(max-width:760px){.ballDirections button{width:24px!important;height:24px!important;font-size:14px!important}.baitLimit{width:min(70vw,31dvh,250px);margin:2px auto 0!important;padding:3px 4px!important;font-size:8px!important}}
+</style><script id="outside-bait-ui-v1">
+const applyMatchBeforeOutsideBaitUi=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeOutsideBaitUi(data),game=data?.game,me=matchSession?.player;
+  if(game&&me){const side=me==='p1'?0:1;state.baitRemaining=Math.max(0,10-((game.baitUsed||[0,0])[side]||0));state.lastBaitDirection=game.lastPlay?.execution==='bait'?game.lastPlay?.pitch?.ball||null:null;}
+  render();
+  return value;
+};
+const renderBeforeOutsideBaitUi=render;
+render=()=>{
+  renderBeforeOutsideBaitUi();
+  if(!state.mode)return;
+  const wrap=document.querySelector('.zoneWrap'),zone=$('zone');if(!wrap||!zone)return;
+  const lastBall=state.lastBaitDirection||state.tutorialBait||null;
+  zone.querySelectorAll('.ball').forEach(cell=>{if(lastBall)cell.classList.remove('ball')});
+  document.getElementById('outsidePitchBall')?.remove();
+  if(lastBall){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${lastBall}`;ball.title='스트라이크존 밖 실제 투구 위치';wrap.append(ball)}
+  let tactics=document.getElementById('ballDirections'),limit=document.getElementById('baitLimit');
+  if(state.half!=='bottom'&&state.mode!=='tutorial'){tactics?.remove();limit?.remove();return;}
+  if(state.mode==='tutorial')return;
+  if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}
+  wrap.append(tactics);
+  const remaining=state.baitRemaining??10;
+  tactics.innerHTML=['high:↑','low:↓','in:←','out:→'].map(item=>{const [value,label]=item.split(':');const name=value==='high'?'상단':value==='low'?'하단':value==='in'?'몸쪽':'바깥쪽',selected=state.pitchBallDirection===value;return `<button data-ball="${value}" title="${name} 유인구" aria-label="${name} 유인구" aria-pressed="${selected}" ${remaining<=0?'disabled':''} class="${selected?'on':''}">${label}</button>`}).join('');
+  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{const direction=button.dataset.ball;state.pitchBallDirection=state.pitchBallDirection===direction?null:direction;state.ball=null;state.lastBaitDirection=null;render()});
+  if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.after(limit)}limit.textContent=`유인구 ${remaining} / 10 · 방향을 다시 누르면 일반 투구`;
+};
+// A normal 5×5 location always means a normal pitch.  Capture this before
+// the regular cell handler updates the selected location and re-renders.
+$('zone').addEventListener('click',event=>{
+  if(state.mode==='tutorial'||state.half!=='bottom')return;
+  if(!event.target.closest('[data-z]'))return;
+  state.pitchBallDirection=null;
+  state.ball=null;
+  state.lastBaitDirection=null;
+},true);
+</script><style id="tutorial-mode-v1">
+.tutorial{background:#f3bf3e;color:#102846;box-shadow:0 7px 0 #a77b12}.tutorialCoach{width:min(520px,100%);margin:8px auto;padding:12px 14px;border:2px solid #102846;background:#fffdf4;color:#183b62;box-shadow:0 4px 0 #d3b15b}.tutorialCoach b{color:#e33b31}.tutorialCoach small{display:block;margin-bottom:4px;color:#7a6531;font-weight:900;letter-spacing:.08em}.tutorialCoach p{margin:4px 0 0;font-size:13px;line-height:1.5}.zone button.pick:not(.tutorial-target){position:relative;z-index:2;box-shadow:inset 0 0 0 3px #f0d047,0 0 0 2px #fff!important;animation:cursorPulse 1s ease-in-out infinite}.zone button.tutorial-target{box-shadow:inset 0 0 0 3px #f0b728,0 0 0 2px #fff!important;animation:tutorialPulse 1s ease-in-out infinite}.zone button.tutorial-target:after{content:"여기";position:absolute;z-index:14;left:50%;top:-23px;transform:translateX(-50%);padding:2px 5px;border-radius:3px;background:#102846;color:#fff;font-size:10px;font-weight:900;white-space:nowrap}@keyframes tutorialPulse{50%{filter:brightness(1.13)}}@keyframes cursorPulse{50%{box-shadow:inset 0 0 0 3px #fff08a,0 0 0 4px #f0b728!important;filter:brightness(1.08)}}.tutorialDone{position:fixed;z-index:90;inset:0;display:grid;place-items:center;padding:18px;background:#071a2bd9}.tutorialDone article{width:min(520px,100%);padding:26px;background:#fff;color:#102846;border:3px solid #f0b728;text-align:center;box-shadow:0 22px 64px #0009}.tutorialDone h2{margin:5px 0 12px;font-size:32px}.tutorialDone p{line-height:1.6;color:#405b76}.tutorialDone ul{margin:14px 0;padding:12px 20px;text-align:left;background:#f6f9fc;line-height:1.7;font-size:13px}.tutorialDone button{width:100%;padding:13px;border:0;background:#e33b31;color:#fff;font-weight:900;cursor:pointer}@media(max-width:760px){.tutorialCoach{width:min(74vw,34dvh,280px);padding:7px 9px;margin:3px auto}.tutorialCoach p{font-size:10px}.tutorialCoach small{font-size:8px}.zone button.tutorial-target:after{top:-16px;font-size:7px}.tutorialDone article{padding:19px}.tutorialDone h2{font-size:26px}.tutorialDone p,.tutorialDone ul{font-size:12px}}
+</style><script id="tutorial-mode-v1">
+const tutorialSteps=[
+  {side:'top',type:'contact',cell:12,title:'1. 정확한 타겟',text:'컨택 스윙과 중앙 칸을 선택하세요. 타겟을 정확히 읽으면 가장 안정적으로 타구를 만들 수 있습니다.',result:'정확 타겟 · 안타! 1루에 주자가 나갑니다.',apply(){state.r=0;state.hits=1;state.bases=[1,0,0];state.b=0;state.s=0;state.o=0;state.ball=12}},
+  {side:'top',type:'contact',cell:12,title:'2. 유인구를 거르기',text:'같은 중앙을 읽으세요. 상대의 높은 유인구는 노린 방향이 아니므로 볼입니다. 볼에는 스윙 판정이 없습니다.',result:'상단 유인구 · 볼. 타자는 스윙하지 않습니다.',bait:'high',apply(){state.b=1;state.ball=null;state.tutorialBait='high'}},
+  {side:'top',type:'power',cell:7,title:'3. 파워 스윙',text:'파워 스윙으로 표시된 칸을 선택하세요. 정확히 맞히면 컨택보다 장타 기대값이 높습니다.',result:'정확 타겟 · 외야를 가르는 2루타! 1루 주자가 홈을 밟습니다.',apply(){state.r=1;state.hits=2;state.bases=[0,1,0];state.b=0;state.s=0;state.ball=7}},
+  {side:'top',type:'spot',cell:4,title:'4. 스팟 스윙의 위험',text:'스팟 스윙은 한 칸만 공략합니다. 보상은 크지만 빗나가면 위험합니다.',result:'스팟 타겟을 살짝 벗어남 · 헛스윙 스트라이크.',apply(){state.s=1;state.ball=3}},
+  {side:'top',type:'contact',cell:12,title:'5. 범타도 존재합니다',text:'타격 범위 안에 들어와도 안타가 보장되지는 않습니다. 이번에는 땅볼 아웃입니다.',result:'컨택 성공 · 땅볼 아웃. 1아웃.',apply(){state.o=1;state.b=0;state.s=0;state.ball=12}},
+  {side:'top',type:'contact',cell:12,title:'6. 파울로 버티기',text:'타겟 주변 공은 헛스윙보다 파울이 늘어납니다. 정확도 높은 타자의 장점입니다.',result:'타겟 주변 · 파울. 2스트라이크에서도 타석은 계속됩니다.',apply(){state.s=2;state.ball=13}},
+  {side:'top',type:'contact',cell:12,title:'7. 공수 교대',text:'마지막 타구는 뜬공 아웃입니다. 3아웃이 되면 이제 당신이 투수입니다.',result:'뜬공 아웃 · 3아웃! 1회말, 수비로 전환합니다.',apply(){state.o=0;state.b=0;state.s=0;state.bases=[0,0,0];state.half='bottom';state.ball=12}},
+  {side:'bottom',type:'fast',cell:12,title:'8. 중앙 직구 승부',text:'패스트볼과 중앙 칸을 선택하세요. 맞을 위험은 있지만 구속으로 타이밍을 빼앗을 수 있습니다.',result:'패스트볼 · 땅볼 아웃. 1아웃.',apply(){state.o=1;state.ball=12}},
+  {side:'bottom',type:'breaking',cell:12,bait:'high',title:'9. 유인구 성공',text:'변화구를 고르고 스트라이크존 위의 상단 유인 버튼을 선택하세요. 상대가 상단을 노리면 헛스윙을 유도합니다.',result:'상단 변화구 유인 · 상대가 속아 헛스윙 스트라이크!',apply(){state.s=1;state.tutorialBait='high';state.ball=null}},
+  {side:'bottom',type:'fast',cell:0,title:'10. 제구 이탈 볼',text:'구석으로 승부합니다. 제구가 흔들린 공은 실제 위치가 벗어나며, 상대가 무엇을 노렸든 무조건 볼입니다.',result:'제구 이탈 · 볼. 타격 판정 없이 볼 카운트만 올라갑니다.',apply(){state.b=1;state.s=0;state.ball=1}},
+  {side:'bottom',type:'breaking',cell:20,title:'11. 실투',text:'이번에는 변화구를 구석에 던집니다. 실투는 상대가 노린 곳 근처로 들어가 안타 위험이 크게 높아집니다.',result:'실투 · 상대가 노린 코스에 들어가 안타를 맞았습니다.',apply(){state.away=1;state.awayHits=1;state.bases=[1,0,0];state.b=0;state.s=0;state.ball=18}},
+  {side:'bottom',type:'fast',cell:14,title:'12. 태그업',text:'3루 주자가 있는 상황입니다. 외야 뜬공 아웃이어도 주력에 따라 태그업 득점이 나올 수 있습니다.',result:'뜬공 아웃 · 3루 주자가 태그업으로 홈인!',apply(){state.away=2;state.o=2;state.bases=[0,0,0];state.ball=14}},
+  {side:'bottom',type:'fast',cell:2,title:'13. 튜토리얼 완료',text:'마지막으로 높은 직구를 선택하세요. 삼진으로 3아웃, 1이닝 튜토리얼을 마칩니다.',result:'삼진 아웃 · 3아웃! 모든 핵심 메커니즘을 경험했습니다.',apply(){state.o=0;state.b=0;state.s=0;state.ball=2;state.tutorialDone=true}}
+];
+let tutorialIndex=0;
+function tutorialStart(){
+  clearInterval(matchPoll);matchSession=null;state.net=false;state.finished=false;state.mode='tutorial';state.inning=1;state.half='top';state.r=0;state.away=0;state.hits=0;state.awayHits=0;state.walks=0;state.awayWalks=0;state.bases=[0,0,0];state.b=0;state.s=0;state.o=0;state.tutorialDone=false;tutorialIndex=0;state.tutorialReady={type:false,cell:false,ball:false};state.tutorialBait=null;document.getElementById('tutorialDone')?.remove();render();
+}
+function completeTutorial(){
+  let overlay=document.getElementById('tutorialDone');if(!overlay){overlay=document.createElement('div');overlay.id='tutorialDone';overlay.className='tutorialDone';document.body.append(overlay)}
+  overlay.innerHTML='<article><small>1이닝 튜토리얼 완료</small><h2>이제 읽고, 속이세요.</h2><p>정해진 장면을 통해 결과가 만들어지는 순서를 모두 경험했습니다.</p><ul><li>정확 타겟과 스윙 범위</li><li>유인구와 강제 볼</li><li>파울·실투·제구 이탈</li><li>주루·태그업·공수 교대</li></ul><button type="button" id="tutorialHome">실전 경기로 가기</button></article>';
+  overlay.querySelector('#tutorialHome').onclick=()=>{overlay.remove();state.mode='';history.pushState({},'',location.pathname);render()};
+}
+function runTutorialStep(){
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  const ready=state.tutorialReady||{};if(!ready.type||!ready.cell||(step.side==='bottom'&&step.bait&&!ready.ball)){state.tutorialHint='표시된 작전을 모두 선택한 뒤 진행하세요.';render();return}
+  state.tutorialBait=null;step.apply();state.tutorialResult=step.result;state.tutorialHint='';tutorialIndex++;state.tutorialReady={type:false,cell:false,ball:false};
+  if(state.tutorialDone){render();completeTutorial()}else render();
+}
+const tutorialButton=document.createElement('button');tutorialButton.type='button';tutorialButton.className='mode tutorial';tutorialButton.dataset.mode='tutorial';tutorialButton.innerHTML='튜토리얼<small>1이닝으로 핵심 규칙 익히기</small>';document.querySelector('.modes').append(tutorialButton);tutorialButton.onclick=tutorialStart;
+const startBeforeTutorialMode=start;
+start=mode=>mode==='tutorial'?tutorialStart():startBeforeTutorialMode(mode);
+const renderBeforeTutorialMode=render;
+render=()=>{
+  renderBeforeTutorialMode();if(state.mode!=='tutorial')return;
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  $('modeTitle').textContent=`튜토리얼 · 1회${step.side==='top'?'초 공격':'말 수비'}`;
+  const coach=document.getElementById('tutorialCoach')||document.createElement('section');coach.id='tutorialCoach';coach.className='tutorialCoach';document.querySelector('.zoneWrap').before(coach);
+  coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length}</small><b>${step.title}</b><p>${state.tutorialResult?`<b>결과:</b> ${state.tutorialResult}<br>`:''}${state.tutorialHint?`<b>${state.tutorialHint}</b><br>`:''}${step.text}</p>`;
+  const isBat=step.side==='top',wantedType=step.type;
+  $('types').innerHTML=isBat?swings.map(([value,label])=>`<button data-tutorial-type="${value}" class="${state.swing===value?'on':''}">${label}</button>`).join(''):`<button data-tutorial-type="fast" class="${state.pitchType==='fast'?'on':''}">패스트볼</button><button data-tutorial-type="breaking" class="${state.pitchType==='breaking'?'on':''}">변화구</button>`;
+  document.querySelectorAll('[data-tutorial-type]').forEach(button=>button.onclick=()=>{const value=button.dataset.tutorialType;if(value!==wantedType){state.tutorialHint=`이번 장면은 ${wantedType==='contact'?'컨택 스윙':wantedType==='power'?'파워 스윙':wantedType==='spot'?'스팟 스윙':wantedType==='fast'?'패스트볼':'변화구'}을 선택해 보세요.`;render();return}if(isBat)state.swing=value;else state.pitchType=value;state.tutorialReady.type=true;state.tutorialHint='';render()});
+  const zone=$('zone');zone.querySelectorAll('[data-z]').forEach(button=>{const cell=+button.dataset.z;button.classList.toggle('tutorial-target',cell===step.cell);button.onclick=()=>{if(cell!==step.cell){state.tutorialHint='노란 테두리로 표시된 칸을 선택해 보세요.';render();return}state.pick=cell;state.tutorialReady.cell=true;state.tutorialHint='';render()}});
+  let tactics=document.getElementById('ballDirections');if(step.side==='bottom'&&step.bait){if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}document.querySelector('.zoneWrap').append(tactics);tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-tutorial-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');tactics.querySelectorAll('[data-tutorial-ball]').forEach(button=>button.onclick=()=>{if(button.dataset.tutorialBall!==step.bait){state.tutorialHint='이번 장면의 안내 방향을 선택해 보세요.';render();return}state.pitchBallDirection=step.bait;state.tutorialReady.ball=true;state.tutorialHint='';render()})}else tactics?.remove();
+  document.getElementById('outsidePitchBall')?.remove();if(state.tutorialBait){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${state.tutorialBait}`;document.querySelector('.zoneWrap').append(ball)}
+  const action=$('swing'),ready=state.tutorialReady||{};action.disabled=!(ready.type&&ready.cell&&(!(step.side==='bottom'&&step.bait)||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'작전을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
+};
+</script><script id="tutorial-flow-stability-v2">
+function prepareStableTutorialStep(){
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  state.tutorialReview=false;state.tutorialHint='';state.tutorialResult='';state.tutorialBait=null;state.pitchBallDirection=null;
+  // The lesson preselects the correct swing or pitch. The player only needs
+  // to confirm the highlighted location (and a bait direction when taught).
+  if(step.side==='top')state.swing=step.type;else state.pitchType=step.type;
+  state.pick=step.cell;
+  state.tutorialReady={type:true,cell:false,ball:!(step.side==='bottom'&&step.bait)};
+}
+const tutorialStartBeforeStableFlow=tutorialStart;
+tutorialStart=()=>{tutorialStartBeforeStableFlow();tutorialIndex=0;state.tutorialDone=false;prepareStableTutorialStep();render()};
+runTutorialStep=()=>{
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  if(state.tutorialReview){
+    if(state.tutorialDone){completeTutorial();return}
+    tutorialIndex++;prepareStableTutorialStep();render();return;
+  }
+  const ready=state.tutorialReady||{};
+  if(!ready.cell||((step.side==='bottom'&&step.bait)&&!ready.ball)){state.tutorialHint='노란 테두리의 칸을 선택하세요.';render();return}
+  state.tutorialBait=null;step.apply();state.tutorialResult=step.result;state.tutorialHint='';state.tutorialReview=true;render();
+};
+const renderBeforeStableTutorialFlow=render;
+render=()=>{
+  renderBeforeStableTutorialFlow();
+  if(state.mode!=='tutorial'){document.getElementById('tutorialCoach')?.remove();document.getElementById('tutorialDone')?.remove();return;}
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  // Disable swing/pitch switching during a fixed scenario, but keep the
+  // prepared action visibly selected so the lesson stays easy to follow.
+  document.querySelectorAll('[data-tutorial-type]').forEach(button=>{button.disabled=true;button.title='이 장면의 작전으로 준비되어 있습니다.'});
+  const coach=document.getElementById('tutorialCoach'),action=$('swing'),ready=state.tutorialReady||{};
+  if(state.tutorialReview){
+    if(coach)coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length} · 결과 확인</small><b>${step.title}</b><p><b>결과:</b> ${state.tutorialResult}</p><p>이 결과가 왜 나왔는지 읽고 다음 장면으로 넘어가세요.</p>`;
+    action.disabled=false;action.classList.remove('waiting');action.textContent=state.tutorialDone?'튜토리얼 마치기':'결과 확인 · 다음 장면';action.onclick=runTutorialStep;return;
+  }
+  if(coach)coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length}</small><b>${step.title}</b><p>${step.side==='top'?'준비된 스윙으로 ':'준비된 구종으로 '}<b>노란 테두리 칸</b>을 선택하세요.${step.side==='bottom'&&step.bait?' 이어서 안내된 유인구 방향도 고르세요.':''}</p><p>${step.text}</p>`;
+  action.disabled=!(ready.cell&&(!(step.side==='bottom'&&step.bait)||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'노란 칸을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
+};
 </script></body></html>
