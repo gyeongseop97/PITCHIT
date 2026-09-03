@@ -870,4 +870,40 @@ showGameSummary = function(game) {
   dialog.querySelector('.summaryNote').after(replay);
   const note = document.createElement('p'); note.className = 'balanceNote'; note.textContent = '경기 결과는 이름·초대코드 없이 익명 밸런스 통계에 반영됩니다.'; dialog.append(note);
 };
+</script><style id="local-career-v1">
+.careerDialog{width:min(620px,100%)}.careerName{display:flex;gap:8px;margin:14px 0}.careerName input{flex:1;min-width:0;padding:10px;border:1px solid #b9c9d8;font:inherit}.careerName button{border:0;background:#e33b31;color:#fff;padding:10px 13px;font-weight:900;cursor:pointer}.careerHero{padding:16px;background:linear-gradient(135deg,#102846,#1d4e89);color:#fff}.careerHero small{display:block;letter-spacing:.14em;font-weight:900;opacity:.7}.careerHero b{display:block;margin-top:4px;font-size:28px}.careerStats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.careerStats article{padding:11px;background:#f6f9fc;border:1px solid #d8e2ec}.careerStats small{display:block;color:#607286;font-size:10px;font-weight:900}.careerStats b{display:block;margin-top:4px;color:#102846;font-size:21px}@media(max-width:760px){.careerStats{grid-template-columns:repeat(2,1fr)}.careerHero b{font-size:24px}}
+</style><script id="local-career-v1">
+const careerStorageKey = 'pitchit:local-career:v1';
+const emptyCareer = () => ({ nickname: '플레이어', games: 0, wins: 0, losses: 0, draws: 0, atBats: 0, hits: 0, rbi: 0, homeRuns: 0, walks: 0, strikeouts: 0, outsRecorded: 0, earnedRuns: 0, recordedGames: [] });
+function loadCareer() { try { return { ...emptyCareer(), ...(JSON.parse(localStorage.getItem(careerStorageKey) || '{}')) }; } catch (_) { return emptyCareer(); } }
+function saveCareer(value) { try { localStorage.setItem(careerStorageKey, JSON.stringify(value)); } catch (_) {} }
+function careerNumber(value) { return Number(value || 0); }
+function careerRate(top, bottom) { return bottom ? (top / bottom).toFixed(3).replace(/^0/, '') : '.000'; }
+function openCareer() {
+  const career = loadCareer(); let overlay = document.getElementById('careerOverlay');
+  if (!overlay) { overlay = document.createElement('div'); overlay.id = 'careerOverlay'; overlay.className = 'guideOverlay'; document.body.append(overlay); }
+  const era = career.outsRecorded ? (career.earnedRuns * 27 / career.outsRecorded).toFixed(2) : '0.00';
+  overlay.innerHTML = `<section class="guideDialog careerDialog" role="dialog" aria-modal="true"><header><h2>내 선수 카드</h2><button class="guideClose">닫기</button></header><div class="careerName"><input id="careerNickname" maxlength="16" value="${String(career.nickname || '').replace(/[&<>"']/g, '')}" placeholder="내 닉네임"><button id="saveCareerName">저장</button></div><section class="careerHero"><small>LOCAL CAREER · THIS DEVICE</small><b>${career.nickname || '플레이어'}</b><span>${career.games}경기 · ${career.wins}승 ${career.losses}패 ${career.draws}무</span></section><div class="careerStats"><article><small>타율</small><b>${careerRate(career.hits, career.atBats)}</b></article><article><small>안타</small><b>${career.hits}</b></article><article><small>타점</small><b>${career.rbi}</b></article><article><small>홈런</small><b>${career.homeRuns}</b></article><article><small>볼넷</small><b>${career.walks}</b></article><article><small>삼진</small><b>${career.strikeouts}</b></article><article><small>방어율</small><b>${era}</b></article><article><small>투구 아웃</small><b>${career.outsRecorded}</b></article></div><p class="balanceNote">전적은 이 브라우저와 기기에만 저장됩니다. 브라우저 데이터를 지우거나 다른 기기로 접속하면 이어지지 않습니다.</p></section>`;
+  overlay.onclick = event => { if (event.target === overlay) overlay.remove(); }; overlay.querySelector('.guideClose').onclick = () => overlay.remove();
+  overlay.querySelector('#saveCareerName').onclick = () => { const updated = loadCareer(); updated.nickname = overlay.querySelector('#careerNickname').value.trim().slice(0, 16) || '플레이어'; saveCareer(updated); openCareer(); };
+}
+const careerButton = document.createElement('button'); careerButton.type = 'button'; careerButton.textContent = '내 기록'; careerButton.onclick = openCareer; document.querySelector('.homeGuideActions')?.append(careerButton);
+document.querySelector('[data-mode="friend"]')?.addEventListener('click', () => setTimeout(() => { const input = document.getElementById('friendName'); if (input && !input.value) input.value = loadCareer().nickname; }, 0));
+document.querySelector('[data-mode="quick"]')?.addEventListener('click', () => setTimeout(() => { const input = document.getElementById('quickName'); if (input && !input.value) input.value = loadCareer().nickname; }, 0));
+function recordFinishedGame(game) {
+  const code = matchSession?.code; const me = matchSession?.player; const plays = game?.playLog || [];
+  if (!code || !me || !plays.length) return;
+  const career = loadCareer(); if (career.recordedGames.includes(code)) return;
+  const mine = plays.filter(play => play.attacker === me), pitching = plays.filter(play => play.attacker !== me);
+  const plateEnds = mine.filter(play => ['single', 'double', 'triple', 'homerun', 'groundout', 'flyout'].includes(play.outcome) || /삼진|볼넷/.test(play.event));
+  const walks = plateEnds.filter(play => /볼넷/.test(play.event)).length;
+  const atBats = plateEnds.filter(play => !/볼넷/.test(play.event)).length;
+  const hits = plateEnds.filter(play => ['single', 'double', 'triple', 'homerun'].includes(play.outcome)).length;
+  const side = me === 'p1' ? 0 : 1, opponent = side ? 0 : 1;
+  career.games += 1; career.wins += game.scores[side] > game.scores[opponent] ? 1 : 0; career.losses += game.scores[side] < game.scores[opponent] ? 1 : 0; career.draws += game.scores[side] === game.scores[opponent] ? 1 : 0;
+  career.atBats += atBats; career.hits += hits; career.walks += walks; career.homeRuns += plateEnds.filter(play => play.outcome === 'homerun').length; career.rbi += plateEnds.reduce((sum, play) => sum + careerNumber(play.runsBattedIn), 0); career.strikeouts += plateEnds.filter(play => /삼진/.test(play.event)).length; career.outsRecorded += pitching.reduce((sum, play) => sum + careerNumber(play.outsRecorded), 0); career.earnedRuns += careerNumber(game.scores[opponent]); career.recordedGames = [...career.recordedGames, code].slice(-100);
+  saveCareer(career);
+}
+const showGameSummaryBeforeCareer = showGameSummary;
+showGameSummary = function(game) { recordFinishedGame(game); showGameSummaryBeforeCareer(game); };
 </script></body></html>

@@ -8,7 +8,7 @@ type Batter = { n: string; t: string; p: number; a: number; e: number; v: number
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
-type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; execution?: "command" | "bait" | "mistake" | "wild" };
+type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "bait" | "mistake" | "wild" };
 type Game = {
   status: "waiting" | "playing" | "finished";
   inning: number;
@@ -139,6 +139,9 @@ function resolve(room: Room) {
   const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
   const pitcher = game.teams[defender(game)].pitchers[game.teams[defender(game)].activePitcher];
   const batter = game.teams[battingPlayer].lineup[game.batter[game.half]];
+  const battingSide = battingPlayer === "p1" ? 0 : 1;
+  const scoreBefore = game.scores[battingSide];
+  const strikesBefore = game.strikes;
   const plate = resolvePlateAppearance({
     batter,
     pitcher,
@@ -194,6 +197,8 @@ function resolve(room: Room) {
     speed: plate.speed,
     outcome: plate.outcome,
     event: game.event,
+    runsBattedIn: game.scores[battingSide] - scoreBefore,
+    outsRecorded: plate.outcome === "groundout" || plate.outcome === "flyout" || (plate.outcome === "swinging_strike" && strikesBefore >= 2) ? 1 : 0,
     execution: plate.execution,
   }, ...(game.playLog ?? [])].slice(0, 120);
   trackBalance(plate.outcome, batting.swing ?? "contact", pitching.ball ? "bait" : (pitching.pitch ?? "fast"));
