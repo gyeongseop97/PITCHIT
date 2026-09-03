@@ -138,6 +138,11 @@ function identify(room: Room, supplied: string): PlayerId | null {
 
 export default async function handler(req: any, res: any) {
   try {
+    // The game is also published through GitHub Pages, which calls this
+    // Vercel function from a different origin.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") return res.status(204).end();
     const input = req.method === "GET" ? req.query : await readBody(req);
     if (input.action === "create") {
