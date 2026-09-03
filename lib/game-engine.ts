@@ -23,8 +23,11 @@ const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, v
 function nearbyCell(cell: number, random: () => number) {
   const row = Math.floor(cell / 5);
   const column = cell % 5;
-  const direction = [[0, -1], [0, 1], [-1, 0], [1, 0]][Math.floor(random() * 4)];
-  return Math.max(0, Math.min(4, row + direction[0])) * 5 + Math.max(0, Math.min(4, column + direction[1]));
+  const neighbours = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    .map(([r, c]) => [row + r, column + c])
+    .filter(([r, c]) => r >= 0 && r < 5 && c >= 0 && c < 5);
+  const [nextRow, nextColumn] = neighbours[Math.floor(random() * neighbours.length)];
+  return nextRow * 5 + nextColumn;
 }
 
 /** Pure plate-appearance resolution. No state, Redis, DOM, or clock access. */
@@ -57,7 +60,8 @@ export function resolvePlateAppearance(input: {
   const selectedRow = Math.floor(input.pitchCell / 5), selectedColumn = input.pitchCell % 5;
   const selectedCenterDistance = Math.abs(selectedRow - 2) + Math.abs(selectedColumn - 2);
   // Corners are a high-risk choice: harder to square up, but more likely to leak.
-  const missChance = clamp(0.28 - input.pitcher.c / 280 + selectedCenterDistance * 0.035 + (direction ? 0.11 : 0));
+  const breakingCommand = breaking ? (70 - input.pitcher.m) / 900 : 0;
+  const missChance = clamp(0.28 - input.pitcher.c / 280 + selectedCenterDistance * 0.035 + breakingCommand + (direction ? 0.11 : 0), 0.01, 0.65);
   const actualCell = random() < missChance ? nearbyCell(input.pitchCell, random) : input.pitchCell;
   const mistake = actualCell !== input.pitchCell;
   const actualRow = Math.floor(actualCell / 5), actualColumn = actualCell % 5;

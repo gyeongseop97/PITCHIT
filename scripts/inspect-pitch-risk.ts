@@ -1,0 +1,27 @@
+import { resolvePlateAppearance, type PitcherRatings } from "../lib/game-engine";
+
+const TRIALS = 100_000;
+const pitchers: Record<string, PitcherRatings> = {
+  구속형: { v: 86, c: 52, s: 50, m: 42 },
+  제구형: { v: 48, c: 88, s: 48, m: 46 },
+  구위형: { v: 53, c: 50, s: 87, m: 40 },
+  변화형: { v: 50, c: 54, s: 45, m: 86 },
+};
+const locations = { 중앙: 12, 변두리: 2, 모서리: 0 } as const;
+
+function measure(name: string, pitcher: PitcherRatings, pitchCell: number, pitch: "fast" | "breaking") {
+  let mistakes = 0, balls = 0;
+  for (let i = 0; i < TRIALS; i++) {
+    // The batter targets the commanded square. This isolates pitching location
+    // risk from hitter eye/chase decisions and deliberate ball tactics.
+    const result = resolvePlateAppearance({
+      batter: { p: 60, a: 60, e: 60, v: 60 }, pitcher,
+      targetCell: pitchCell, pitchCell, swing: "contact", pitch, count: { balls: 0, strikes: 0 },
+    });
+    if (result.actualCell !== pitchCell) mistakes++;
+    if (result.outcome === "ball") balls++;
+  }
+  return { 투수: name, 구종: pitch === "fast" ? "패스트볼" : "변화구", 위치: Object.entries(locations).find(([, cell]) => cell === pitchCell)?.[0], 실투율: +(mistakes / TRIALS).toFixed(3), 볼확률: +(balls / TRIALS).toFixed(3) };
+}
+
+console.table(Object.entries(pitchers).flatMap(([name, pitcher]) => (["fast", "breaking"] as const).flatMap(pitch => Object.values(locations).map(cell => measure(name, pitcher, cell, pitch)))));
