@@ -81,7 +81,7 @@ function walk(game: Game) {
 }
 function nextPitch(game: Game) {
   game.choices = {};
-  game.deadline = Date.now() + 15000;
+  game.deadline = Date.now() + 20000;
 }
 function endPlate(game: Game) {
   game.balls = 0;
@@ -156,7 +156,7 @@ export default async function handler(req: any, res: any) {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
       room.players.p2 = { token: token(), name: input.name || "플레이어 2" };
       room.game.status = "playing";
-      room.game.event = "경기 시작! 15초 안에 작전을 선택하세요.";
+      room.game.event = "경기 시작! 20초 안에 작전을 선택하세요.";
       nextPitch(room.game);
       await save(room);
       return res.json({ ...publicRoom(room), player: "p2", token: room.players.p2.token });
