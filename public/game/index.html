@@ -219,4 +219,16 @@ render=()=>{
   .countGroup{min-height:10px;gap:3px}.countGroup small{width:8px;font-size:8px}.countGroup i{width:7px;height:7px}
   .score>div:last-child{min-width:100px}.score>div:last-child small{white-space:nowrap;font-size:8px}.score>div:last-child b{font-size:21px}
 }
-</style></body></html>
+</style><script id="result-overlay-fix-v4">
+const renderBeforeResultOverlayFix=render;
+render=()=>{
+  renderBeforeResultOverlayFix();
+  if(!state.mode)return;
+  let outcome=document.getElementById('zoneOutcome');
+  if(!outcome){outcome=document.createElement('div');outcome.id='zoneOutcome';outcome.className='zoneOutcome';document.querySelector('.zoneWrap').append(outcome)}
+  const active=state.net?((state.netOutcomeUntil||0)>Date.now()?state.netOutcome:'') : ((state.localOutcomeUntil||0)>Date.now()?state.localOutcome:'');
+  outcome.textContent=active||'';
+  outcome.style.display=active?'block':'none';
+  outcome.className='zoneOutcome '+(active.includes('안타')||active.includes('홈런')||active.includes('루타')?'hit':active.includes('아웃')?'out':active.includes('볼')?'ball':'strike');
+};
+</script></body></html>
