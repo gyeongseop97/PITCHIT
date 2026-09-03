@@ -742,4 +742,55 @@ applyMatch = function(data) {
     render();
   }
 };
+</script><style id="guide-and-team-name-v1">
+.scoreTeamLabel{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.scoreTeamLabel[title]{cursor:default}
+@media(max-width:760px){.scoreTeamLabel{font-size:7px!important;letter-spacing:.04em!important}}
+</style><script id="guide-and-team-name-v1">
+// Tutorials were useful for prototyping, but the fixed scenarios are not
+// reliable enough to ship. Keep the game focused on the two usable guides.
+document.querySelector('[data-mode="tutorial"]')?.remove();
+const startBeforeTutorialRemoval = start;
+start = mode => startBeforeTutorialRemoval(mode === 'tutorial' ? '' : mode);
+if (state.mode === 'tutorial') { state.mode = ''; history.replaceState({}, '', location.pathname); render(); }
+
+// The short guide is deliberately playable in one read. The existing long
+// guide remains available for players who want the full strategy details.
+Object.assign(guideContent, {
+  info: { title: '간단 가이드 · 바로 플레이하기', body: `
+    <p class="guideLead"><b>한 턴은 간단합니다.</b> 타자는 스윙과 노릴 칸을, 투수는 구종과 던질 칸(또는 유인구)을 고릅니다. 상대가 무엇을 읽었는지 예상하는 것이 핵심입니다.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>타자 유형</h3><ul><li><b>컨택형</b>: 안타·정확한 타구에 강함</li><li><b>파워형</b>: 2루타·홈런에 강함</li><li><b>선구안형</b>: 빗나간 공을 볼로 골라냄</li><li><b>주루형</b>: 내야안타·추가 진루·3루타에 유리</li></ul></section>
+      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 선택 칸 주변 3×3, 가장 안정적</li><li><b>파워</b>: 십자 5칸, 맞히면 장타 기대값 상승</li><li><b>스팟</b>: 한 칸, 정확히 읽으면 최고 보상</li></ul><p class="tip"><b>핵심:</b> 정확히 선택 칸에 맞을수록 좋은 타구가 나옵니다. 색칠된 주변 칸은 파울·약한 타구가 늘어납니다.</p></section>
+      <section class="guideCard"><h3>투수 유형·구종</h3><ul><li><b>구속형</b>: 타이밍을 흔듦</li><li><b>제구형</b>: 볼·제구 이탈·실투를 줄임</li><li><b>구위형</b>: 범타를 늘림</li><li><b>변화형</b>: 변화구 헛스윙 유도에 강함</li><li><b>직구</b>: 장타 위험은 낮지만 스윙 유도도 낮음</li><li><b>변화구</b>: 스윙 유도는 높지만 맞으면 장타 위험</li></ul></section>
+      <section class="guideCard"><h3>코스와 유인구</h3><p>존 <b>중앙</b>은 맞을 위험이 높고, <b>구석</b>은 안타 위험은 낮지만 볼·실투 위험이 조금 큽니다.</p><p>유인구는 상·하·몸쪽·바깥쪽 중 하나를 골라 존 밖으로 던집니다. 타자가 그 방향을 읽으면 헛스윙, 반대 방향을 읽으면 볼입니다. 경기당 <b>10개</b>만 사용할 수 있습니다.</p></section>
+      <section class="guideCard wide"><h3>처음엔 이렇게 해보세요</h3><p><b>타자:</b> 확신이 없으면 컨택으로 중앙 근처를 노리고, 상대 패턴을 읽었을 때 파워·스팟으로 보상을 노리세요. <b>투수:</b> 중앙 승부와 구석 승부를 섞고, 2스트라이크에서만 유인구를 아껴 쓰면 좋습니다. 결과 뒤 남는 최근 5개 표식을 다음 선택의 근거로 활용하세요.</p></section>
+    </div>` },
+  guide: { ...guideContent.guide, title: '상세 전략 가이드' }
+});
+document.querySelector('[data-guide="info"]').textContent = '간단 가이드';
+document.querySelector('[data-guide="guide"]').textContent = '상세 가이드';
+
+function truncateTeamName(name) { return String(name || '플레이어').trim().slice(0, 12) || '플레이어'; }
+function renderTeamNames() {
+  if (!state.mode) return;
+  const label = document.querySelector('.score > div:nth-child(4) small');
+  if (!label) return;
+  const mine = truncateTeamName(state.myTeamName || (state.mode === 'solo' ? 'MY TEAM' : '플레이어'));
+  const opponent = truncateTeamName(state.opponentTeamName || (state.mode === 'solo' ? 'PITCHIT AI' : '상대팀'));
+  label.classList.add('scoreTeamLabel');
+  label.textContent = `SCORE · ${mine} : ${opponent}`;
+  label.title = `${state.myTeamName || mine} : ${state.opponentTeamName || opponent}`;
+}
+const applyMatchBeforeTeamNames = applyMatch;
+applyMatch = function(data) {
+  applyMatchBeforeTeamNames(data);
+  const me = matchSession?.player;
+  if (me && data.players) {
+    state.myTeamName = data.players[me];
+    state.opponentTeamName = data.players[me === 'p1' ? 'p2' : 'p1'];
+  }
+  renderTeamNames();
+};
+const renderBeforeTeamNames = render;
+render = function() { renderBeforeTeamNames(); renderTeamNames(); };
 </script></body></html>
