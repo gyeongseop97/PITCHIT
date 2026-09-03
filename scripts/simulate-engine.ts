@@ -2,7 +2,7 @@ import { resolvePlateAppearance, type BatterRatings, type PitcherRatings, type S
 
 type BatterProfile = { name: string; ratings: BatterRatings; swing: SwingType };
 type PitcherProfile = { name: string; ratings: PitcherRatings; breakingRate: number; baitRate: number };
-type StatLine = Record<"pa" | "ab" | "h" | "bb" | "so" | "out" | "single" | "double" | "triple" | "hr", number>;
+type StatLine = Record<"pa" | "ab" | "h" | "bb" | "so" | "foul" | "out" | "single" | "double" | "triple" | "hr", number>;
 
 const PLATE_APPEARANCES = 100_000;
 const cells = Array.from({ length: 25 }, (_, cell) => cell);
@@ -21,7 +21,7 @@ const pitchers: PitcherProfile[] = [
 ];
 
 const choose = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)];
-const empty = (): StatLine => ({ pa: 0, ab: 0, h: 0, bb: 0, so: 0, out: 0, single: 0, double: 0, triple: 0, hr: 0 });
+const empty = (): StatLine => ({ pa: 0, ab: 0, h: 0, bb: 0, so: 0, foul: 0, out: 0, single: 0, double: 0, triple: 0, hr: 0 });
 const add = (to: StatLine, from: StatLine) => Object.keys(to).forEach(key => to[key as keyof StatLine] += from[key as keyof StatLine]);
 const ratio = (top: number, bottom: number) => bottom ? +(top / bottom).toFixed(3) : 0;
 
@@ -37,13 +37,13 @@ function adjacentTo(cell: number) {
   return choose(candidates);
 }
 
-function plateAppearance(batter: BatterProfile, pitcher: PitcherProfile, readRate: number, selectTarget = (cell: number) => targetFor(cell, readRate)): StatLine {
+function plateAppearance(batter: BatterProfile, pitcher: PitcherProfile, readRate: number, selectTarget = (cell: number) => targetFor(cell, readRate), selectPitch = () => choose(cells)): StatLine {
   const stat = empty();
   stat.pa++;
   let balls = 0;
   let strikes = 0;
   while (true) {
-    const pitchCell = choose(cells);
+    const pitchCell = selectPitch();
     const targetCell = selectTarget(pitchCell);
     const bait = Math.random() < pitcher.baitRate ? choose(directions) : undefined;
     const result = resolvePlateAppearance({
@@ -51,7 +51,7 @@ function plateAppearance(batter: BatterProfile, pitcher: PitcherProfile, readRat
       swing: batter.swing, pitch: Math.random() < pitcher.breakingRate ? "breaking" : "fast", count: { balls, strikes },
     });
     if (result.outcome === "ball") { if (++balls === 4) { stat.bb++; return stat; } continue; }
-    if (result.outcome === "foul") { strikes = Math.min(2, strikes + 1); continue; }
+    if (result.outcome === "foul") { stat.foul++; strikes = Math.min(2, strikes + 1); continue; }
     if (result.outcome === "swinging_strike" || result.outcome === "strike") {
       if (++strikes === 3) { stat.ab++; stat.so++; stat.out++; return stat; }
       continue;
@@ -68,11 +68,11 @@ function plateAppearance(batter: BatterProfile, pitcher: PitcherProfile, readRat
 }
 
 function report(scenario: string, stats: StatLine) {
-  return { scenario, PA: stats.pa, AVG: ratio(stats.h, stats.ab), OBP: ratio(stats.h + stats.bb, stats.pa), BB: ratio(stats.bb, stats.pa), K: ratio(stats.so, stats.pa), H: ratio(stats.h, stats.pa), "2B": ratio(stats.double, stats.pa), "3B": ratio(stats.triple, stats.pa), HR: ratio(stats.hr, stats.pa) };
+  return { scenario, PA: stats.pa, AVG: ratio(stats.h, stats.ab), OBP: ratio(stats.h + stats.bb, stats.pa), BB: ratio(stats.bb, stats.pa), K: ratio(stats.so, stats.pa), Foul: ratio(stats.foul, stats.pa), H: ratio(stats.h, stats.pa), "2B": ratio(stats.double, stats.pa), "3B": ratio(stats.triple, stats.pa), HR: ratio(stats.hr, stats.pa) };
 }
-function runScenario(name: string, readRate: number, chooseBatter = () => choose(batters), choosePitcher = () => choose(pitchers), selectTarget?: (cell: number) => number) {
+function runScenario(name: string, readRate: number, chooseBatter = () => choose(batters), choosePitcher = () => choose(pitchers), selectTarget?: (cell: number) => number, selectPitch?: () => number) {
   const total = empty();
-  for (let plate = 0; plate < PLATE_APPEARANCES; plate++) add(total, plateAppearance(chooseBatter(), choosePitcher(), readRate, selectTarget));
+  for (let plate = 0; plate < PLATE_APPEARANCES; plate++) add(total, plateAppearance(chooseBatter(), choosePitcher(), readRate, selectTarget, selectPitch));
   return report(name, total);
 }
 
@@ -85,6 +85,13 @@ const qualityReports = (["contact", "power", "spot"] as SwingType[]).flatMap(swi
     runScenario(`${swing} · 주변 색깔존`, 0, () => batter, () => standardPitcher, adjacentTo),
   ];
 });
+const locationReports = (["contact", "power", "spot"] as SwingType[]).flatMap(swing => {
+  const batter = { ...standardBatter, swing };
+  return [
+    runScenario(`${swing} · 중앙 투구`, 1, () => batter, () => standardPitcher, cell => cell, () => 12),
+    runScenario(`${swing} · 구석 투구`, 1, () => batter, () => standardPitcher, cell => cell, () => 0),
+  ];
+});
 
 console.table([
   runScenario("무작위 추측 (읽기 0%)", 0),
@@ -93,4 +100,5 @@ console.table([
   ...batters.map(batter => runScenario(`${batter.name} 타자`, .35, () => batter)),
   ...pitchers.map(pitcher => runScenario(`${pitcher.name} 투수 상대`, .35, undefined, () => pitcher)),
   ...qualityReports,
+  ...locationReports,
 ]);
