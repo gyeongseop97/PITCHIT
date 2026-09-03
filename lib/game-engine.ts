@@ -65,8 +65,8 @@ export function resolvePlateAppearance(input: {
   const selectedRow = Math.floor(input.pitchCell / 5), selectedColumn = input.pitchCell % 5;
   const selectedCenterDistance = Math.abs(selectedRow - 2) + Math.abs(selectedColumn - 2);
   // Corners are a high-risk choice: harder to square up, but more likely to leak.
-  const breakingCommand = breaking ? (70 - input.pitcher.m) / 900 : 0;
-  const missChance = clamp(0.10 - input.pitcher.c / 520 + selectedCenterDistance * 0.016 + breakingCommand + (direction ? 0.05 : 0), 0.005, 0.35);
+  const breakingCommand = breaking ? (70 - input.pitcher.m) / 1400 : 0;
+  const missChance = clamp(0.10 - input.pitcher.c / 520 + selectedCenterDistance * 0.011 + breakingCommand + (direction ? 0.05 : 0), 0.005, 0.35);
   const mistake = random() < missChance;
   const actualCell = mistake ? mistakeIntoTarget(input.targetCell, input.swing, random) : input.pitchCell;
   const actualRow = Math.floor(actualCell / 5), actualColumn = actualCell % 5;
