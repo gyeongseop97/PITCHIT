@@ -563,4 +563,31 @@ start=async mode=>{
     state.net=false;action.disabled=false;action.classList.remove('waiting');$('result').textContent=error.message||'AI 경기를 시작하지 못했습니다. 다시 시도해 주세요.';render();
   }
 };
+</script><style id="outside-bait-ui-v1">
+.zoneWrap{overflow:visible}.ballDirections{position:absolute!important;inset:0!important;width:auto!important;height:auto!important;margin:0!important;display:block!important;z-index:12;pointer-events:none}.ballDirections button{position:absolute!important;min-height:0!important;width:68px!important;height:30px!important;padding:3px!important;border:1px solid #8fa7bd!important;background:#f8fbff!important;color:#173b62!important;font-size:10px!important;font-weight:900!important;box-shadow:0 2px 0 #b5c5d4;pointer-events:auto}.ballDirections button[data-ball="high"]{left:50%;top:-35px;transform:translateX(-50%)}.ballDirections button[data-ball="low"]{left:50%;bottom:-35px;transform:translateX(-50%)}.ballDirections button[data-ball="in"]{left:-72px;top:50%;transform:translateY(-50%)}.ballDirections button[data-ball="out"]{right:-72px;top:50%;transform:translateY(-50%)}.ballDirections button.on{background:#183b62!important;color:#fff!important;box-shadow:inset 0 -3px #e33b31!important}.ballDirections button:disabled{opacity:.4;cursor:not-allowed}.baitLimit{position:absolute;z-index:13;left:50%;bottom:-65px;transform:translateX(-50%);margin:0;padding:4px 8px;border-radius:12px;background:#102846;color:#fff;font-size:10px;font-weight:900;white-space:nowrap}.outsidePitchBall{position:absolute;z-index:11;width:17%;aspect-ratio:1;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 3px 3px #10284666);pointer-events:none}.outsidePitchBall.high{left:50%;top:-11%;transform:translateX(-50%)}.outsidePitchBall.low{left:50%;bottom:-11%;transform:translateX(-50%)}.outsidePitchBall.in{left:-11%;top:50%;transform:translateY(-50%)}.outsidePitchBall.out{right:-11%;top:50%;transform:translateY(-50%)}@media(max-width:760px){.ballDirections button{width:48px!important;height:22px!important;font-size:7px!important}.ballDirections button[data-ball="high"]{top:-26px}.ballDirections button[data-ball="low"]{bottom:-26px}.ballDirections button[data-ball="in"]{left:-51px}.ballDirections button[data-ball="out"]{right:-51px}.baitLimit{bottom:-48px;font-size:8px;padding:3px 6px}.outsidePitchBall{width:19%}.outsidePitchBall.high{top:-9%}.outsidePitchBall.low{bottom:-9%}.outsidePitchBall.in{left:-9%}.outsidePitchBall.out{right:-9%}}
+</style><script id="outside-bait-ui-v1">
+const applyMatchBeforeOutsideBaitUi=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeOutsideBaitUi(data),game=data?.game,me=matchSession?.player;
+  if(game&&me){const side=me==='p1'?0:1;state.baitRemaining=Math.max(0,10-((game.baitUsed||[0,0])[side]||0));state.lastBaitDirection=game.lastPlay?.execution==='bait'?game.lastPlay?.pitch?.ball||null:null;}
+  render();
+  return value;
+};
+const renderBeforeOutsideBaitUi=render;
+render=()=>{
+  renderBeforeOutsideBaitUi();
+  if(!state.mode)return;
+  const wrap=document.querySelector('.zoneWrap'),zone=$('zone');if(!wrap||!zone)return;
+  const lastBall=state.net&&state.lastBaitDirection;
+  zone.querySelectorAll('.ball').forEach(cell=>{if(lastBall)cell.classList.remove('ball')});
+  document.getElementById('outsidePitchBall')?.remove();
+  if(lastBall){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${lastBall}`;ball.title='스트라이크존 밖 실제 투구 위치';wrap.append(ball)}
+  if(state.half!=='bottom')return;
+  let tactics=document.getElementById('ballDirections');if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}
+  wrap.append(tactics);
+  const remaining=state.baitRemaining??10;
+  tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" ${remaining<=0?'disabled':''} class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
+  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
+  let limit=document.getElementById('baitLimit');if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.append(limit)}limit.textContent=`유인구 ${remaining} / 10`;
+};
 </script></body></html>

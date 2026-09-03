@@ -19,6 +19,7 @@ type Game = {
   strikes: number;
   outs: number;
   bases: [number, number, number];
+  baitUsed: [number, number];
   batter: [number, number];
   teams: Record<PlayerId, Team>;
   deadline: number;
@@ -56,7 +57,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -210,6 +211,14 @@ function startRoom(room: Room, joining: { token: string; name: string }) {
 function identify(room: Room, supplied: string): PlayerId | null {
   return room.players.p1?.token === supplied ? "p1" : room.players.p2?.token === supplied ? "p2" : null;
 }
+function consumeBait(game: Game, player: PlayerId, choice: Choice) {
+  if (!choice.ball) return true;
+  game.baitUsed ??= [0, 0];
+  const side = player === "p1" ? 0 : 1;
+  if (game.baitUsed[side] >= 10) return false;
+  game.baitUsed[side]++;
+  return true;
+}
 
 export default async function handler(req: any, res: any) {
   try {
@@ -276,8 +285,13 @@ export default async function handler(req: any, res: any) {
       if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
+      if (!consumeBait(room.game, player, input.choice)) return res.status(409).json({ error: "이번 경기의 유인구 10개를 모두 사용했습니다." });
       room.game.choices[player] = input.choice;
-      if (room.mode === "solo") room.game.choices.p2 = aiChoice(room.game, "p2");
+      if (room.mode === "solo") {
+        const ai = aiChoice(room.game, "p2");
+        if (!consumeBait(room.game, "p2", ai)) delete ai.ball;
+        room.game.choices.p2 = ai;
+      }
       if (room.game.choices.p1 && room.game.choices.p2) resolve(room);
     }
     await save(room);
