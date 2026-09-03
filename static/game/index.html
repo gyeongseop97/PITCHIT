@@ -407,7 +407,7 @@ applyMatch=function(data){
     const mine=game.teams[me],other=game.teams[me==='p1'?'p2':'p1'],mineIndex=me==='p1'?0:1,otherIndex=mineIndex?0:1;
     state.pitchers=mine.pitchers;state.activePitcher=mine.activePitcher;state.usedPitchers=mine.usedPitchers;
     state.awayPitchers=other.pitchers;state.awayActivePitcher=other.activePitcher;state.awayUsedPitchers=other.usedPitchers;
-    state.onlineLineup=mine.lineup;state.onlineAwayLineup=other.lineup;
+    state.onlineLineup=mine.lineup;state.onlineAwayLineup=other.lineup;state.awayLineup=other.lineup;
     state.batter=mine.lineup[game.batter[mineIndex]];state.awayBatter=other.lineup[game.batter[otherIndex]];
   }
   return applyMatchBeforeRosterOrder(data);
