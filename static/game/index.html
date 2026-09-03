@@ -160,4 +160,30 @@ render=()=>{
   outcome.style.display=active?'block':'none';
   outcome.className='zoneOutcome '+(active.includes('안타')||active.includes('홈런')||active.includes('루타')?'hit':active.includes('아웃')?'out':active.includes('볼')?'ball':'strike');
 };
+</script><style id="mobile-layout-v1">
+.types{grid-template-columns:repeat(3,minmax(0,1fr))}.types.two{grid-template-columns:repeat(2,minmax(0,1fr))}.types button{text-align:center}
+.mobileDuelInfo{display:none}
+@media(max-width:760px){
+  body{background:#fff}.game{padding:7px;min-height:100dvh}.top{gap:8px;padding-bottom:6px}.top h2{font-size:16px}.back{padding:6px 8px;font-size:12px}
+  .board{display:block;margin-top:7px}.board>aside.panel{display:none}.score{grid-template-columns:39px 64px 1fr 78px;gap:4px;padding:7px 8px;min-height:76px}.score small{font-size:8px}.score b{font-size:20px}.bases{width:64px;height:60px;transform:scale(.58);transform-origin:center}.counts{gap:3px}.counts span{width:29px;height:29px;font-size:9px}.counts b{font-size:13px}
+  .mobileDuelInfo{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0}.mobileDuelInfo article{min-width:0;padding:7px 8px;border:1px solid #d6e1ec;background:#f8fbff}.mobileDuelInfo article:last-child{background:#fff7f5;border-color:#f1c9c2}.mobileDuelInfo small{display:block;color:#64748b;font-size:9px;font-weight:900;letter-spacing:.08em}.mobileDuelInfo b{display:block;margin:2px 0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mobileDuelInfo span{display:block;color:#526b84;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .panel{padding:8px}.panel h3{margin-bottom:2px;font-size:18px}.panel>.hint{display:none}.types{gap:4px;margin:5px 0}.types button{min-width:0;padding:9px 3px;font-size:12px;white-space:nowrap}.zoneWrap{width:min(70vw,31dvh,250px);padding:0;margin:5px auto;background-size:100% 100%}.zone{left:14%;top:14%;width:72%;height:72%}.zone button{font-size:17px}.zoneOutcome{top:1%;padding:5px 10px;font-size:16px}.hint#reveal{display:none}.action{padding:11px;font-size:15px;box-shadow:0 3px 0 #95241e}.result{display:none}.art{display:none!important}
+}
+</style>
+<script id="mobile-layout-v1">
+const renderBeforeMobileLayout=render;
+render=()=>{
+  renderBeforeMobileLayout();
+  if(!state.mode)return;
+  const typesBox=$('types');
+  typesBox.classList.toggle('two',typesBox.children.length===2);
+  let strip=document.getElementById('mobileDuelInfo');
+  if(!strip){strip=document.createElement('section');strip.id='mobileDuelInfo';strip.className='mobileDuelInfo';document.querySelector('.score').after(strip)}
+  const attacking=state.half==='top';
+  const batter=attacking?state.batter:(state.awayBatter||state.batter);
+  const staff=attacking?(state.awayPitchers||state.pitchers):state.pitchers;
+  const active=attacking?(state.awayActivePitcher??state.activePitcher):state.activePitcher;
+  const pitcher=staff?.[active];
+  strip.innerHTML=`<article><small>현재 타자</small><b>${batter?.n||''} · ${batter?.t||''}</b><span>P ${batter?.p??'-'} · 정확 ${batter?.a??'-'} · 선구 ${batter?.e??'-'} · 주력 ${batter?.v??'-'}</span></article><article><small>현재 투수</small><b>${pitcher?.n||''} · ${pitcher?.t||''}</b><span>구속 ${pitcher?.v??'-'} · 제구 ${pitcher?.c??'-'} · 구위 ${pitcher?.s??'-'} · 변화 ${pitcher?.m??'-'}</span></article>`;
+};
 </script></body></html>
