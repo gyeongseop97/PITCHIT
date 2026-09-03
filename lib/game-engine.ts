@@ -62,12 +62,24 @@ export function resolvePlateAppearance(input: {
   const covered = input.swing === "contact"
     ? Math.abs(Math.floor(input.targetCell / 5) - Math.floor(actualCell / 5)) <= 1 && Math.abs((input.targetCell % 5) - (actualCell % 5)) <= 1
     : input.swing === "power" ? distance <= 1 : distance === 0;
+  const perfectTarget = distance === 0;
+  // The coloured range is intentionally not a flat hit zone. Exact reads are
+  // rewarded most; neighbouring contact squares merely keep the at-bat alive.
+  const contactQuality = input.swing === "contact"
+    ? (perfectTarget ? 0.03 : -0.10)
+    : input.swing === "power" ? (perfectTarget ? 0.12 : 0.025) : 0.18;
+  const hitQuality = input.swing === "contact"
+    ? (perfectTarget ? 0.015 : -0.09)
+    : input.swing === "power" ? (perfectTarget ? 0.085 : 0.03) : 0.14;
+  const barrelQuality = input.swing === "contact"
+    ? (perfectTarget ? -0.01 : -0.06)
+    : input.swing === "power" ? (perfectTarget ? 0.09 : 0.035) : 0.15;
   const eyeTake = !covered && random() < clamp((input.batter.e - 38) / 220 - input.count.strikes * 0.015);
   if (eyeTake) return { outcome: "ball", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 선구안으로 아슬아슬한 공을 골랐습니다.` };
 
   const pitchDifficulty = input.pitcher.v / 560 + input.pitcher.c / 180 + input.pitcher.s / 410 + (breaking ? input.pitcher.m / 330 : 0);
   const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "spot" ? 0.04 : 0.06;
-  const contactChance = clamp(0.63 + input.batter.a / 135 + swingBonus - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.12 : 0));
+  const contactChance = clamp(0.63 + input.batter.a / 135 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.12 : 0));
   const contact = covered && random() < contactChance;
   if (!contact) {
     const foulChance = clamp(0.16 + input.batter.a / 520 + (input.swing === "contact" ? 0.09 : 0) - input.pitcher.s / 900);
@@ -76,8 +88,8 @@ export function resolvePlateAppearance(input: {
   }
 
   const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;
-  const extraChance = clamp(0.04 + power * 0.20 + (breaking ? 0.025 : -0.015));
-  const hitChance = clamp(0.245 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.10 : 0));
+  const extraChance = clamp(0.04 + power * 0.20 + barrelQuality + (breaking ? 0.025 : -0.015));
+  const hitChance = clamp(0.205 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.10 : 0));
   const roll = random();
   if (roll < extraChance * 0.18) return { outcome: "homerun", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 완벽한 타이밍, 홈런!` };
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
