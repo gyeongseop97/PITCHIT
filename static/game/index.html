@@ -641,4 +641,42 @@ render=()=>{
   document.getElementById('outsidePitchBall')?.remove();if(state.tutorialBait){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${state.tutorialBait}`;document.querySelector('.zoneWrap').append(ball)}
   const action=$('swing'),ready=state.tutorialReady||{};action.disabled=!(ready.type&&ready.cell&&(!(step.side==='bottom'&&step.bait)||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'작전을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
 };
+</script><script id="tutorial-flow-stability-v2">
+function prepareStableTutorialStep(){
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  state.tutorialReview=false;state.tutorialHint='';state.tutorialResult='';state.tutorialBait=null;state.pitchBallDirection=null;
+  // The lesson preselects the correct swing or pitch. The player only needs
+  // to confirm the highlighted location (and a bait direction when taught).
+  if(step.side==='top')state.swing=step.type;else state.pitchType=step.type;
+  state.pick=step.cell;
+  state.tutorialReady={type:true,cell:false,ball:!(step.side==='bottom'&&step.bait)};
+}
+const tutorialStartBeforeStableFlow=tutorialStart;
+tutorialStart=()=>{tutorialStartBeforeStableFlow();tutorialIndex=0;state.tutorialDone=false;prepareStableTutorialStep();render()};
+runTutorialStep=()=>{
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  if(state.tutorialReview){
+    if(state.tutorialDone){completeTutorial();return}
+    tutorialIndex++;prepareStableTutorialStep();render();return;
+  }
+  const ready=state.tutorialReady||{};
+  if(!ready.cell||((step.side==='bottom'&&step.bait)&&!ready.ball)){state.tutorialHint='노란 테두리의 칸을 선택하세요.';render();return}
+  state.tutorialBait=null;step.apply();state.tutorialResult=step.result;state.tutorialHint='';state.tutorialReview=true;render();
+};
+const renderBeforeStableTutorialFlow=render;
+render=()=>{
+  renderBeforeStableTutorialFlow();
+  if(state.mode!=='tutorial')return;
+  const step=tutorialSteps[tutorialIndex];if(!step)return;
+  // Disable swing/pitch switching during a fixed scenario, but keep the
+  // prepared action visibly selected so the lesson stays easy to follow.
+  document.querySelectorAll('[data-tutorial-type]').forEach(button=>{button.disabled=true;button.title='이 장면의 작전으로 준비되어 있습니다.'});
+  const coach=document.getElementById('tutorialCoach'),action=$('swing'),ready=state.tutorialReady||{};
+  if(state.tutorialReview){
+    if(coach)coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length} · 결과 확인</small><b>${step.title}</b><p><b>결과:</b> ${state.tutorialResult}</p><p>이 결과가 왜 나왔는지 읽고 다음 장면으로 넘어가세요.</p>`;
+    action.disabled=false;action.classList.remove('waiting');action.textContent=state.tutorialDone?'튜토리얼 마치기':'결과 확인 · 다음 장면';action.onclick=runTutorialStep;return;
+  }
+  if(coach)coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length}</small><b>${step.title}</b><p>${step.side==='top'?'준비된 스윙으로 ':'준비된 구종으로 '}<b>노란 테두리 칸</b>을 선택하세요.${step.side==='bottom'&&step.bait?' 이어서 안내된 유인구 방향도 고르세요.':''}</p><p>${step.text}</p>`;
+  action.disabled=!(ready.cell&&(!(step.side==='bottom'&&step.bait)||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'노란 칸을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
+};
 </script></body></html>
