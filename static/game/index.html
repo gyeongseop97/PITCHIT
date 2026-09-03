@@ -466,4 +466,31 @@ Object.assign(guideContent,{
       <section class="guideCard wide"><h3>주루와 승부치기</h3><p>주루는 별도 조작 없이 <b>주력 능력치에 따라 자동</b>으로 처리됩니다. 빠른 주자는 단타에 추가 진루할 수 있고, 3루 주자는 외야 뜬공에서 태그업 득점할 수 있습니다. 동점 연장에서는 무사 2루이므로, 공격은 한 점을 만드는 컨택·주루를, 수비는 삼진 또는 병살성 땅볼을 노리는 것이 핵심입니다.</p><p class="tip"><b>한 줄 요령:</b> 상대의 직전 선택 하나가 아니라 최근 5개 흐름을 보고, 확신이 없으면 컨택·중앙 근처, 확신이 생기면 파워 또는 스팟으로 보상을 노리세요.</p></section>
     </div>`}
 });
+</script><style id="game-summary-v1">
+.gameSummaryOverlay{position:fixed;z-index:80;inset:0;display:grid;place-items:center;padding:18px;background:rgba(4,15,30,.76);backdrop-filter:blur(4px)}.gameSummary{width:min(500px,100%);padding:28px;background:linear-gradient(145deg,#fff,#f1f6fb);color:#102846;border:3px solid #102846;box-shadow:0 22px 64px #0008;text-align:center}.gameSummary .eyebrow{margin:0 0 6px;font-size:11px}.gameSummary h2{margin:0;font-size:clamp(32px,8vw,48px);letter-spacing:-.05em}.gameSummary.loss h2{color:#e33b31}.gameSummary .finalScore{margin:15px 0 18px;padding:13px;background:#102846;color:#fff;font:900 clamp(36px,9vw,55px)/1 Impact,"Arial Narrow",Arial,sans-serif;letter-spacing:.04em}.gameSummary .summaryStats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}.gameSummary .summaryStats article{padding:10px;background:#fff;border:1px solid #ccd9e6;text-align:left}.gameSummary .summaryStats small{display:block;color:#667b91;font-weight:900;letter-spacing:.08em}.gameSummary .summaryStats b{display:block;margin-top:4px;font-size:19px}.gameSummary .summaryNote{margin:0 0 17px;padding:10px;background:#fff6e9;border-left:4px solid #e33b31;text-align:left;color:#405b76;font-size:13px;line-height:1.5}.gameSummaryActions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.gameSummaryActions button{padding:13px;border:0;background:#102846;color:#fff;font-weight:900;cursor:pointer}.gameSummaryActions button:last-child{background:#e33b31}@media(max-width:760px){.gameSummary{padding:22px 17px}.gameSummary .summaryStats article{padding:8px}.gameSummary .summaryNote{font-size:12px}}
+</style><script id="game-summary-v1">
+let shownGameSummaryKey='';
+function showGameSummary(game){
+  const mine=state.r||0, opponent=state.away||0;
+  const result=mine>opponent?'승리':mine<opponent?'패배':'무승부';
+  const key=`${state.net?'net':'local'}:${mine}:${opponent}:${state.inning}:${result}`;
+  if(shownGameSummaryKey===key)return;
+  shownGameSummaryKey=key;
+  const mineHits=state.hits||0,mineWalks=state.walks||0,opponentHits=state.awayHits||0,opponentWalks=state.awayWalks||0;
+  let overlay=document.getElementById('gameSummaryOverlay');
+  if(!overlay){overlay=document.createElement('div');overlay.id='gameSummaryOverlay';overlay.className='gameSummaryOverlay';document.body.append(overlay)}
+  overlay.innerHTML=`<section class="gameSummary ${result==='패배'?'loss':''}" role="dialog" aria-modal="true"><p class="eyebrow">FINAL · ${state.inning} INNINGS</p><h2>${result}</h2><div class="finalScore">${mine} : ${opponent}</div><div class="summaryStats"><article><small>MY TEAM</small><b>${mine} R · ${mineHits} H · ${mineWalks} BB</b></article><article><small>OPPONENT</small><b>${opponent} R · ${opponentHits} H · ${opponentWalks} BB</b></article></div><p class="summaryNote"><b>경기 요약</b><br>${game?.event||state.serverEvent||$('result')?.textContent||'3이닝 승부가 종료되었습니다.'}</p><div class="gameSummaryActions"><button type="button" data-summary-home>홈으로</button><button type="button" data-summary-replay>다시 하기</button></div></section>`;
+  overlay.querySelector('[data-summary-home]').onclick=()=>{overlay.remove();shownGameSummaryKey='';state.finished=false;state.mode='';state.net=false;matchSession=null;history.pushState({},'',location.pathname);render()};
+  overlay.querySelector('[data-summary-replay]').onclick=()=>{overlay.remove();shownGameSummaryKey='';state.finished=false;state.net=false;matchSession=null;start('solo')};
+}
+const applyMatchBeforeGameSummary=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeGameSummary(data);
+  if(data?.game?.status==='finished')showGameSummary(data.game);
+  return value;
+};
+const startBeforeGameSummary=start;
+start=mode=>{shownGameSummaryKey='';document.getElementById('gameSummaryOverlay')?.remove();state.finished=false;return startBeforeGameSummary(mode)};
+const renderBeforeGameSummary=render;
+render=()=>{renderBeforeGameSummary();if(state.mode&&!state.net&&state.finished)showGameSummary()};
 </script></body></html>
