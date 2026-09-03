@@ -710,4 +710,18 @@ render=()=>{
   if(coach)coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length}</small><b>${step.title}</b><p>${step.side==='top'?'준비된 스윙으로 ':'준비된 구종으로 '}<b>노란 테두리 칸</b>을 선택하세요.${step.side==='bottom'&&step.bait?' 이어서 안내된 유인구 방향도 고르세요.':''}</p><p>${step.text}</p>`;
   action.disabled=!(ready.cell&&(!(step.side==='bottom'&&step.bait)||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'노란 칸을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
 };
+</script><script id="network-result-banner-fix-v1">
+// The older wrappers update matchDeadline before the result-banner wrapper
+// observes it. Keep a separate deadline snapshot so every completed pitch
+// reliably shows its result for three seconds on both players' boards.
+let resultBannerDeadline = 0;
+const applyMatchBeforeResultBannerFix = applyMatch;
+applyMatch = function(data) {
+  const previousDeadline = resultBannerDeadline;
+  applyMatchBeforeResultBannerFix(data);
+  const game = data.game;
+  const completedTurn = Boolean(previousDeadline && game.lastPlay && game.deadline !== previousDeadline);
+  resultBannerDeadline = game.deadline;
+  if (completedTurn) revealOutcome(state.serverEvent || game.event || '투구 결과가 나왔습니다.');
+};
 </script></body></html>
