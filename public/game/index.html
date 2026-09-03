@@ -72,11 +72,55 @@ if(state.mode&&!state.awayLineup)newPitchers();render();
 </script><script id="multiplayer-room-v1">
 let matchSession=null,matchPoll=null;
 const requestMatch=async(body)=>{const response=await fetch('/api/match',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error||'서버 연결 실패');return data};
-function friendLobby(){let box=document.getElementById('friendLobby');if(!box){box=document.createElement('section');box.id='friendLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}box.innerHTML='<h3>친구와 실시간 대전</h3><p class="hint">방을 만들거나 친구의 초대 코드를 입력하세요. 경기 중 선택 시간은 7초입니다.</p><input id="friendName" placeholder="내 이름" maxlength="16"><div class="types"><button id="createRoom">초대 코드 생성</button><button id="joinRoom">초대 코드 입력</button></div><p class="result" id="friendStatus">서버 연결 준비 완료</p>';document.getElementById('createRoom').onclick=async()=>{try{const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};document.getElementById('friendStatus').textContent=`초대 코드: ${data.code} · 친구의 입장을 기다리는 중`;watchMatch()}catch(e){document.getElementById('friendStatus').textContent=e.message}};document.getElementById('joinRoom').onclick=async()=>{const code=prompt('친구에게 받은 6자리 초대 코드를 입력하세요.');if(!code)return;try{const data=await requestMatch({action:'join',code,name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};beginMatch(data)}catch(e){document.getElementById('friendStatus').textContent=e.message}}}
+function friendLobby(){let box=document.getElementById('friendLobby');if(!box){box=document.createElement('section');box.id='friendLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}box.innerHTML='<h3>친구와 실시간 대전</h3><p class="hint">방을 만들거나 친구의 초대 코드를 입력하세요. 경기 중 선택 시간은 15초입니다.</p><input id="friendName" placeholder="내 이름" maxlength="16"><div class="types"><button id="createRoom">초대 코드 생성</button><button id="joinRoom">초대 코드 입력</button></div><p class="result" id="friendStatus">서버 연결 준비 완료</p>';document.getElementById('createRoom').onclick=async()=>{try{const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};document.getElementById('friendStatus').textContent=`초대 코드: ${data.code} · 친구의 입장을 기다리는 중`;watchMatch()}catch(e){document.getElementById('friendStatus').textContent=e.message}};document.getElementById('joinRoom').onclick=async()=>{const code=prompt('친구에게 받은 6자리 초대 코드를 입력하세요.');if(!code)return;try{const data=await requestMatch({action:'join',code,name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};beginMatch(data)}catch(e){document.getElementById('friendStatus').textContent=e.message}}}
 function applyMatch(data){if(!matchSession)return;const g=data.game,me=matchSession.player,index=me==='p1'?0:1;state.mode='friend';state.net=true;state.inning=g.inning;state.r=g.scores[index];state.away=g.scores[index?0:1];state.b=g.balls;state.s=g.strikes;state.o=g.outs;state.bases=g.bases;state.turn=g.batter[index];state.awayTurn=g.batter[index?0:1];state.batter=lineup[state.turn];state.awayBatter=state.awayLineup?.[state.awayTurn]||state.batter;state.half=(g.half===0?'p1':'p2')===me?'top':'bottom';state.deadline=g.deadline;state.serverEvent=g.event;render()}
 function beginMatch(data){document.getElementById('friendLobby')?.remove();applyMatch(data);watchMatch()}
 async function watchMatch(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data);else document.getElementById('friendStatus').textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}catch(e){clearInterval(matchPoll)}},700)}
 async function submitMatch(){if(!matchSession)return;const kind=state.half==='top'?'bat':'pitch';try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data);$('result').textContent='작전을 전송했습니다. 상대 선택 또는 제한 시간을 기다리는 중입니다.'}catch(e){$('result').textContent=e.message}}
 const renderBeforeMultiplayer=render;render=()=>{renderBeforeMultiplayer();if(!state.net)return;$('swing').onclick=submitMatch;$('reveal').textContent=state.serverEvent||'상대의 선택을 기다리는 중입니다.';const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));$('swing').textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;};
 document.querySelector('[data-mode="friend"]').onclick=friendLobby;
+</script><style id="multiplayer-feedback-style">
+.zone button.opponent-last{position:relative;background:#dbeafe!important;box-shadow:inset 0 0 0 3px #1d4ed8!important}.zone button.opponent-last:after{content:attr(data-opponent);position:absolute;inset:0;display:grid;place-items:center;font-size:31px;filter:drop-shadow(0 1px 1px #fff)}.zoneOutcome{position:absolute;z-index:7;left:50%;top:50%;transform:translate(-50%,-50%);min-width:58%;padding:13px 18px;text-align:center;border:3px solid #fff;border-radius:12px;background:rgba(13,42,76,.93);color:#fff;font-weight:1000;font-size:clamp(24px,5vw,42px);letter-spacing:-.04em;box-shadow:0 10px 24px rgba(4,20,42,.35);pointer-events:none}.zoneOutcome.hit{background:rgba(205,46,37,.95)}.zoneOutcome.out{background:rgba(24,51,83,.95)}.zoneOutcome.ball{background:rgba(154,88,14,.95)}.zoneOutcome.strike{background:rgba(52,85,123,.95)}.action.waiting,.action:disabled{background:#94a3b8!important;box-shadow:0 5px 0 #64748b!important;cursor:wait!important;transform:none!important}
+</style>
+<script id="multiplayer-feedback-v2">
+let matchSubmitted=false,matchDeadline=0,shownNetEvent='';
+const applyMatchBeforeFeedback=applyMatch;
+applyMatch=function(data){
+  applyMatchBeforeFeedback(data);
+  const g=data.game;
+  const amBatting=state.half==='top';
+  state.opponentLastCell=g.lastPlay?(amBatting?g.lastPlay.pitch.cell:g.lastPlay.bat.cell):null;
+  state.opponentLastIcon=amBatting?'⚾':'◎';
+  state.opponentLastLabel=amBatting?'상대 직전 투구':'상대 직전 타격 노림';
+  if(matchDeadline&&matchDeadline!==g.deadline)matchSubmitted=false;
+  matchDeadline=g.deadline;
+  if(g.lastPlay&&shownNetEvent!==g.event){shownNetEvent=g.event;state.netOutcome=g.event;}
+  render();
+};
+async function submitMatch(){
+  if(!matchSession||matchSubmitted)return;
+  matchSubmitted=true;render();
+  const kind=state.half==='top'?'bat':'pitch';
+  try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data)}
+  catch(e){matchSubmitted=false;$('result').textContent=e.message;render()}
+}
+const renderBeforeFeedback=render;
+render=()=>{
+  renderBeforeFeedback();
+  if(!state.net)return;
+  const button=$('swing');
+  const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));
+  button.disabled=matchSubmitted;
+  button.classList.toggle('waiting',matchSubmitted);
+  button.textContent=matchSubmitted?'선택 완료 · 상대방의 선택을 기다리는 중':(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;
+  $('result').textContent=matchSubmitted?'선택을 전송했습니다. 상대방의 선택 또는 제한 시간을 기다리는 중입니다.':(state.serverEvent||'작전을 선택하세요.');
+  const prior=$('zone').querySelector(`[data-z="${state.opponentLastCell}"]`);
+  if(prior){prior.classList.add('opponent-last');prior.dataset.opponent=state.opponentLastIcon;prior.title=state.opponentLastLabel;}
+  let outcome=document.getElementById('zoneOutcome');
+  if(!outcome){outcome=document.createElement('div');outcome.id='zoneOutcome';outcome.className='zoneOutcome';document.querySelector('.zoneWrap').append(outcome)}
+  const message=state.netOutcome||'';
+  outcome.textContent=message;
+  outcome.style.display=message?'block':'none';
+  outcome.className='zoneOutcome '+(message.includes('안타')||message.includes('홈런')||message.includes('루타')?'hit':message.includes('아웃')?'out':message.includes('볼')?'ball':'strike');
+};
 </script></body></html>

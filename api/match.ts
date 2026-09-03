@@ -15,6 +15,7 @@ type Game = {
   batter: [number, number];
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
+  lastPlay: { bat: Choice; pitch: Choice } | null;
   event: string;
 };
 type Room = { code: string; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -29,7 +30,7 @@ const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], deadline: 0, choices: {}, event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], deadline: 0, choices: {}, lastPlay: null, event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -37,7 +38,7 @@ const publicRoom = (room: Room) => ({
   code: room.code,
   ready: room.game.status === "playing",
   players: { p1: room.players.p1?.name ?? null, p2: room.players.p2?.name ?? null },
-  game: room.game,
+  game: { ...room.game, choices: {} },
   attacker: actor(room.game),
 });
 
@@ -62,7 +63,7 @@ function walk(game: Game) {
 }
 function nextPitch(game: Game) {
   game.choices = {};
-  game.deadline = Date.now() + 7000;
+  game.deadline = Date.now() + 15000;
 }
 function endPlate(game: Game) {
   game.balls = 0;
@@ -79,6 +80,7 @@ function resolve(room: Room) {
   if (game.status !== "playing") return;
   const batting = game.choices[actor(game)] ?? { kind: "bat" as const, cell: Math.floor(Math.random() * 25), swing: "contact" };
   const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: Math.floor(Math.random() * 25), pitch: "fast" };
+  game.lastPlay = { bat: batting, pitch: pitching };
   const distance = Math.abs(Math.floor(batting.cell / 5) - Math.floor(pitching.cell / 5)) + Math.abs((batting.cell % 5) - (pitching.cell % 5));
   const roll = Math.random();
   if (roll < 0.07) {
@@ -126,7 +128,7 @@ export default async function handler(req: any, res: any) {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
       room.players.p2 = { token: token(), name: input.name || "플레이어 2" };
       room.game.status = "playing";
-      room.game.event = "경기 시작! 7초 안에 작전을 선택하세요.";
+      room.game.event = "경기 시작! 15초 안에 작전을 선택하세요.";
       nextPitch(room.game);
       await save(room);
       return res.json({ ...publicRoom(room), player: "p2", token: room.players.p2.token });
