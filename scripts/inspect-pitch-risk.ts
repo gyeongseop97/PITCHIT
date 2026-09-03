@@ -12,11 +12,12 @@ const locations = { 중앙: 12, 변두리: 2, 모서리: 0 } as const;
 function measure(name: string, pitcher: PitcherRatings, pitchCell: number, pitch: "fast" | "breaking") {
   let mistakes = 0, balls = 0;
   for (let i = 0; i < TRIALS; i++) {
-    // The batter targets the commanded square. This isolates pitching location
-    // risk from hitter eye/chase decisions and deliberate ball tactics.
+    // The batter targets a different square with zero eye rating. This isolates
+    // the pitcher's directed-mistake and accidental-ball probabilities.
+    const targetCell = pitchCell === 12 ? 6 : 12;
     const result = resolvePlateAppearance({
-      batter: { p: 60, a: 60, e: 60, v: 60 }, pitcher,
-      targetCell: pitchCell, pitchCell, swing: "contact", pitch, count: { balls: 0, strikes: 0 },
+      batter: { p: 60, a: 60, e: 0, v: 60 }, pitcher,
+      targetCell, pitchCell, swing: "contact", pitch, count: { balls: 0, strikes: 0 },
     });
     if (result.actualCell !== pitchCell) mistakes++;
     if (result.outcome === "ball") balls++;

@@ -20,14 +20,19 @@ export const isStrikeCell = (cell: number) => cell >= 0 && cell < 25;
 const cellDistance = (a: number, b: number) => Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs((a % 5) - (b % 5));
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
-function nearbyCell(cell: number, random: () => number) {
-  const row = Math.floor(cell / 5);
-  const column = cell % 5;
-  const neighbours = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-    .map(([r, c]) => [row + r, column + c])
-    .filter(([r, c]) => r >= 0 && r < 5 && c >= 0 && c < 5);
-  const [nextRow, nextColumn] = neighbours[Math.floor(random() * neighbours.length)];
-  return nextRow * 5 + nextColumn;
+function mistakeIntoTarget(targetCell: number, swing: SwingType, random: () => number) {
+  const row = Math.floor(targetCell / 5), column = targetCell % 5;
+  const colouredRange = swing === "contact"
+    ? [-1, 0, 1].flatMap(rowOffset => [-1, 0, 1].map(columnOffset => [row + rowOffset, column + columnOffset]))
+    : swing === "power"
+      ? [[row, column], [row - 1, column], [row + 1, column], [row, column - 1], [row, column + 1]]
+      : [[row, column]];
+  const candidates = colouredRange
+    .filter(([nextRow, nextColumn]) => nextRow >= 0 && nextRow < 5 && nextColumn >= 0 && nextColumn < 5)
+    .map(([nextRow, nextColumn]) => nextRow * 5 + nextColumn);
+  // A true hanger most often lands on the hitter's exact read; the remaining
+  // mistakes fall into the coloured coverage range for that swing.
+  return random() < 0.42 ? targetCell : candidates[Math.floor(random() * candidates.length)];
 }
 
 /** Pure plate-appearance resolution. No state, Redis, DOM, or clock access. */
@@ -61,9 +66,9 @@ export function resolvePlateAppearance(input: {
   const selectedCenterDistance = Math.abs(selectedRow - 2) + Math.abs(selectedColumn - 2);
   // Corners are a high-risk choice: harder to square up, but more likely to leak.
   const breakingCommand = breaking ? (70 - input.pitcher.m) / 900 : 0;
-  const missChance = clamp(0.28 - input.pitcher.c / 280 + selectedCenterDistance * 0.035 + breakingCommand + (direction ? 0.11 : 0), 0.01, 0.65);
-  const actualCell = random() < missChance ? nearbyCell(input.pitchCell, random) : input.pitchCell;
-  const mistake = actualCell !== input.pitchCell;
+  const missChance = clamp(0.10 - input.pitcher.c / 520 + selectedCenterDistance * 0.016 + breakingCommand + (direction ? 0.05 : 0), 0.005, 0.35);
+  const mistake = random() < missChance;
+  const actualCell = mistake ? mistakeIntoTarget(input.targetCell, input.swing, random) : input.pitchCell;
   const actualRow = Math.floor(actualCell / 5), actualColumn = actualCell % 5;
   const actualCenterDistance = Math.abs(actualRow - 2) + Math.abs(actualColumn - 2);
   const accidentalBallRisk = clamp(Math.max(0, selectedCenterDistance - 1) * 0.02 + 0.003 - input.pitcher.c / 2000);
@@ -93,7 +98,7 @@ export function resolvePlateAppearance(input: {
 
   const pitchDifficulty = input.pitcher.v / 560 + input.pitcher.c / 180 + input.pitcher.s / 410 + (breaking ? input.pitcher.m / 330 : 0);
   const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "spot" ? 0.04 : 0.06;
-  const contactChance = clamp(0.65 + input.batter.a / 135 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.12 : 0) + (nearTarget ? 0.04 : 0));
+  const contactChance = clamp(0.65 + input.batter.a / 135 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.06 : 0) + (nearTarget ? 0.04 : 0));
   const contact = covered && random() < contactChance;
   if (!contact) {
     const nearFoulChance = clamp(0.48 + input.batter.a / 430 + (input.swing === "contact" ? 0.10 : input.swing === "power" ? 0.065 : 0.04) - input.pitcher.s / 1050);
@@ -106,7 +111,7 @@ export function resolvePlateAppearance(input: {
   const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;
   const extraChance = clamp(0.04 + power * 0.20 + barrelQuality + (breaking ? 0.025 : -0.015));
   const locationHitBonus = 0.05 - actualCenterDistance * 0.022;
-  const hitChance = clamp(0.245 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.10 : 0));
+  const hitChance = clamp(0.245 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.05 : 0));
   const roll = random();
   if (roll < extraChance * 0.18) return { outcome: "homerun", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 완벽한 타이밍, 홈런!` };
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
