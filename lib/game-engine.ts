@@ -56,6 +56,7 @@ export function resolvePlateAppearance(input: {
   }
   const missChance = clamp(0.28 - input.pitcher.c / 280 + (direction ? 0.11 : 0));
   const actualCell = random() < missChance ? nearbyCell(input.pitchCell, random) : input.pitchCell;
+  const mistake = actualCell !== input.pitchCell;
 
   const distance = cellDistance(input.targetCell, actualCell);
   const covered = input.swing === "contact"
@@ -64,9 +65,9 @@ export function resolvePlateAppearance(input: {
   const eyeTake = !covered && random() < clamp((input.batter.e - 38) / 220 - input.count.strikes * 0.015);
   if (eyeTake) return { outcome: "ball", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 선구안으로 아슬아슬한 공을 골랐습니다.` };
 
-  const pitchDifficulty = input.pitcher.v / 560 + input.pitcher.s / 410 + (breaking ? input.pitcher.m / 330 : 0);
-  const swingBonus = input.swing === "contact" ? 0.08 : input.swing === "spot" ? 0.05 : -0.07;
-  const contactChance = clamp(0.64 + input.batter.a / 115 + swingBonus - pitchDifficulty * 0.30 - distance * 0.16 + (breaking ? 0.035 : -0.01));
+  const pitchDifficulty = input.pitcher.v / 560 + input.pitcher.c / 180 + input.pitcher.s / 410 + (breaking ? input.pitcher.m / 330 : 0);
+  const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "spot" ? 0.04 : 0.06;
+  const contactChance = clamp(0.63 + input.batter.a / 135 + swingBonus - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.12 : 0));
   const contact = covered && random() < contactChance;
   if (!contact) {
     const foulChance = clamp(0.16 + input.batter.a / 520 + (input.swing === "contact" ? 0.09 : 0) - input.pitcher.s / 900);
@@ -75,8 +76,8 @@ export function resolvePlateAppearance(input: {
   }
 
   const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;
-  const extraChance = clamp(0.035 + power * 0.17 + (breaking ? 0.025 : -0.015));
-  const hitChance = clamp(0.27 + input.batter.a / 315 + (input.swing === "contact" ? 0.055 : 0) - input.pitcher.s / 700 - input.pitcher.v / 1350);
+  const extraChance = clamp(0.04 + power * 0.20 + (breaking ? 0.025 : -0.015));
+  const hitChance = clamp(0.245 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.10 : 0));
   const roll = random();
   if (roll < extraChance * 0.18) return { outcome: "homerun", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 완벽한 타이밍, 홈런!` };
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
