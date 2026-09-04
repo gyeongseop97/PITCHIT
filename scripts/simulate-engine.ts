@@ -1,12 +1,11 @@
 import { resolvePlateAppearance, type BatterRatings, type PitcherRatings, type SwingType } from "../lib/game-engine";
 
 type BatterProfile = { name: string; ratings: BatterRatings; swing: SwingType };
-type PitcherProfile = { name: string; ratings: PitcherRatings; breakingRate: number; baitRate: number };
+type PitcherProfile = { name: string; ratings: PitcherRatings; breakingRate: number };
 type StatLine = Record<"pa" | "ab" | "h" | "bb" | "so" | "foul" | "out" | "single" | "double" | "triple" | "hr", number>;
 
 const PLATE_APPEARANCES = 100_000;
 const cells = Array.from({ length: 25 }, (_, cell) => cell);
-const directions = ["high", "low", "in", "out"] as const;
 const batters: BatterProfile[] = [
   { name: "컨택형", ratings: { p: 45, a: 85, e: 55, v: 45 }, swing: "contact" },
   { name: "파워형", ratings: { p: 85, a: 48, e: 52, v: 45 }, swing: "power" },
@@ -14,10 +13,10 @@ const batters: BatterProfile[] = [
   { name: "선구안형", ratings: { p: 48, a: 58, e: 82, v: 42 }, swing: "spot" },
 ];
 const pitchers: PitcherProfile[] = [
-  { name: "구속형", ratings: { v: 86, c: 52, s: 50, m: 42 }, breakingRate: .28, baitRate: .20 },
-  { name: "제구형", ratings: { v: 48, c: 88, s: 48, m: 46 }, breakingRate: .30, baitRate: .22 },
-  { name: "구위형", ratings: { v: 53, c: 50, s: 87, m: 40 }, breakingRate: .30, baitRate: .19 },
-  { name: "변화형", ratings: { v: 50, c: 54, s: 45, m: 86 }, breakingRate: .55, baitRate: .30 },
+  { name: "구속형", ratings: { v: 86, c: 52, s: 50, m: 42 }, breakingRate: .28 },
+  { name: "제구형", ratings: { v: 48, c: 88, s: 48, m: 46 }, breakingRate: .30 },
+  { name: "구위형", ratings: { v: 53, c: 50, s: 87, m: 40 }, breakingRate: .30 },
+  { name: "변화형", ratings: { v: 50, c: 54, s: 45, m: 86 }, breakingRate: .55 },
 ];
 
 const choose = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)];
@@ -45,9 +44,8 @@ function plateAppearance(batter: BatterProfile, pitcher: PitcherProfile, readRat
   while (true) {
     const pitchCell = selectPitch();
     const targetCell = selectTarget(pitchCell);
-    const bait = Math.random() < pitcher.baitRate ? choose(directions) : undefined;
     const result = resolvePlateAppearance({
-      batter: batter.ratings, pitcher: pitcher.ratings, targetCell, pitchCell, ballDirection: bait,
+      batter: batter.ratings, pitcher: pitcher.ratings, targetCell, pitchCell,
       swing: batter.swing, pitch: Math.random() < pitcher.breakingRate ? "breaking" : "fast", count: { balls, strikes },
     });
     if (result.outcome === "ball") { if (++balls === 4) { stat.bb++; return stat; } continue; }
@@ -77,7 +75,7 @@ function runScenario(name: string, readRate: number, chooseBatter = () => choose
 }
 
 const standardBatter: BatterProfile = { name: "기준", ratings: { p: 62, a: 62, e: 62, v: 62 }, swing: "contact" };
-const standardPitcher: PitcherProfile = { name: "기준", ratings: { v: 60, c: 60, s: 60, m: 60 }, breakingRate: .35, baitRate: .22 };
+const standardPitcher: PitcherProfile = { name: "기준", ratings: { v: 60, c: 60, s: 60, m: 60 }, breakingRate: .35 };
 const qualityReports = (["contact", "power", "spot"] as SwingType[]).flatMap(swing => {
   const batter = { ...standardBatter, swing };
   return [

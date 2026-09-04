@@ -1,14 +1,14 @@
 import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
-import { resolvePlateAppearance, type BallDirection, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
+import { resolvePlateAppearance, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
 
 type PlayerId = "p1" | "p2";
-type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string; ball?: BallDirection };
+type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
 type Batter = { n: string; t: string; p: number; a: number; e: number; v: number };
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
-type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "bait" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
+type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
 type Game = {
   status: "waiting" | "playing" | "finished";
   inning: number;
@@ -21,15 +21,14 @@ type Game = {
   strikes: number;
   outs: number;
   bases: [number, number, number];
-  baitUsed: [number, number];
   batter: [number, number];
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "bait" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
+  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
-  aiStyle: "공격형" | "모서리형" | "유인구형" | "혼합형";
+  aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
   event: string;
 };
 type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
@@ -61,7 +60,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "유인구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -161,7 +160,6 @@ function resolve(room: Room) {
     pitcher,
     targetCell: batting.cell,
     pitchCell: pitching.cell,
-    ballDirection: pitching.ball,
     swing: (batting.swing ?? "contact") as SwingType,
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
@@ -206,7 +204,7 @@ function resolve(room: Room) {
     actualCell: plate.actualCell,
     attacker: battingPlayer,
     swing: batting.swing ?? "contact",
-    pitch: pitching.ball ? `유인구 ${pitching.ball}` : (pitching.pitch ?? "fast"),
+    pitch: pitching.pitch ?? "fast",
     pitchName: plate.pitchName,
     speed: plate.speed,
     outcome: plate.outcome,
@@ -216,7 +214,7 @@ function resolve(room: Room) {
     execution: plate.execution,
     strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
-  trackBalance(plate.outcome, batting.swing ?? "contact", pitching.ball ? "bait" : (pitching.pitch ?? "fast"));
+  trackBalance(plate.outcome, batting.swing ?? "contact", pitching.pitch ?? "fast");
   if (game.status === "playing") nextPitch(game);
 }
 
@@ -237,23 +235,21 @@ function aiChoice(game: Game, player: PlayerId): Choice {
   const pitcher = game.teams[player].pitchers[game.teams[player].activePitcher];
   if (player === actor(game)) {
     const swings: SwingType[] = ["contact", "power", "spot"];
-    // Aggressive AI hitters sit on the middle; corner/bait personalities
+    // Aggressive AI hitters sit on the middle; corner personalities
     // hunt an edge more often. A repeated pattern remains readable.
     const cell = game.aiStyle === "공격형" ? pick(center) : game.aiStyle === "모서리형" ? pick(edges) : pick(strikeCells);
     return { kind: "bat", cell, swing: game.aiStyle === "공격형" && Math.random() < .42 ? "power" : swings[Math.floor(Math.random() * swings.length)] };
   }
-  const balls: BallDirection[] = ["high", "low", "in", "out"];
   const type = pitcher?.t ?? "구위형";
   const style = game.aiStyle;
   const cornerHeavy = style === "모서리형" || type === "제구형";
-  const baitHeavy = style === "유인구형" || type === "변화형";
+  const breakingHeavy = style === "변화구형" || type === "변화형";
   const fastHeavy = type === "구속형";
   const target = cornerHeavy ? pick(Math.random() < .72 ? corners : edges) : type === "구위형" ? pick([11, 12, 13, 16, 17, 18]) : pick(style === "공격형" ? center : strikeCells);
   return {
     kind: "pitch",
     cell: target,
-    pitch: baitHeavy ? (Math.random() < .76 ? "breaking" : "fast") : fastHeavy ? (Math.random() < .78 ? "fast" : "breaking") : (Math.random() < .48 ? "breaking" : "fast"),
-    ...(Math.random() < (baitHeavy ? .28 : style === "공격형" ? .08 : .14) ? { ball: balls[Math.floor(Math.random() * balls.length)] } : {}),
+    pitch: breakingHeavy ? (Math.random() < .76 ? "breaking" : "fast") : fastHeavy ? (Math.random() < .78 ? "fast" : "breaking") : (Math.random() < .48 ? "breaking" : "fast"),
   };
 }
 async function readBody(req: any) {
@@ -279,15 +275,6 @@ function startRoom(room: Room, joining: { token: string; name: string }) {
 function identify(room: Room, supplied: string): PlayerId | null {
   return room.players.p1?.token === supplied ? "p1" : room.players.p2?.token === supplied ? "p2" : null;
 }
-function consumeBait(game: Game, player: PlayerId, choice: Choice) {
-  if (!choice.ball) return true;
-  game.baitUsed ??= [0, 0];
-  const side = player === "p1" ? 0 : 1;
-  if (game.baitUsed[side] >= 10) return false;
-  game.baitUsed[side]++;
-  return true;
-}
-
 export default async function handler(req: any, res: any) {
   try {
     // The game is also published through GitHub Pages, which calls this
@@ -376,11 +363,9 @@ export default async function handler(req: any, res: any) {
       if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
-      if (!consumeBait(room.game, player, input.choice)) return res.status(409).json({ error: "이번 경기의 유인구 10개를 모두 사용했습니다." });
       room.game.choices[player] = input.choice;
       if (room.mode === "solo") {
         const ai = aiChoice(room.game, "p2");
-        if (!consumeBait(room.game, "p2", ai)) delete ai.ball;
         room.game.choices.p2 = ai;
       }
       if (room.game.choices.p1 && room.game.choices.p2) resolve(room);

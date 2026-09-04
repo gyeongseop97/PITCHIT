@@ -288,7 +288,7 @@ applyMatch=function(data){
   render();
 };
 const stadiumMessage=(event,pitch)=>{
-  const headline=event.includes('홈런')?'완벽한 타이밍! 담장을 넘겼습니다.':event.includes('루타')?'강한 타구가 외야를 가릅니다.':event.includes('안타')?'노린 코스를 정확히 공략했습니다.':event.includes('볼넷')?'침착하게 공을 골라 출루합니다.':event.includes('삼진')?'결정구에 타이밍을 빼앗겼습니다.':event.includes('땅볼')?'낮게 깔린 타구, 땅볼 아웃.':event.includes('뜬공')?'높이 뜬 타구, 뜬공 아웃.':event.includes('파울')?'끈질긴 파울로 승부를 이어갑니다.':event.includes('스트라이크')?'타격 범위를 벗어난 공입니다.':event.includes('볼')?'유인구를 지켜봤습니다.':'노린 범위를 벗어난 공입니다.';
+  const headline=event.includes('홈런')?'완벽한 타이밍! 담장을 넘겼습니다.':event.includes('루타')?'강한 타구가 외야를 가릅니다.':event.includes('안타')?'노린 코스를 정확히 공략했습니다.':event.includes('볼넷')?'침착하게 공을 골라 출루합니다.':event.includes('삼진')?'결정구에 타이밍을 빼앗겼습니다.':event.includes('땅볼')?'낮게 깔린 타구, 땅볼 아웃.':event.includes('뜬공')?'높이 뜬 타구, 뜬공 아웃.':event.includes('파울')?'끈질긴 파울로 승부를 이어갑니다.':event.includes('스트라이크')?'타격 범위를 벗어난 공입니다.':event.includes('볼')?'제구가 흔들려 볼이 됐습니다.':'노린 범위를 벗어난 공입니다.';
   return `${pitch||''} · ${event} — ${headline}`;
 };
 const startBeforeStadium=start;
@@ -457,7 +457,7 @@ Object.assign(guideContent,{
     <p class="guideLead">정답은 하나가 아닙니다. <b>카운트, 능력치, 최근 5개 패턴</b>을 함께 보고 상대가 다음에 할 선택을 한 발 앞서 읽어 보세요.</p>
     <div class="guideGrid">
       <section class="guideCard"><h3>1. 타격: 5×5 존 선택</h3><p>타자는 공이 올 것 같은 한 칸을 고릅니다. 정확히 맞출수록 강한 타구가 늘고, 색칠된 주변 범위는 타격은 가능하지만 파울·약한 타구 비중이 높습니다.</p><p class="tip"><b>기본:</b> 상대 패턴을 읽지 못했을 때는 중앙 부근 컨택 스윙이 안정적입니다.</p></section>
-      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 중심 3×3. 가장 넓고 안정적이나 최고의 타구 확률은 낮습니다.</li><li><b>파워</b>: 십자 5칸. 맞히면 컨택보다 장타 기대값이 큽니다.</li><li><b>스팟</b>: 한 칸. 가장 위험하지만 정확히 읽으면 최고 타구 확률입니다.</li></ul><p class="tip"><b>예시:</b> 3볼처럼 유리한 카운트에서 상대의 한 코스를 확신하면 파워·스팟이 보상받습니다.</p></section>
+      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 5×5 전체를 덮습니다. 노린 칸에서 멀수록 연한 범위가 되어 파울·약한 타구 비중이 큽니다.</li><li><b>파워</b>: 중심 3×3. 맞히면 컨택보다 장타 기대값이 큽니다.</li><li><b>스팟</b>: 한 칸. 가장 위험하지만 정확히 읽으면 최고 타구 확률입니다.</li></ul><p class="tip"><b>예시:</b> 3볼처럼 유리한 카운트에서 상대의 한 코스를 확신하면 파워·스팟이 보상받습니다.</p></section>
       <section class="guideCard"><h3>2. 투구: 존 승부</h3><p>직구 또는 변화구를 골라 5×5의 코스를 정합니다. 중앙은 맞을 위험이 크지만, 모서리는 안타를 줄이는 대신 볼·실투 위험이 조금 올라갑니다.</p><ul><li><b>직구</b>: 장타 위험은 낮지만 스윙 유도도 낮음</li><li><b>변화구</b>: 스윙을 더 이끌어내지만 맞으면 장타 위험이 큼</li></ul></section>
       <section class="guideCard"><h3>유인구: 상·하·좌·우</h3><p>존 바깥 유인구는 별도 선택입니다. 타자가 그 방향을 노렸다면 헛스윙 스트라이크가 될 수 있고, 반대쪽을 읽었다면 볼이 됩니다.</p><p class="tip"><b>예시:</b> 타자가 바깥 열을 반복해 노리면 바깥 유인구보다 몸쪽 승부가 안전합니다. 2스트라이크에서는 유인구가 조금 더 효과적입니다.</p></section>
       <section class="guideCard"><h3>3. 카운트별 판단</h3><ul><li><b>0–2</b>: 투수는 유인구·구석 승부, 타자는 파울로 버티는 선택을 고려하세요.</li><li><b>3볼</b>: 투수의 구석 공은 볼 위험이 조금 더 큽니다. 타자는 좋은 코스 하나를 과감하게 노릴 만합니다.</li><li><b>2스트라이크</b>: 정확 타겟 주변 공은 헛스윙보다 파울이 늘어납니다.</li></ul></section>
@@ -596,21 +596,11 @@ applyMatch=function(data){
 const renderBeforeOutsideBaitUi=render;
 render=()=>{
   renderBeforeOutsideBaitUi();
-  if(!state.mode)return;
-  const wrap=document.querySelector('.zoneWrap'),zone=$('zone');if(!wrap||!zone)return;
-  const lastBall=state.lastBaitDirection||state.tutorialBait||null;
-  zone.querySelectorAll('.ball').forEach(cell=>{if(lastBall)cell.classList.remove('ball')});
+  state.pitchBallDirection=null;
+  state.lastBaitDirection=null;
+  document.getElementById('ballDirections')?.remove();
+  document.getElementById('baitLimit')?.remove();
   document.getElementById('outsidePitchBall')?.remove();
-  if(lastBall){const ball=document.createElement('i');ball.id='outsidePitchBall';ball.className=`outsidePitchBall ${lastBall}`;ball.title='스트라이크존 밖 실제 투구 위치';wrap.append(ball)}
-  let tactics=document.getElementById('ballDirections'),limit=document.getElementById('baitLimit');
-  if(state.half!=='bottom'&&state.mode!=='tutorial'){tactics?.remove();limit?.remove();return;}
-  if(state.mode==='tutorial')return;
-  if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections'}
-  wrap.append(tactics);
-  const remaining=state.baitRemaining??10;
-  tactics.innerHTML=['high:↑','low:↓','in:←','out:→'].map(item=>{const [value,label]=item.split(':');const name=value==='high'?'상단':value==='low'?'하단':value==='in'?'몸쪽':'바깥쪽',selected=state.pitchBallDirection===value;return `<button data-ball="${value}" title="${name} 유인구" aria-label="${name} 유인구" aria-pressed="${selected}" ${remaining<=0?'disabled':''} class="${selected?'on':''}">${label}</button>`}).join('');
-  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{const direction=button.dataset.ball;state.pitchBallDirection=state.pitchBallDirection===direction?null:direction;state.ball=null;state.lastBaitDirection=null;render()});
-  if(!limit){limit=document.createElement('p');limit.id='baitLimit';limit.className='baitLimit';wrap.after(limit)}limit.textContent=`유인구 ${remaining} / 10 · 방향을 다시 누르면 일반 투구`;
 };
 // A normal 5×5 location always means a normal pitch.  Capture this before
 // the regular cell handler updates the selected location and re-renders.
@@ -757,13 +747,13 @@ if (state.mode === 'tutorial') { state.mode = ''; history.replaceState({}, '', l
 // guide remains available for players who want the full strategy details.
 Object.assign(guideContent, {
   info: { title: '간단 가이드 · 바로 플레이하기', body: `
-    <p class="guideLead"><b>한 턴은 간단합니다.</b> 타자는 스윙과 노릴 칸을, 투수는 구종과 던질 칸(또는 유인구)을 고릅니다. 상대가 무엇을 읽었는지 예상하는 것이 핵심입니다.</p>
+    <p class="guideLead"><b>한 턴은 간단합니다.</b> 타자는 스윙과 노릴 칸을, 투수는 구종과 던질 칸을 고릅니다. 상대가 무엇을 읽었는지 예상하는 것이 핵심입니다.</p>
     <div class="guideGrid">
       <section class="guideCard"><h3>타자 유형</h3><ul><li><b>컨택형</b>: 안타·정확한 타구에 강함</li><li><b>파워형</b>: 2루타·홈런에 강함</li><li><b>선구안형</b>: 빗나간 공을 볼로 골라냄</li><li><b>주루형</b>: 내야안타·추가 진루·3루타에 유리</li></ul></section>
-      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 선택 칸 주변 3×3, 가장 안정적</li><li><b>파워</b>: 십자 5칸, 맞히면 장타 기대값 상승</li><li><b>스팟</b>: 한 칸, 정확히 읽으면 최고 보상</li></ul><p class="tip"><b>핵심:</b> 정확히 선택 칸에 맞을수록 좋은 타구가 나옵니다. 색칠된 주변 칸은 파울·약한 타구가 늘어납니다.</p></section>
+      <section class="guideCard"><h3>스윙 3종</h3><ul><li><b>컨택</b>: 5×5 전체에 강약이 있는 범위, 중앙 공일수록 유리</li><li><b>파워</b>: 중심 3×3, 맞히면 장타 기대값 상승</li><li><b>스팟</b>: 한 칸, 정확히 읽으면 최고 보상</li></ul><p class="tip"><b>핵심:</b> 정확히 선택 칸에 맞을수록 좋은 타구가 나옵니다. 색칠된 주변 칸은 파울·약한 타구가 늘어납니다.</p></section>
       <section class="guideCard"><h3>투수 유형·구종</h3><ul><li><b>구속형</b>: 타이밍을 흔듦</li><li><b>제구형</b>: 볼·제구 이탈·실투를 줄임</li><li><b>구위형</b>: 범타를 늘림</li><li><b>변화형</b>: 변화구 헛스윙 유도에 강함</li><li><b>직구</b>: 장타 위험은 낮지만 스윙 유도도 낮음</li><li><b>변화구</b>: 스윙 유도는 높지만 맞으면 장타 위험</li></ul></section>
-      <section class="guideCard"><h3>코스와 유인구</h3><p>존 <b>중앙</b>은 맞을 위험이 높고, <b>구석</b>은 안타 위험은 낮지만 볼·실투 위험이 조금 큽니다.</p><p>유인구는 상·하·몸쪽·바깥쪽 중 하나를 골라 존 밖으로 던집니다. 타자가 그 방향을 읽으면 헛스윙, 반대 방향을 읽으면 볼입니다. 경기당 <b>10개</b>만 사용할 수 있습니다.</p></section>
-      <section class="guideCard wide"><h3>처음엔 이렇게 해보세요</h3><p><b>타자:</b> 확신이 없으면 컨택으로 중앙 근처를 노리고, 상대 패턴을 읽었을 때 파워·스팟으로 보상을 노리세요. <b>투수:</b> 중앙 승부와 구석 승부를 섞고, 2스트라이크에서만 유인구를 아껴 쓰면 좋습니다. 결과 뒤 남는 최근 5개 표식을 다음 선택의 근거로 활용하세요.</p></section>
+      <section class="guideCard"><h3>코스 선택</h3><p>존 <b>중앙</b>은 맞을 위험이 높고, <b>구석</b>은 안타 위험은 낮지만 볼·실투 위험이 조금 큽니다. 투수는 구종과 위치 조합으로 타자의 예측을 흔듭니다.</p></section>
+      <section class="guideCard wide"><h3>처음엔 이렇게 해보세요</h3><p><b>타자:</b> 확신이 없으면 컨택으로 중앙 근처를 노리고, 상대 패턴을 읽었을 때 파워·스팟으로 보상을 노리세요. <b>투수:</b> 중앙 승부와 구석 승부를 섞고, 구종과 코스를 바꿔 타이밍을 흔드세요. 결과 뒤 남는 최근 5개 표식을 다음 선택의 근거로 활용하세요.</p></section>
     </div>` },
   guide: { ...guideContent.guide, title: '상세 전략 가이드' }
 });
@@ -909,13 +899,13 @@ showGameSummary = function(game) { recordFinishedGame(game); showGameSummaryBefo
 </script><style id="broadcast-and-ai-v1">
 .broadcastCall{width:min(620px,100%);margin:8px auto 12px;padding:10px 16px;border-left:5px solid #e33b31;background:linear-gradient(90deg,#102846,#1a4678);color:#fff;box-shadow:0 6px 14px #10284622;font-size:15px;font-weight:900;line-height:1.4;animation:broadcastIn .26s ease-out}.broadcastCall small{display:block;margin-bottom:2px;color:#9bc7f3;font-size:10px;letter-spacing:.13em}.pitchFlight{position:absolute;z-index:15;width:18%;aspect-ratio:1;left:50%;top:-16%;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 5px 4px #10284688);pointer-events:none;animation:pitchFlight .62s cubic-bezier(.18,.78,.3,1) forwards}.zoneWrap.resultFlash .zone{animation:zoneFlash .52s ease-out}.zoneWrap.resultFlash.hit .zone{box-shadow:0 0 0 4px #e33b31,0 0 28px #e33b3180}.zoneWrap.resultFlash.out .zone{box-shadow:0 0 0 4px #173b62,0 0 25px #173b6280}@keyframes pitchFlight{0%{transform:translate(-50%,0) scale(.45);opacity:.2}70%{opacity:1}100%{left:calc(14% + var(--pitch-x) * 14.4%);top:calc(14% + var(--pitch-y) * 14.4%);transform:translate(-50%,-50%) scale(1.05);opacity:0}}@keyframes broadcastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}@keyframes zoneFlash{50%{filter:brightness(1.2)}}.aiScout{margin:8px 0 0;padding:10px 11px;border:1px solid #b9cadc;background:#f3f8fe;color:#264966;font-size:12px;line-height:1.45}.aiScout b{color:#e33b31}@media(max-width:760px){.broadcastCall{width:min(70vw,31dvh,250px);margin:3px auto 5px;padding:6px 8px;font-size:10px}.broadcastCall small{font-size:7px}.aiScout{font-size:10px;padding:7px}.pitchFlight{width:20%}}
 </style><script id="broadcast-and-ai-v1">
-const aiStyleHint = { '공격형': '중앙 승부와 강한 스윙을 선호합니다.', '모서리형': '구석 코스를 반복해서 공략합니다.', '유인구형': '변화구와 유인구 비중이 높습니다.', '혼합형': '구종과 코스를 고르게 섞습니다.' };
+const aiStyleHint = { '공격형': '중앙 승부와 강한 스윙을 선호합니다.', '모서리형': '구석 코스를 반복해서 공략합니다.', '변화구형': '변화구 비중이 높습니다.', '혼합형': '구종과 코스를 고르게 섞습니다.' };
 function distanceBetween(a, b) { return Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs(a % 5 - b % 5); }
 function broadcastText(game) {
   const play = game?.lastPlay; if (!play) return '';
   const outcome = game.event || ''; const actual = play.actualCell;
   const contact = distanceBetween(play.bat.cell, actual);
-  const reason = play.execution === 'mistake' ? '실투가 노린 타격 범위로 몰렸습니다.' : play.execution === 'wild' ? '제구가 흔들려 존을 벗어났습니다.' : play.execution === 'bait' ? '유인구 승부입니다.' : contact === 0 ? '예측이 정확히 맞았습니다.' : contact <= 1 ? '타겟 주변을 건드렸습니다.' : '타격 범위를 벗어났습니다.';
+  const reason = play.execution === 'mistake' ? '실투가 노린 타격 범위로 몰렸습니다.' : play.execution === 'wild' ? '제구가 흔들려 존을 벗어났습니다.' : contact === 0 ? '예측이 정확히 맞았습니다.' : contact <= 1 ? '타겟 주변을 건드렸습니다.' : '타격 범위를 벗어났습니다.';
   const resolved = play.outcome || game?.playLog?.[0]?.outcome;
   const strikeStyle = play.strikeStyle || game?.playLog?.[0]?.strikeStyle;
   const strikeout = /삼진/.test(outcome);
@@ -1103,4 +1093,10 @@ render=function(){
   modal.querySelector('.pitcherModalClose').onclick=()=>{state.pitcherSwapOpen=false;render()};modal.onclick=event=>{if(event.target===modal){state.pitcherSwapOpen=false;render()}};
   modal.querySelectorAll('[data-modal-pitcher]').forEach(button=>button.onclick=()=>{const index=+button.dataset.modalPitcher;if(state.usedPitchers?.includes(index))return;state.activePitcher=index;state.usedPitchers=[...(state.usedPitchers||[]),index];state.pitcherSwapOpen=false;state.pitcherSwapNotice=`${state.pitchers[index].n} 투수가 등판했습니다.`;setResult(state.pitcherSwapNotice,'strike');render()});
 };
+</script><style id="weighted-contact-zone-v1">
+.zone button.contact-strong{background:#f7c69faa!important}.zone button.contact-medium{background:#f9d9c1a3!important}.zone button.contact-soft{background:#fdf0e680!important}.zone button.power-range{background:#f6d3b7a8!important}
+</style><script id="weighted-contact-zone-v1">
+function contactZoneWeight(target, actual){const tr=Math.floor(target/5),tc=target%5,ar=Math.floor(actual/5),ac=actual%5;const square=Math.max(Math.abs(tr-ar),Math.abs(tc-ac));const targetCenter=Math.abs(tr-2)+Math.abs(tc-2),actualCenter=Math.abs(ar-2)+Math.abs(ac-2);const local=Math.max(0,1-square/4),centralTarget=(4-targetCenter)/4,centralPitch=(4-actualCenter)/4,toward=targetCenter>=2&&actualCenter<targetCenter?.1375*(targetCenter-actualCenter)/targetCenter:0;return Math.min(1,.20+local*.42+centralTarget*centralPitch*.25+toward+(target===actual?.13:0))}
+const renderBeforeWeightedContactZone=render;
+render=function(){renderBeforeWeightedContactZone();if(!state.mode||state.half==='bottom')return;const zone=document.getElementById('zone');if(!zone)return;zone.querySelectorAll('[data-z]').forEach(button=>{const cell=+button.dataset.z;button.classList.remove('range','contact-strong','contact-medium','contact-soft','power-range');if(cell===state.pick)return;if(state.swing==='contact'){const weight=contactZoneWeight(state.pick,cell);button.classList.add('range',weight>=.62?'contact-strong':weight>=.40?'contact-medium':'contact-soft');button.title=`컨택 가능 범위 · ${Math.round(weight*100)}%`}else if(state.swing==='power'){const row=Math.floor(cell/5),col=cell%5,pickRow=Math.floor(state.pick/5),pickCol=state.pick%5;if(Math.abs(row-pickRow)<=1&&Math.abs(col-pickCol)<=1){button.classList.add('range','power-range');button.title='파워 스윙 3×3 범위'}}});};
 </script></body></html>
