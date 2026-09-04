@@ -1179,7 +1179,7 @@ Object.assign(guideContent,{
 const developerSupport=document.createElement('section');developerSupport.className='developerSupport';developerSupport.innerHTML='<div><small>SUPPORT THE DEVELOPER</small><strong>다음 이닝을 만드는 작은 응원</strong><p>PITCHIT을 재미있게 즐기셨다면 개발자를 응원해 주세요.</p></div><button type="button" class="supportAccount">후원하기</button>';document.querySelector('.home').append(developerSupport);
 developerSupport.querySelector('.supportAccount').onclick=async event=>{const button=event.currentTarget,account='3333-21-2647205';try{await navigator.clipboard.writeText(account)}catch(_){const input=document.createElement('textarea');input.value=account;input.style.position='fixed';input.style.opacity='0';document.body.append(input);input.select();document.execCommand('copy');input.remove()}button.textContent='후원정보가 복사되었습니다! 은행 어플에서 붙여넣어주세요.';setTimeout(()=>{button.textContent='후원하기'},2500)};
 </script><style id="live-presence-v1">
-.livePresence{display:flex;align-items:center;justify-content:center;gap:8px;margin:16px 0 0;padding:10px 13px;border:1px solid #c8d7e7;background:#f7fbff;color:#25486c;font-size:12px;font-weight:900}.livePresence i{width:8px;height:8px;border-radius:50%;background:#32c76f;box-shadow:0 0 0 4px #32c76f22;animation:presencePulse 1.4s ease-in-out infinite}@keyframes presencePulse{50%{transform:scale(.62);box-shadow:0 0 0 7px #32c76f00}}@media(max-width:760px){.livePresence{margin-top:12px;font-size:10px;padding:8px 10px}}
+.home{position:relative}.livePresence{position:absolute;top:94px;left:318px;display:flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:10px 13px;border:1px solid #c8d7e7;border-radius:999px;background:#f7fbffdf;color:#25486c;font-size:12px;font-weight:900;white-space:nowrap;box-shadow:0 5px 14px #183b6215}.livePresence i{width:8px;height:8px;border-radius:50%;background:#32c76f;box-shadow:0 0 0 4px #32c76f22;animation:presencePulse 1.4s ease-in-out infinite}@keyframes presencePulse{50%{transform:scale(.62);box-shadow:0 0 0 7px #32c76f00}}@media(max-width:760px){.livePresence{top:54px;left:263px;padding:7px 9px;gap:6px;font-size:9px}.livePresence i{width:7px;height:7px}}
 </style><script id="live-presence-v1">
 const presenceStorageKey='pitchit:presence-id';
 let presenceId='';
@@ -1190,11 +1190,11 @@ async function refreshPresence(){
     const response=await fetch(matchApi,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'presence',clientId:presenceId})});
     const data=await response.json();
     const label=document.getElementById('livePresenceCount');
-    if(response.ok&&label)label.textContent=`현재 ${data.online||1}명 접속 중`;
+    if(response.ok&&label)label.textContent=`LIVE · ${data.online||1}명 접속`;
   }catch(_){/* The game remains playable if presence reporting is unavailable. */}
 }
 const renderBeforeLivePresence=render;
-render=function(){renderBeforeLivePresence();let card=document.getElementById('livePresence');if(!state.mode){if(!card){card=document.createElement('div');card.id='livePresence';card.className='livePresence';card.setAttribute('aria-live','polite');card.innerHTML='<i aria-hidden="true"></i><span id="livePresenceCount">실시간 접속자 확인 중…</span>';document.querySelector('.modes')?.after(card)}refreshPresence()}else card?.remove()};
+render=function(){renderBeforeLivePresence();let card=document.getElementById('livePresence');if(!state.mode){if(!card){card=document.createElement('div');card.id='livePresence';card.className='livePresence';card.setAttribute('aria-live','polite');card.innerHTML='<i aria-hidden="true"></i><span id="livePresenceCount">LIVE · 확인 중</span>';document.querySelector('.home')?.append(card)}refreshPresence()}else card?.remove()};
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshPresence()});
 refreshPresence();setInterval(refreshPresence,30000);
 </script><script id="exclusive-match-lobby-v1">
