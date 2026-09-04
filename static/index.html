@@ -1270,6 +1270,50 @@ if(guideButton){guideButton.textContent='게임 가이드';guideButton.onclick=(
 const rankingButton=document.createElement('button');rankingButton.type='button';rankingButton.textContent='랭킹';rankingButton.onclick=openRanking;document.querySelector('.homeGuideActions')?.append(rankingButton);
 const showGameSummaryBeforeRanking=showGameSummary;
 showGameSummary=function(game){showGameSummaryBeforeRanking(game);const result=game?.ranking?.[matchSession?.player];const dialog=document.querySelector('.gameSummary');if(!result||!dialog||dialog.querySelector('.rankResult'))return;const gain=result.change>=0?`+${result.change}`:String(result.change);const card=document.createElement('p');card.className='rankResult'+(result.change<0?' negative':'');card.textContent=`온라인 랭킹 · ${gain} P → ${result.points} P · ${result.wins}승 ${result.games}경기`;dialog.querySelector('.gameSummaryActions')?.before(card)};
+</script><style id="immersion-layer-v1">
+.pitchSequence{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin:5px auto 8px}.pitchSequence .sequenceTitle{width:100%;text-align:center;color:#60768d;font-size:10px;font-weight:900;letter-spacing:.1em}.pitchChip{min-width:74px;padding:5px 6px;border:1px solid #aebfd0;background:#f7faff;color:#193b5d;text-align:center;font-size:10px;font-weight:900;line-height:1.25}.pitchChip strong{display:block;color:#d84136;font-size:11px}.pitchChip.faded{opacity:.55}.atBatCall .traitLine{display:block;margin-top:3px;color:#60768d;font-size:10px;font-weight:700}.atBatCall .traitLine b{color:#254c71}.zoneWrap.critical{filter:drop-shadow(0 0 9px #e8b83a88)}.zoneWrap.critical:before{content:'PRESSURE';position:absolute;z-index:8;left:50%;top:-9px;transform:translateX(-50%);padding:3px 8px;border-radius:20px;background:#b52e28;color:#fff;font:900 9px Arial,sans-serif;letter-spacing:.13em}.score.critical{box-shadow:inset 0 0 0 2px #e9b83d,inset 0 12px 30px #000,0 0 22px #e9b83d77!important}.rematchButton{margin-top:9px;border:0;background:#16385f;color:#fff;padding:11px 14px;font-weight:900;cursor:pointer}.rematchButton:hover{background:#e33b31}.rematchButton:disabled{background:#94a3b8;cursor:wait}@media(max-width:760px){.pitchSequence{gap:3px;margin:3px auto 5px}.pitchChip{min-width:62px;padding:4px;font-size:8px}.pitchChip strong{font-size:9px}.atBatCall .traitLine{font-size:8px}.zoneWrap.critical:before{font-size:7px}}
+</style><script id="immersion-layer-v1">
+const archetypeTip={
+  '컨택형':'커트와 단타에 강합니다.', '파워형':'한 번 맞으면 장타를 노립니다.', '주루형':'내야안타와 추가 진루에 강합니다.', '선구안형':'나쁜 공을 골라냅니다.',
+  '구속형':'장타를 억제하는 빠른 공입니다.', '제구형':'코너 승부에 안정적입니다.', '구위형':'안타를 억제하지만 제구가 흔들릴 수 있습니다.', '변화형':'헛스윙을 유도합니다.'
+};
+const applyMatchBeforeImmersion=applyMatch;
+applyMatch=function(data){applyMatchBeforeImmersion(data);state.pitchSequence=data?.game?.history||[];return data};
+const renderBeforeImmersion=render;
+render=function(){
+  renderBeforeImmersion();
+  if(!state.mode)return;
+  const action=$('swing'),status=document.getElementById('onlineTurnStatus');
+  // The turn signal belongs beside the decision, not above the scoreboard.
+  if(action&&status&&action.parentElement)action.before(status);
+  const hitter=state.half==='top'?state.batter:(state.awayBatter||state.batter);
+  const staff=state.half==='top'?(state.awayPitchers||[]):(state.pitchers||[]);
+  const pitcher=staff[state.half==='top'?(state.awayActivePitcher??0):(state.activePitcher??0)];
+  const call=document.getElementById('atBatCall');
+  if(call&&hitter)call.innerHTML=`<b>${hitter.n||'현재 타자'} ${hitter.t||''}</b> · ${state.o||0}아웃 ${state.bases?.some(Boolean)?'주자 있음':'주자 없음'}<span class="traitLine"><b>${hitter.t||'타자'}</b> ${archetypeTip[hitter.t]||''}${pitcher?` · <b>${pitcher.t}</b> ${archetypeTip[pitcher.t]||''}`:''}</span>`;
+  let sequence=document.getElementById('pitchSequence');
+  if(!sequence){sequence=document.createElement('div');sequence.id='pitchSequence';sequence.className='pitchSequence';document.querySelector('.zoneWrap')?.before(sequence)}
+  const entries=(state.pitchSequence||[]).slice(0,5);
+  sequence.innerHTML=entries.length?`<span class="sequenceTitle">RECENT 5 · 상대 패턴</span>${entries.map((play,index)=>{const row=Math.floor((play.actualCell??play.pitchCell)/5)+1,col=(play.actualCell??play.pitchCell)%5+1;return `<span class="pitchChip ${index?'faded':''}"><strong>${play.pitchName||'투구'} ${play.speed||''}</strong>${row}행 ${col}열</span>`}).join('')}`:'';
+  const critical=(state.s>=2)||((state.r===state.away||Math.abs((state.r||0)-(state.away||0))<=1)&&Boolean(state.bases?.some(Boolean)))||((state.b||0)>=3);
+  document.querySelector('.zoneWrap')?.classList.toggle('critical',critical);
+  document.querySelector('.score')?.classList.toggle('critical',critical);
+};
+const showGameSummaryBeforeRematch=showGameSummary;
+showGameSummary=function(game){
+  showGameSummaryBeforeRematch(game);
+  if(!state.net||game?.status!=='finished'||!matchSession)return;
+  const dialog=document.querySelector('.gameSummary');
+  if(!dialog||dialog.querySelector('.rematchButton'))return;
+  const button=document.createElement('button');button.className='rematchButton';button.textContent='상대와 리매치 요청';
+  button.onclick=async()=>{button.disabled=true;try{const data=await requestMatch({action:'rematch',code:matchSession.code,token:matchSession.token});if(data.game.status==='playing'){document.getElementById('gameSummary')?.remove();state.finished=false;beginMatch(data)}else{matchSession.rematchWaiting=true;button.textContent='상대의 리매치 수락을 기다리는 중';watchMatch()}}catch(error){button.disabled=false;button.textContent=error.message||'리매치 요청 실패'}};
+  dialog.querySelector('.gameSummaryActions')?.before(button);
+};
+const watchMatchBeforeRematch=watchMatch;
+watchMatch=function(){
+  if(!matchSession?.rematchWaiting)return watchMatchBeforeRematch();
+  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game.status==='playing'){matchSession.rematchWaiting=false;state.finished=false;beginMatch(data)}}catch(_){/* retry */}},700);
+};
 </script><script id="match-role-sync-v1">
 // A joiner can be assigned the first at-bat. The host learns its randomized
 // role on the next state poll, before rendering score, turn, or team data.

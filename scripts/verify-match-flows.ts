@@ -112,12 +112,17 @@ async function main() {
   const forfeited = await request({ action: "forfeit", code: host.code, token: attacker.token });
   assert.equal(forfeited.game.status, "finished");
   assert.equal(forfeited.game.forfeitWinner, defender.player);
+  const rematchWaiting = await request({ action: "rematch", code: host.code, token: attacker.token });
+  assert.equal(rematchWaiting.game.status, "finished");
+  const rematched = await request({ action: "rematch", code: host.code, token: defender.token });
+  assert.equal(rematched.game.status, "playing");
+  assert.ok(rematched.game.introUntil, "a rematch must show the match intro before its first turn");
 
   // A full remote game means dozens of sequential server calls. Keep it
   // opt-in for staging/CI so routine production audits cannot outlive a
   // command runner or contend with live users.
   const fullGame = process.env.RUN_FULL_GAME === "1" ? `, complete game (${await playFullGame()} pitches)` : "";
-  console.log(`PASS: presence, solo, friend lobby/join/intro, validation, choice privacy, swap, forfeit${fullGame}`);
+  console.log(`PASS: presence, solo, friend lobby/join/intro, validation, choice privacy, swap, forfeit/rematch${fullGame}`);
 }
 
 main().catch((error) => {

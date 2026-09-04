@@ -18,6 +18,7 @@ type Game = {
   forfeitWinner?: PlayerId;
   rankingApplied?: boolean;
   ranking?: Partial<Record<PlayerId, RankingResult>>;
+  rematch?: Partial<Record<PlayerId, boolean>>;
   inning: number;
   half: 0 | 1;
   scores: [number, number];
@@ -455,7 +456,7 @@ export default async function handler(req: any, res: any) {
     }
     let room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
-    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || (input.action === "state" && Boolean(room.game.introUntil));
+    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || input.action === "rematch" || (input.action === "state" && Boolean(room.game.introUntil));
     const roomLockKey = `pitchit:room:${room.code}:lock`;
     const roomLock = needsRoomLock ? await acquire(roomLockKey, 12) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
@@ -481,6 +482,24 @@ export default async function handler(req: any, res: any) {
       await applyRankings(room);
       await save(room);
       return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });
+    }
+    if (input.action === "rematch") {
+      const player = identify(room, input.token);
+      if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
+      if (room.mode === "solo") return res.status(409).json({ error: "싱글 플레이는 새 게임으로 다시 시작할 수 있습니다." });
+      if (room.game.status !== "finished") return res.status(409).json({ error: "경기 종료 후에 리매치를 요청할 수 있습니다." });
+      room.game.rematch ??= {};
+      room.game.rematch[player] = true;
+      if (room.game.rematch.p1 && room.game.rematch.p2) {
+        const next = freshGame();
+        next.status = "playing";
+        next.introUntil = Date.now() + 5_000;
+        next.deadline = 0;
+        next.event = "리매치 성사! 양 팀 소개 후 경기가 시작됩니다.";
+        room.game = next;
+      }
+      await save(room);
+      return res.status(200).json({ ...publicRoom(room), player, token: input.token });
     }
     if (input.action === "cancel") {
       const player = identify(room, input.token);
