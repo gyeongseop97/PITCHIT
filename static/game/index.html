@@ -1263,4 +1263,9 @@ if(guideButton){guideButton.textContent='게임 가이드';guideButton.onclick=(
 const rankingButton=document.createElement('button');rankingButton.type='button';rankingButton.textContent='랭킹';rankingButton.onclick=openRanking;document.querySelector('.homeGuideActions')?.append(rankingButton);
 const showGameSummaryBeforeRanking=showGameSummary;
 showGameSummary=function(game){showGameSummaryBeforeRanking(game);const result=game?.ranking?.[matchSession?.player];const dialog=document.querySelector('.gameSummary');if(!result||!dialog||dialog.querySelector('.rankResult'))return;const gain=result.change>=0?`+${result.change}`:String(result.change);const card=document.createElement('p');card.className='rankResult'+(result.change<0?' negative':'');card.textContent=`온라인 랭킹 · ${gain} P → ${result.points} P · ${result.wins}승 ${result.games}경기`;dialog.querySelector('.gameSummaryActions')?.before(card)};
+</script><script id="match-role-sync-v1">
+// A joiner can be assigned the first at-bat. The host learns its randomized
+// role on the next state poll, before rendering score, turn, or team data.
+const applyMatchBeforeRoleSync=applyMatch;
+applyMatch=function(data){if(matchSession&&data?.player&&data?.token===matchSession.token)matchSession.player=data.player;return applyMatchBeforeRoleSync(data)};
 </script></body></html>
