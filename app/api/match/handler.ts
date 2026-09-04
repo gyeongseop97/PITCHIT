@@ -59,6 +59,13 @@ type RankingPlayer = { name: string; points: number; wins: number; losses: numbe
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
+const validChoice = (choice: unknown, expected: Choice["kind"]): choice is Choice => {
+  if (!choice || typeof choice !== "object") return false;
+  const value = choice as Record<string, unknown>;
+  if (value.kind !== expected || !Number.isInteger(value.cell) || Number(value.cell) < 0 || Number(value.cell) >= strikeCells.length) return false;
+  if (expected === "bat") return value.swing === "contact" || value.swing === "power" || value.swing === "spot";
+  return value.pitch === "fast" || value.pitch === "breaking";
+};
 const batterTypes = [
   { t: "컨택형", p: 45, a: 85, e: 55, v: 45 }, { t: "파워형", p: 85, a: 48, e: 52, v: 45 },
   { t: "주루형", p: 45, a: 57, e: 48, v: 80 }, { t: "선구안형", p: 48, a: 58, e: 82, v: 42 },
@@ -498,8 +505,10 @@ export default async function handler(req: any, res: any) {
     }
     if (input.action === "choose") {
       if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
+      if (room.game.status !== "playing") return res.status(409).json({ error: "상대가 입장한 뒤 경기가 시작되면 작전을 선택할 수 있습니다." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
+      if (!validChoice(input.choice, expected)) return res.status(400).json({ error: "작전 선택값이 올바르지 않습니다." });
       room.game.choices[player] = input.choice;
       if (room.mode === "solo") {
         const ai = aiChoice(room.game, "p2");
