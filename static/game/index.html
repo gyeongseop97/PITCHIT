@@ -472,14 +472,15 @@ Object.assign(guideContent,{
 let shownGameSummaryKey='';
 function showGameSummary(game){
   const mine=state.r||0, opponent=state.away||0;
-  const result=mine>opponent?'승리':mine<opponent?'패배':'무승부';
+  const forfeitWinner=game?.forfeitWinner;
+  const result=forfeitWinner&&matchSession?.player?(forfeitWinner===matchSession.player?'몰수승':'몰수패'):(mine>opponent?'승리':mine<opponent?'패배':'무승부');
   const key=`${state.net?'net':'local'}:${mine}:${opponent}:${state.inning}:${result}`;
   if(shownGameSummaryKey===key)return;
   shownGameSummaryKey=key;
   const mineHits=state.hits||0,mineWalks=state.walks||0,opponentHits=state.awayHits||0,opponentWalks=state.awayWalks||0;
   let overlay=document.getElementById('gameSummaryOverlay');
   if(!overlay){overlay=document.createElement('div');overlay.id='gameSummaryOverlay';overlay.className='gameSummaryOverlay';document.body.append(overlay)}
-  overlay.innerHTML=`<section class="gameSummary ${result==='패배'?'loss':''}" role="dialog" aria-modal="true"><p class="eyebrow">FINAL · ${state.inning} INNINGS</p><h2>${result}</h2><div class="finalScore">${mine} : ${opponent}</div><div class="summaryStats"><article><small>MY TEAM</small><b>${mine} R · ${mineHits} H · ${mineWalks} BB</b></article><article><small>OPPONENT</small><b>${opponent} R · ${opponentHits} H · ${opponentWalks} BB</b></article></div><p class="summaryNote"><b>경기 요약</b><br>${game?.event||state.serverEvent||$('result')?.textContent||'3이닝 승부가 종료되었습니다.'}</p><div class="gameSummaryActions"><button type="button" data-summary-home>홈으로</button><button type="button" data-summary-replay>다시 하기</button></div></section>`;
+  overlay.innerHTML=`<section class="gameSummary ${(result==='패배'||result==='몰수패')?'loss':''}" role="dialog" aria-modal="true"><p class="eyebrow">FINAL · ${state.inning} INNINGS</p><h2>${result}</h2><div class="finalScore">${mine} : ${opponent}</div><div class="summaryStats"><article><small>MY TEAM</small><b>${mine} R · ${mineHits} H · ${mineWalks} BB</b></article><article><small>OPPONENT</small><b>${opponent} R · ${opponentHits} H · ${opponentWalks} BB</b></article></div><p class="summaryNote"><b>경기 요약</b><br>${game?.event||state.serverEvent||$('result')?.textContent||'3이닝 승부가 종료되었습니다.'}</p><div class="gameSummaryActions"><button type="button" data-summary-home>홈으로</button><button type="button" data-summary-replay>다시 하기</button></div></section>`;
   overlay.querySelector('[data-summary-home]').onclick=()=>{overlay.remove();shownGameSummaryKey='';state.finished=false;state.mode='';state.net=false;matchSession=null;history.pushState({},'',location.pathname);render()};
   overlay.querySelector('[data-summary-replay]').onclick=()=>{overlay.remove();shownGameSummaryKey='';state.finished=false;state.net=false;matchSession=null;start('solo')};
 }
@@ -890,7 +891,7 @@ function recordFinishedGame(game) {
   const atBats = plateEnds.filter(play => !/볼넷/.test(play.event)).length;
   const hits = plateEnds.filter(play => ['single', 'double', 'triple', 'homerun'].includes(play.outcome)).length;
   const side = me === 'p1' ? 0 : 1, opponent = side ? 0 : 1;
-  career.games += 1; career.wins += game.scores[side] > game.scores[opponent] ? 1 : 0; career.losses += game.scores[side] < game.scores[opponent] ? 1 : 0; career.draws += game.scores[side] === game.scores[opponent] ? 1 : 0;
+  const forfeited=game.forfeitWinner;career.games += 1; career.wins += forfeited===me||(!forfeited&&game.scores[side] > game.scores[opponent]) ? 1 : 0; career.losses += forfeited&&forfeited!==me||(!forfeited&&game.scores[side] < game.scores[opponent]) ? 1 : 0; career.draws += !forfeited&&game.scores[side] === game.scores[opponent] ? 1 : 0;
   career.atBats += atBats; career.hits += hits; career.walks += walks; career.homeRuns += plateEnds.filter(play => play.outcome === 'homerun').length; career.rbi += plateEnds.reduce((sum, play) => sum + careerNumber(play.runsBattedIn), 0); career.strikeouts += plateEnds.filter(play => /삼진/.test(play.event)).length; career.outsRecorded += pitching.reduce((sum, play) => sum + careerNumber(play.outsRecorded), 0); career.earnedRuns += careerNumber(game.scores[opponent]); career.recordedGames = [...career.recordedGames, code].slice(-100);
   saveCareer(career);
 }
@@ -1034,10 +1035,20 @@ render=function(){
 };
 </script><script id="reliable-home-exit-v1">
 /* 홈으로 나가면 대기·재접속·턴 타이머까지 함께 끊어 이전 경기에 갇히지 않는다. */
+let forfeitReported=false;
+function reportCompetitiveForfeit(room,useBeacon=false){
+  const competitive=state.mode==='quick'||state.mode==='friend'||matchSession?.mode==='quick'||matchSession?.mode==='friend';
+  if(!room||!competitive||state.finished||forfeitReported)return;
+  forfeitReported=true;
+  const payload=JSON.stringify({action:'forfeit',code:room.code,token:room.token});
+  if(useBeacon&&navigator.sendBeacon){try{if(navigator.sendBeacon(matchApi,new Blob([payload],{type:'application/json'})))return}catch(_){}}
+  requestMatch(JSON.parse(payload)).catch(()=>undefined);
+}
 function leaveCurrentGame(event){
   event?.preventDefault();
   event?.stopImmediatePropagation();
   const room=matchSession?.code&&matchSession?.token?{code:matchSession.code,token:matchSession.token}:null;
+  reportCompetitiveForfeit(room);
   clearInterval(matchPoll);matchPoll=null;matchSubmitted=false;
   clearActiveRoom();
   matchSession=null;
@@ -1046,9 +1057,9 @@ function leaveCurrentGame(event){
   document.getElementById('pitcherSwapPanel')?.remove();
   history.replaceState({},'',location.pathname);
   render();
-  if(room)requestMatch({action:'forfeit',code:room.code,token:room.token}).catch(()=>undefined);
 }
 document.getElementById('back').addEventListener('click',leaveCurrentGame,true);
+window.addEventListener('pagehide',()=>{const room=matchSession?.code&&matchSession?.token?{code:matchSession.code,token:matchSession.token}:null;reportCompetitiveForfeit(room,true)});
 </script><style id="scoreboard-layering-v2">
 /* 점수 기록과 투타 정보를 서로 다른 전광판 행으로 분리한다. */
 .score{padding-bottom:194px!important;min-height:248px!important}
@@ -1116,7 +1127,7 @@ render=function(){renderBeforeWeightedContactZone();if(!state.mode||state.half==
 </style><script id="match-intro-v1">
 const beginMatchBeforeMatchIntro=beginMatch;let matchIntroKey='',matchIntroTimer=null;const matchIntroEscape=value=>String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 function showMatchIntro(data){const players=data.players||{},first=data.game?.half===0?'p1':'p2',firstName=players[first]||(first==='p1'?'플레이어 1':'플레이어 2'),p1=matchIntroEscape(players.p1||'플레이어 1'),p2=matchIntroEscape(players.p2||'플레이어 2'),firstSafe=matchIntroEscape(firstName);let overlay=document.getElementById('matchIntro');if(!overlay){overlay=document.createElement('section');overlay.id='matchIntro';overlay.className='matchIntro';document.body.append(overlay)}overlay.innerHTML=`<div class="matchIntroCard" role="status" aria-live="polite"><p class="matchIntroEyebrow">PITCHIT · MATCH FOUND</p><h2 class="matchIntroTitle">매칭 성공!</h2><div class="matchIntroNames"><b title="${p1}">${p1}</b><span>VS</span><b title="${p2}">${p2}</b></div><p class="matchIntroFirst"><b>${firstSafe}</b> 선공 · ${data.game?.inning||1}회초 시작</p><p class="matchIntroCount">경기 시작까지 <b id="matchIntroSeconds">5</b>초</p></div>`;let seconds=5;const count=overlay.querySelector('#matchIntroSeconds'),tick=setInterval(()=>{seconds--;if(count)count.textContent=String(Math.max(0,seconds));if(seconds<=0)clearInterval(tick)},1000);return overlay}
-beginMatch=function(data){const online=data?.mode==='quick'||data?.mode==='friend',key=online&&matchSession?`${matchSession.code}:${data.players?.p1||''}:${data.players?.p2||''}`:'';if(online&&data?.ready&&matchIntroKey!==key){matchIntroKey=key;clearInterval(matchPoll);const overlay=showMatchIntro(data);clearTimeout(matchIntroTimer);matchIntroTimer=setTimeout(()=>{overlay.remove();beginMatchBeforeMatchIntro(data)},5000);return}return beginMatchBeforeMatchIntro(data)};
+beginMatch=function(data){const online=data?.mode==='quick'||data?.mode==='friend',key=online&&matchSession?`${matchSession.code}:${data.players?.p1||''}:${data.players?.p2||''}`:'';if(online&&data?.ready&&matchIntroKey!==key){forfeitReported=false;matchIntroKey=key;clearInterval(matchPoll);const overlay=showMatchIntro(data);clearTimeout(matchIntroTimer);matchIntroTimer=setTimeout(()=>{overlay.remove();beginMatchBeforeMatchIntro(data)},5000);return}return beginMatchBeforeMatchIntro(data)};
 </script><style id="inning-break-v1">
 .inningBreak{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;padding:24px;background:#061426d9;color:#fff;text-align:center;animation:inningBreakIn .2s ease-out}.inningBreakCard{width:min(430px,100%);padding:30px 24px;border-top:4px solid #e33b31;border-bottom:4px solid #e33b31;background:linear-gradient(135deg,#102e50,#071525);box-shadow:0 16px 46px #0008}.inningBreak small{display:block;color:#a8bfd6;font-weight:900;letter-spacing:.2em;font-size:10px}.inningBreak h2{margin:11px 0 8px;font-size:clamp(28px,8vw,46px);letter-spacing:-.06em}.inningBreak p{margin:0;color:#dce9f7;font-size:14px;font-weight:800}.inningBreak p b{color:#f5d15e}@keyframes inningBreakIn{from{opacity:0}.inningBreakCard{transform:translateY(14px)}to{opacity:1}.inningBreakCard{transform:translateY(0)}}
 </style><script id="inning-break-v1">

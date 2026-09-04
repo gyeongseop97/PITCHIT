@@ -14,6 +14,7 @@ type Game = {
   // The pre-game card is not part of a turn: keep its countdown separate
   // from the 20-second decision deadline.
   introUntil?: number;
+  forfeitWinner?: PlayerId;
   inning: number;
   half: 0 | 1;
   scores: [number, number];
@@ -352,10 +353,12 @@ export default async function handler(req: any, res: any) {
       const player = identify(room, input.token);
       if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
       if (room.game.status === "finished") return res.status(200).json({ ...publicRoom(room), player, token: input.token });
+      const winner: PlayerId = player === "p1" ? "p2" : "p1";
       room.game.status = "finished";
       room.game.deadline = 0;
       room.game.choices = {};
-      room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다.`;
+      room.game.forfeitWinner = winner;
+      room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
       await save(room);
       return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });
     }
