@@ -102,7 +102,14 @@ async function submitMatch(){
   matchSubmitted=true;render();
   const kind=state.half==='top'?'bat':'pitch';
   try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data)}
-  catch(e){matchSubmitted=false;$('result').textContent=e.message;render()}
+  catch(e){
+    matchSubmitted=false;
+    const message=e?.message||'작전 전송에 실패했습니다.';
+    // A delayed poll can briefly leave a client on the previous half-inning.
+    // Recover from that state instead of leaving the pitch button disabled.
+    try{const latest=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});applyMatch(latest);$('result').textContent=`상태를 다시 확인했습니다. ${message}`}
+    catch(_){$('result').textContent=message;render()}
+  }
 }
 const renderBeforeFeedback=render;
 render=()=>{

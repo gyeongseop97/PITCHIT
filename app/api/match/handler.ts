@@ -119,8 +119,18 @@ async function applyRankings(room: Room) {
   const winner = game.forfeitWinner ?? (game.scores[0] === game.scores[1] ? null : game.scores[0] > game.scores[1] ? "p1" : "p2");
   const firstResult = winner === "p1" ? "win" : winner === "p2" ? "loss" : "draw";
   const secondResult = winner === "p2" ? "win" : winner === "p1" ? "loss" : "draw";
-  const firstChange = ratingChange(first.points, second.points, firstResult);
-  const secondChange = ratingChange(second.points, first.points, secondResult);
+  const forfeit = Boolean(game.forfeitWinner);
+  // A forfeit should hurt more than a played loss, while the winner earns a
+  // smaller reward than for completing a match. Keep the normal Elo-style
+  // strength adjustment, then apply the forfeit modifier symmetrically.
+  const forfeitAdjusted = (change: number, result: "win" | "loss" | "draw") => {
+    if (!forfeit) return change;
+    if (result === "win") return Math.max(1, Math.round(change * 0.5));
+    if (result === "loss") return Math.round(change * 2);
+    return change;
+  };
+  const firstChange = forfeitAdjusted(ratingChange(first.points, second.points, firstResult), firstResult);
+  const secondChange = forfeitAdjusted(ratingChange(second.points, first.points, secondResult), secondResult);
   const firstBefore = first.points, secondBefore = second.points;
   first.points = Math.max(0, first.points + firstChange); second.points = Math.max(0, second.points + secondChange);
   first.games++; second.games++;
