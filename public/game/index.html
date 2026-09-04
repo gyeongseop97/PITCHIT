@@ -1398,7 +1398,7 @@ render=function(){
 .score.critical{border-color:#d93832!important;animation:pitchitPressurePulse 1.8s cubic-bezier(.25,.1,.3,1) infinite!important}
 .zoneWrap.critical .zone{outline:none!important;box-shadow:none!important;animation:none!important}
 /* The board grid never changes. Pressure is an external, non-interactive halo. */
-.zoneWrap.critical:after{content:"";position:absolute;z-index:6;pointer-events:none;inset:-10px;border:2px solid #d93832;box-shadow:inset 0 0 0 0 #d93832,0 0 5px #d9383244;animation:pitchitPressurePulse 1.8s cubic-bezier(.25,.1,.3,1) infinite}
+.zoneWrap.critical:after{content:"";position:absolute;z-index:6;pointer-events:none;inset:-4px;border:2px solid #d93832;box-shadow:inset 0 0 0 0 #d93832,0 0 5px #d9383244;animation:pitchitPressurePulse 1.8s cubic-bezier(.25,.1,.3,1) infinite}
 .feedback-off .score.critical{border-color:#1f394f!important;box-shadow:inset 0 12px 30px #000!important;animation:none!important}.feedback-off .zoneWrap.critical:after{display:none!important}
 @media(prefers-reduced-motion:reduce){.score.critical,.zoneWrap.critical .zone{animation:none!important}}
 </style><script id="pressure-feedback-toggle-v1">
