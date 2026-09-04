@@ -261,7 +261,7 @@ applyMatch=function(data){
     state.batter=mine.lineup[game.batter[myIndex]];state.awayBatter=opponent.lineup[game.batter[opponentIndex]];
     state.onlineLineup=mine.lineup;state.onlineAwayLineup=opponent.lineup;
   }
-  state.opponentName=data.players?.[me==='p1'?'p2':'p1']||'상대';state.opponentSubmitted=Boolean(data.choiceReady?.[me==='p1'?'p2':'p1']);state.gameHalf=game.half;state.finished=game.status==='finished';
+  state.opponentName=data.players?.[me==='p1'?'p2':'p1']||'상대';state.opponentSubmitted=Boolean(data.choiceReady?.[me==='p1'?'p2':'p1']);state.gameHalf=game.half;state.introUntil=Number(game.introUntil)||0;state.finished=game.status==='finished';
   // Use the server's actor as the source of truth.  `half` is rendered from
   // each player's viewpoint, while this flag says unambiguously who can
   // replace a pitcher right now.
@@ -1154,7 +1154,7 @@ watchMatch=function(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{i
 </style><script id="match-intro-v1">
 const beginMatchBeforeMatchIntro=beginMatch;let matchIntroKey='',matchIntroTimer=null;const matchIntroEscape=value=>String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 function showMatchIntro(data){const players=data.players||{},first=data.game?.half===0?'p1':'p2',firstName=players[first]||(first==='p1'?'플레이어 1':'플레이어 2'),p1=matchIntroEscape(players.p1||'플레이어 1'),p2=matchIntroEscape(players.p2||'플레이어 2'),firstSafe=matchIntroEscape(firstName);let overlay=document.getElementById('matchIntro');if(!overlay){overlay=document.createElement('section');overlay.id='matchIntro';overlay.className='matchIntro';document.body.append(overlay)}overlay.innerHTML=`<div class="matchIntroCard" role="status" aria-live="polite"><p class="matchIntroEyebrow">PITCHIT · MATCH FOUND</p><h2 class="matchIntroTitle">매칭 성공!</h2><div class="matchIntroNames"><b title="${p1}">${p1}</b><span>VS</span><b title="${p2}">${p2}</b></div><p class="matchIntroFirst"><b>${firstSafe}</b> 선공 · ${data.game?.inning||1}회초 시작</p><p class="matchIntroCount">경기 시작까지 <b id="matchIntroSeconds">5</b>초</p></div>`;let seconds=5;const count=overlay.querySelector('#matchIntroSeconds'),tick=setInterval(()=>{seconds--;if(count)count.textContent=String(Math.max(0,seconds));if(seconds<=0)clearInterval(tick)},1000);return overlay}
-beginMatch=function(data){const online=data?.mode==='quick'||data?.mode==='friend',key=online&&matchSession?`${matchSession.code}:${data.players?.p1||''}:${data.players?.p2||''}`:'';if(online&&data?.ready&&matchIntroKey!==key){forfeitReported=false;matchIntroKey=key;clearInterval(matchPoll);const overlay=showMatchIntro(data);clearTimeout(matchIntroTimer);matchIntroTimer=setTimeout(()=>{overlay.remove();beginMatchBeforeMatchIntro(data)},5000);return}return beginMatchBeforeMatchIntro(data)};
+beginMatch=function(data){const online=data?.mode==='quick'||data?.mode==='friend',key=online&&matchSession?`${matchSession.code}:${data.players?.p1||''}:${data.players?.p2||''}`:'';if(online&&data?.ready&&matchIntroKey!==key){forfeitReported=false;matchIntroKey=key;matchSubmitted=false;clearInterval(matchPoll);const overlay=showMatchIntro(data);clearTimeout(matchIntroTimer);matchIntroTimer=setTimeout(async()=>{try{const latest=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});overlay.remove();beginMatchBeforeMatchIntro(latest)}catch(_){overlay.remove();beginMatchBeforeMatchIntro(data)}},5000);return}return beginMatchBeforeMatchIntro(data)};
 </script><style id="inning-break-v1">
 .inningBreak{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;padding:24px;background:#061426d9;color:#fff;text-align:center;animation:inningBreakIn .2s ease-out}.inningBreakCard{width:min(430px,100%);padding:30px 24px;border-top:4px solid #e33b31;border-bottom:4px solid #e33b31;background:linear-gradient(135deg,#102e50,#071525);box-shadow:0 16px 46px #0008}.inningBreak small{display:block;color:#a8bfd6;font-weight:900;letter-spacing:.2em;font-size:10px}.inningBreak h2{margin:11px 0 8px;font-size:clamp(28px,8vw,46px);letter-spacing:-.06em}.inningBreak p{margin:0;color:#dce9f7;font-size:14px;font-weight:800}.inningBreak p b{color:#f5d15e}@keyframes inningBreakIn{from{opacity:0}.inningBreakCard{transform:translateY(14px)}to{opacity:1}.inningBreakCard{transform:translateY(0)}}
 </style><script id="inning-break-v1">
@@ -1435,6 +1435,7 @@ showBroadcast=function(game){
   if(key&&cinematicBroadcastPending===key)return;
   showBroadcastBeforeCinematic(game);
   const call=document.getElementById('broadcastCall'),event=String(game?.event||'');
+  if(call){const outcome=game?.lastPlay?.outcome||'';call.dataset.cinematic=/삼진/.test(event)?'strikeout':outcome==='homerun'?'homerun':['single','double','triple'].includes(outcome)?'hit':'';}
   if(call&&event&&(/주력으로|태그업|득점/.test(event))&&!call.querySelector('.playDetail')){
     const detail=document.createElement('small');detail.className='playDetail';detail.textContent=event.match(/(주력으로.*|3루 주자가 태그업 득점!)/)?.[1]||event;call.append(detail);
   }
@@ -1467,5 +1468,26 @@ render=function(){
     [0,1].forEach(side=>{if(previous[side]!==current[side]||previous[side+2]!==current[side+2]||previous[side+4]!==current[side+4])rows[side]?.querySelectorAll('.total,.stat').forEach(cell=>{cell.classList.remove('scoreboardFlash');void cell.offsetWidth;cell.classList.add('scoreboardFlash')})});
   }
   scoreboardSnapshot=snapshot;
+};
+</script><style id="cinematic-art-and-opening-turn-v1">
+/* Generated artwork supports the call instead of covering the choice board. */
+.broadcastCall[data-cinematic="homerun"],.broadcastCall[data-cinematic="hit"],.broadcastCall[data-cinematic="strikeout"]{position:relative;isolation:isolate;overflow:hidden;background-color:#102846!important;background-position:center!important;background-size:cover!important}.broadcastCall[data-cinematic="homerun"]{background-image:linear-gradient(90deg,#601614f4,#9d211adb 58%,#0a1728cc),url("pitchit-cinematic-homerun-v1.png")!important}.broadcastCall[data-cinematic="hit"]{background-image:linear-gradient(90deg,#0b263dea,#16415dc9 54%,#081b2dbd),url("pitchit-cinematic-hit-v1.png")!important}.broadcastCall[data-cinematic="strikeout"]{background-image:linear-gradient(90deg,#071527f2,#112f4ad8 58%,#071527b8),url("pitchit-cinematic-strikeout-v1.png")!important}.inningBreak{background:linear-gradient(#061426d9,#061426d9),url("pitchit-inning-transition-v1.png") center/cover no-repeat!important}.inningBreakCard{border:1px solid #b9cad8;border-top:4px solid #e33b31!important;border-bottom:4px solid #e33b31!important;box-shadow:0 16px 46px #000c,0 0 0 4px #ffffff10 inset!important}
+</style><script id="opening-turn-and-countdown-v1">
+/* Do not let the first live button appear until the server has opened its 20s turn. */
+const renderBeforeOpeningTurnGuard=render;
+render=function(){
+  renderBeforeOpeningTurnGuard();
+  if(!state.net||!state.mode)return;
+  const action=$('swing');if(!action||state.finished)return;
+  const now=Date.now(),seconds=state.deadline>now?Math.ceil((state.deadline-now)/1000):0;
+  if(state.introUntil>now||!state.deadline){
+    action.disabled=true;action.classList.add('waiting');action.textContent='첫 턴을 준비하는 중';return;
+  }
+  const waiting=Boolean(matchSubmitted),opponentReady=!waiting&&Boolean(state.opponentSubmitted);
+  action.classList.toggle('waiting',waiting);action.classList.toggle('opponentReady',opponentReady);
+  if(waiting){action.disabled=true;action.textContent=`선택 완료 · 상대방의 선택을 기다리는 중 · ${seconds}초`;return;}
+  action.disabled=false;
+  if(opponentReady){action.textContent=`상대 선택 완료 · 내 선택을 확정하세요 · ${seconds}초`;return;}
+  action.textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;
 };
 </script></body></html>
