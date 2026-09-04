@@ -1102,4 +1102,21 @@ render=function(){
   modal.querySelector('.pitcherModalClose').onclick=()=>{state.pitcherSwapOpen=false;render()};modal.onclick=event=>{if(event.target===modal){state.pitcherSwapOpen=false;render()}};
   modal.querySelectorAll('[data-modal-pitcher]').forEach(button=>button.onclick=()=>{const index=+button.dataset.modalPitcher;if(state.usedPitchers?.includes(index))return;state.activePitcher=index;state.usedPitchers=[...(state.usedPitchers||[]),index];state.pitcherSwapOpen=false;state.pitcherSwapNotice=`${state.pitchers[index].n} 투수가 등판했습니다.`;setResult(state.pitcherSwapNotice,'strike');render()});
 };
+</script><script id="result-record-synchronization-v1">
+/* 이전 플레이의 중계가 다음 B/S/O와 함께 남지 않도록 결과 생명주기를 한 턴으로 제한한다. */
+function clearResolvedResult(){
+  state.netOutcome='';state.localOutcome='';state.netOutcomeUntil=0;state.localOutcomeUntil=0;
+  const call=document.getElementById('broadcastCall');if(call){call.style.display='none';call.dataset.resultKey='';}
+  const outcome=document.getElementById('zoneOutcome');if(outcome)outcome.style.display='none';
+}
+const showBroadcastBeforeResultSynchronization=showBroadcast;
+showBroadcast=function(game){
+  showBroadcastBeforeResultSynchronization(game);
+  const call=document.getElementById('broadcastCall');if(!call)return;
+  const key=`${game?.deadline||''}:${game?.event||''}:${game?.lastPlay?.actualCell??''}`;
+  call.style.display='block';call.dataset.resultKey=key;
+  const tone=resultTone(game?.event||'');call.className=`broadcastCall tone-${tone}`;
+  setTimeout(()=>{const current=document.getElementById('broadcastCall');if(current?.dataset.resultKey===key)current.style.display='none';},3200);
+};
+['zone','types','swing'].forEach(id=>document.getElementById(id)?.addEventListener('click',clearResolvedResult,true));
 </script></body></html>
