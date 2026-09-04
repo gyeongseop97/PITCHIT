@@ -1435,7 +1435,6 @@ showBroadcast=function(game){
   if(key&&cinematicBroadcastPending===key)return;
   showBroadcastBeforeCinematic(game);
   const call=document.getElementById('broadcastCall'),event=String(game?.event||'');
-  if(call){const outcome=game?.lastPlay?.outcome||'';call.dataset.cinematic=/삼진/.test(event)?'strikeout':outcome==='homerun'?'homerun':['single','double','triple'].includes(outcome)?'hit':'';}
   if(call&&event&&(/주력으로|태그업|득점/.test(event))&&!call.querySelector('.playDetail')){
     const detail=document.createElement('small');detail.className='playDetail';detail.textContent=event.match(/(주력으로.*|3루 주자가 태그업 득점!)/)?.[1]||event;call.append(detail);
   }
@@ -1470,8 +1469,8 @@ render=function(){
   scoreboardSnapshot=snapshot;
 };
 </script><style id="cinematic-art-and-opening-turn-v1">
-/* Generated artwork supports the call instead of covering the choice board. */
-.broadcastCall[data-cinematic="homerun"],.broadcastCall[data-cinematic="hit"],.broadcastCall[data-cinematic="strikeout"]{position:relative;isolation:isolate;overflow:hidden;background-color:#102846!important;background-position:center!important;background-size:cover!important}.broadcastCall[data-cinematic="homerun"]{background-image:linear-gradient(90deg,#601614f4,#9d211adb 58%,#0a1728cc),url("pitchit-cinematic-homerun-v1.png")!important}.broadcastCall[data-cinematic="hit"]{background-image:linear-gradient(90deg,#0b263dea,#16415dc9 54%,#081b2dbd),url("pitchit-cinematic-hit-v1.png")!important}.broadcastCall[data-cinematic="strikeout"]{background-image:linear-gradient(90deg,#071527f2,#112f4ad8 58%,#071527b8),url("pitchit-cinematic-strikeout-v1.png")!important}.inningBreak{background:linear-gradient(#061426d9,#061426d9),url("pitchit-inning-transition-v1.png") center/cover no-repeat!important}.inningBreakCard{border:1px solid #b9cad8;border-top:4px solid #e33b31!important;border-bottom:4px solid #e33b31!important;box-shadow:0 16px 46px #000c,0 0 0 4px #ffffff10 inset!important}
+/* Result calls stay deliberately plain so the play-by-play is always readable. */
+.inningBreak{background:#061426d9!important}.inningBreakCard{border:1px solid #b9cad8;border-top:4px solid #e33b31!important;border-bottom:4px solid #e33b31!important;box-shadow:0 16px 46px #000c,0 0 0 4px #ffffff10 inset!important}
 </style><script id="opening-turn-and-countdown-v1">
 /* Do not let the first live button appear until the server has opened its 20s turn. */
 const renderBeforeOpeningTurnGuard=render;
@@ -1490,4 +1489,7 @@ render=function(){
   if(opponentReady){action.textContent=`상대 선택 완료 · 내 선택을 확정하세요 · ${seconds}초`;return;}
   action.textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;
 };
-</script></body></html>
+</script><style id="stadium-scoreboard-art-v1">
+/* The generated board is the physical stadium hardware; all scores stay live HTML. */
+.score{background:#06090d url("pitchit-stadium-scoreboard-v1.png") center/100% 100% no-repeat!important;border:0!important;box-shadow:0 8px 18px #07111d55!important}.score:before{background:transparent!important;border:0!important;text-shadow:0 1px 2px #000}.score>div:first-child,.score>div:nth-child(4),.counts{background:transparent!important;border-color:transparent!important}.stadiumStats{background:transparent!important;border-color:transparent!important}.lineScore th,.lineScore td{background:transparent!important;border-color:transparent!important;text-shadow:0 1px 2px #000}.lineScore .team,.lineScore .total,.lineScore .stat{background:transparent!important}.scoreMatchup{border-color:transparent!important}.scoreMatchup article,.scoreMatchup .scorePitch{background:transparent!important;border-color:transparent!important;text-shadow:0 1px 2px #000}.scoreMatchup article{padding-left:10px!important}.scoreMatchup .scorePitch{padding-top:2px!important}@media(max-width:760px){.score{background-size:100% 100%!important}.score>div:first-child,.score>div:nth-child(4),.counts{background:transparent!important}.scoreMatchup article{padding-left:6px!important}}
+</style></body></html>
