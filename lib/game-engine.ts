@@ -86,7 +86,10 @@ export function resolvePlateAppearance(input: {
   const selectedCenterDistance = Math.abs(selectedRow - 2) + Math.abs(selectedColumn - 2);
   // Corners are a high-risk choice: harder to square up, but more likely to leak.
   const breakingCommand = breaking ? (70 - input.pitcher.m) / 1400 : 0;
-  const missChance = clamp(0.10 - input.pitcher.c / 520 + selectedCenterDistance * 0.011 + breakingCommand, 0.005, 0.35);
+  // Control governs whether the called pitch is actually commanded.  It no
+  // longer doubles as generic swing difficulty: a control specialist wins by
+  // avoiding free balls and hanging pitches, not by becoming a power arm.
+  const missChance = clamp(0.185 - input.pitcher.c / 420 + selectedCenterDistance * 0.014 + breakingCommand, 0.01, 0.35);
   const mistake = random() < missChance;
   const actualCell = mistake ? mistakeIntoTarget(input.targetCell, input.swing, random) : input.pitchCell;
   const actualRow = Math.floor(actualCell / 5), actualColumn = actualCell % 5;
@@ -94,12 +97,17 @@ export function resolvePlateAppearance(input: {
   // A hitter's count forces the pitcher to come closer to the zone. Corners
   // remain useful, but are a touch more likely to miss when behind in count.
   const hittersCountRisk = input.count.balls >= 3 && selectedCenterDistance >= 2 ? 0.024 : 0;
-  const accidentalBallRisk = clamp(Math.max(0, selectedCenterDistance - 1) * 0.02 + 0.003 - input.pitcher.c / 2000 + hittersCountRisk);
+  const accidentalBallRisk = clamp(Math.max(0, selectedCenterDistance - 1) * 0.022 + 0.008 + (66 - input.pitcher.c) / 1000 + hittersCountRisk, 0, 0.24);
   if (random() < accidentalBallRisk) {
     return { outcome: "ball", actualCell: controlMissCell(actualCell, random), isBall: true, pitchName, speed, execution: "wild", message: `${pitchName} ${speed}km/h · 제구가 빠져 볼이 됐습니다.` };
   }
 
   const distance = cellDistance(input.targetCell, actualCell);
+  // Movement only matters when the pitcher actually chooses a breaking ball.
+  // This gives the 변화형 a real situational identity instead of a cosmetic
+  // velocity readout.
+  const breakingDeception = breaking ? clamp((input.pitcher.m - 40) / 420, 0, 0.12) : 0;
+  const fastballHeat = !breaking ? clamp((input.pitcher.v - 45) / 550, 0, 0.08) : 0;
   const contactReach = input.swing === "contact" ? contactReachWeight(input.targetCell, actualCell) : 0;
   const covered = input.swing === "contact"
     ? Math.abs(Math.floor(input.targetCell / 5) - Math.floor(actualCell / 5)) <= 2
@@ -120,12 +128,15 @@ export function resolvePlateAppearance(input: {
   const barrelQuality = input.swing === "contact"
     ? (perfectTarget ? -0.01 : -0.04)
     : input.swing === "power" ? (perfectTarget ? 0.09 : 0.035) : 0.15;
-  const eyeTake = !covered && random() < clamp((input.batter.e - 38) / 220 - input.count.strikes * 0.015);
+  // Plate discipline is deliberately strongest when the hitter's prediction
+  // is wrong.  It turns a bad read into a possible ball rather than making
+  // every hitter equally safe across the whole board.
+  const eyeTake = !covered && random() < clamp(0.055 + (input.batter.e - 45) / 92 - input.count.strikes * 0.018, 0.025, 0.52);
   if (eyeTake) return { outcome: "ball", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 선구안으로 아슬아슬한 공을 골랐습니다.` };
 
-  const pitchDifficulty = input.pitcher.v / 560 + input.pitcher.c / 180 + input.pitcher.s / 410 + (breaking ? input.pitcher.m / 330 : 0);
+  const pitchDifficulty = input.pitcher.v / 430 + input.pitcher.s / 350 + (breaking ? input.pitcher.m / 250 : 0);
   const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "spot" ? 0.04 : 0.06;
-  const contactChance = clamp(0.65 + input.batter.a / 135 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + (breaking ? 0.03 : -0.01) + (mistake ? 0.06 : 0) + (nearTarget ? 0.04 : 0) + (input.count.strikes >= 2 ? 0.018 : 0));
+  const contactChance = clamp(0.65 + input.batter.a / 180 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 - fastballHeat + (breaking ? -0.02 - breakingDeception : -0.01) + (mistake ? 0.075 : 0) + (nearTarget ? 0.04 : 0) + (input.count.strikes >= 2 ? 0.018 : 0));
   const reachFactor = input.swing === "contact" ? 0.62 + contactReach * 0.38 : 1;
   const contact = covered && random() < contactChance * reachFactor;
   if (!contact) {
@@ -144,7 +155,7 @@ export function resolvePlateAppearance(input: {
   const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;
   // Short 3-inning games need a little more payoff when a hitter barrels the
   // ball.  This changes hit quality (not the chance to put the ball in play).
-  const extraChance = clamp(0.075 + power * 0.50 + barrelQuality * 1.25 + (breaking ? 0.035 : -0.01));
+  const extraChance = clamp(0.075 + power * 0.50 + barrelQuality * 1.25 + (breaking ? -0.02 : -0.01));
   const locationHitBonus = 0.05 - actualCenterDistance * 0.022;
   // Reading the exact square should feel rewarding in every swing type.
   // Neighbouring coloured squares still earn a smaller boost: they are
@@ -155,13 +166,14 @@ export function resolvePlateAppearance(input: {
       ? (input.swing === "contact" ? 0.030 : input.swing === "power" ? 0.028 : 0)
       : 0;
   const reachHitBonus = input.swing === "contact" ? contactReach * 0.13 - 0.035 : 0;
-  const hitChance = clamp(0.435 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus + readHitBonus + reachHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.05 : 0));
+  const edgeCommandBonus = selectedCenterDistance >= 2 ? Math.max(0, input.pitcher.c - 50) / 700 : 0;
+  const hitChance = clamp(0.435 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus + readHitBonus + reachHitBonus - input.pitcher.s / 540 - input.pitcher.v / 1120 - edgeCommandBonus - breakingDeception * 0.7 + (mistake ? 0.075 : 0));
   const roll = random();
   if (roll < extraChance * 0.18) return { outcome: "homerun", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 완벽한 타이밍, 홈런!` };
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
-  if (roll < extraChance * 0.72 && input.batter.v >= 68) return { outcome: "triple", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 빠른 발로 3루타!` };
+  if (roll < extraChance * (0.56 + clamp((input.batter.v - 48) / 150, 0, 0.28))) return { outcome: "triple", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 빠른 발로 3루타!` };
   if (roll < hitChance) return { outcome: "single", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 노린 코스를 공략한 안타!` };
   const grounder = random() < 0.58;
-  if (grounder && input.batter.v >= 72 && random() < (input.batter.v - 60) / 120) return { outcome: "single", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 빠른 발로 내야안타!` };
+  if (grounder && random() < clamp((input.batter.v - 48) / 130)) return { outcome: "single", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 빠른 발로 내야안타!` };
   return { outcome: grounder ? "groundout" : "flyout", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · ${grounder ? "땅볼 아웃." : "뜬공 아웃."}` };
 }
