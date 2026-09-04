@@ -134,6 +134,9 @@ const publicRoom = (room: Room) => ({
   mode: room.mode,
   ready: room.game.status === "playing",
   players: { p1: room.players.p1?.name ?? null, p2: room.players.p2?.name ?? null },
+  // Reveal only that a player has locked a choice.  Their target, swing and
+  // pitch stay private until both choices are received and resolved.
+  choiceReady: { p1: Boolean(room.game.choices.p1), p2: Boolean(room.game.choices.p2) },
   game: { ...room.game, choices: {} },
   attacker: actor(room.game),
 });
