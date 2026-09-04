@@ -65,9 +65,9 @@ function advance(bases: number[], basesTaken: number, speed: number): number {
   let runs = 0; const next = [0, 0, 0];
   for (let index = 2; index >= 0; index--) if (bases[index]) {
     const runnerSpeed = bases[index]; let destination = index + basesTaken;
-    if (basesTaken === 1 && index === 1 && Math.random() < Math.min(.90, .58 + (runnerSpeed - 40) / 75)) destination = 3;
-    if (basesTaken === 1 && index === 0 && Math.random() < Math.min(.36, .06 + (runnerSpeed - 40) / 70)) destination = 3;
-    else if (basesTaken === 1 && index === 0 && Math.random() < Math.min(.82, .45 + (runnerSpeed - 40) / 80)) destination = 2;
+    if (basesTaken === 1 && index === 1 && Math.random() < Math.min(.96, .82 + (runnerSpeed - 40) / 90)) destination = 3;
+    if (basesTaken === 1 && index === 0 && Math.random() < Math.min(.50, .18 + (runnerSpeed - 40) / 70)) destination = 3;
+    else if (basesTaken === 1 && index === 0 && Math.random() < Math.min(.91, .66 + (runnerSpeed - 40) / 90)) destination = 2;
     if (basesTaken === 2 && index === 0 && Math.random() < Math.min(.96, .74 + (runnerSpeed - 40) / 80)) destination = 3;
     if (destination >= 3) runs++; else next[destination] = runnerSpeed;
   }

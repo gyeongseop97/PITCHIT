@@ -90,9 +90,9 @@ function advance(game: Game, runs: number, batterSpeed: number) {
     // a runner from second or send one from first to third; a fast runner is
     // more likely to take the extra base.  Doubles can score a runner from
     // first, rather than leaving every one at third.
-    if (runs === 1 && i === 1 && Math.random() < Math.min(.90, .58 + (runnerSpeed - 40) / 75)) destination = 3;
-    if (runs === 1 && i === 0 && Math.random() < Math.min(.36, .06 + (runnerSpeed - 40) / 70)) { destination = 3; extraAdvance = " · 주력으로 1루에서 홈까지 질주합니다!"; }
-    else if (runs === 1 && i === 0 && Math.random() < Math.min(.82, .45 + (runnerSpeed - 40) / 80)) destination = 2;
+    if (runs === 1 && i === 1 && Math.random() < Math.min(.96, .82 + (runnerSpeed - 40) / 90)) destination = 3;
+    if (runs === 1 && i === 0 && Math.random() < Math.min(.50, .18 + (runnerSpeed - 40) / 70)) { destination = 3; extraAdvance = " · 주력으로 1루에서 홈까지 질주합니다!"; }
+    else if (runs === 1 && i === 0 && Math.random() < Math.min(.91, .66 + (runnerSpeed - 40) / 90)) destination = 2;
     if (runs === 2 && i === 0 && Math.random() < Math.min(.96, .74 + (runnerSpeed - 40) / 80)) destination = 3;
     if (destination >= 3) addRun(game, side);
     else next[destination as 0 | 1 | 2] = runnerSpeed;
