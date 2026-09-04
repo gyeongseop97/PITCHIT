@@ -9,7 +9,7 @@ type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: numbe
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
 type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
-type RankingResult = { before: number; points: number; change: number; wins: number; games: number };
+type RankingResult = { before: number; points: number; change: number; wins: number; losses: number; draws: number; games: number };
 type Game = {
   status: "waiting" | "playing" | "finished";
   // The pre-game card is not part of a turn: keep its countdown separate
@@ -55,7 +55,7 @@ const presenceKey = "pitchit:presence";
 const presenceLifetimeMs = 75_000;
 const rankingBoardKey = "pitchit:ranking:v1";
 const rankingPlayerKey = (profileId: string) => `pitchit:ranking:v1:${profileId}`;
-type RankingPlayer = { name: string; points: number; wins: number; games: number; updatedAt: number };
+type RankingPlayer = { name: string; points: number; wins: number; losses: number; draws: number; games: number; updatedAt: number };
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
@@ -100,8 +100,8 @@ async function applyRankings(room: Room) {
     redis.get<RankingPlayer>(rankingPlayerKey(p1.profileId)),
     redis.get<RankingPlayer>(rankingPlayerKey(p2.profileId)),
   ]);
-  const first: RankingPlayer = { name: rankingName(p1.name), points: Math.max(0, Number(savedP1?.points ?? 1000)), wins: Number(savedP1?.wins ?? 0), games: Number(savedP1?.games ?? 0), updatedAt: Date.now() };
-  const second: RankingPlayer = { name: rankingName(p2.name), points: Math.max(0, Number(savedP2?.points ?? 1000)), wins: Number(savedP2?.wins ?? 0), games: Number(savedP2?.games ?? 0), updatedAt: Date.now() };
+  const first: RankingPlayer = { name: rankingName(p1.name), points: Math.max(0, Number(savedP1?.points ?? 1000)), wins: Number(savedP1?.wins ?? 0), losses: Number(savedP1?.losses ?? 0), draws: Number(savedP1?.draws ?? 0), games: Number(savedP1?.games ?? 0), updatedAt: Date.now() };
+  const second: RankingPlayer = { name: rankingName(p2.name), points: Math.max(0, Number(savedP2?.points ?? 1000)), wins: Number(savedP2?.wins ?? 0), losses: Number(savedP2?.losses ?? 0), draws: Number(savedP2?.draws ?? 0), games: Number(savedP2?.games ?? 0), updatedAt: Date.now() };
   const winner = game.forfeitWinner ?? (game.scores[0] === game.scores[1] ? null : game.scores[0] > game.scores[1] ? "p1" : "p2");
   const firstResult = winner === "p1" ? "win" : winner === "p2" ? "loss" : "draw";
   const secondResult = winner === "p2" ? "win" : winner === "p1" ? "loss" : "draw";
@@ -109,10 +109,12 @@ async function applyRankings(room: Room) {
   const secondChange = ratingChange(second.points, first.points, secondResult);
   const firstBefore = first.points, secondBefore = second.points;
   first.points = Math.max(0, first.points + firstChange); second.points = Math.max(0, second.points + secondChange);
-  first.games++; second.games++; if (firstResult === "win") first.wins++; if (secondResult === "win") second.wins++;
+  first.games++; second.games++;
+  if (firstResult === "win") first.wins++; else if (firstResult === "loss") first.losses++; else first.draws++;
+  if (secondResult === "win") second.wins++; else if (secondResult === "loss") second.losses++; else second.draws++;
   game.ranking = {
-    p1: { before: firstBefore, points: first.points, change: first.points - firstBefore, wins: first.wins, games: first.games },
-    p2: { before: secondBefore, points: second.points, change: second.points - secondBefore, wins: second.wins, games: second.games },
+    p1: { before: firstBefore, points: first.points, change: first.points - firstBefore, wins: first.wins, losses: first.losses, draws: first.draws, games: first.games },
+    p2: { before: secondBefore, points: second.points, change: second.points - secondBefore, wins: second.wins, losses: second.losses, draws: second.draws, games: second.games },
   };
   game.rankingApplied = true;
   await Promise.all([
@@ -338,6 +340,9 @@ async function release(keyName: string, lockToken: string) {
 function startRoom(room: Room, joining: Player) {
   room.players.p2 = joining;
   room.game.status = "playing";
+  // The host should not always get the first at-bat.  Decide the visiting
+  // side when the second player joins, before the match-intro is shown.
+  room.game.half = Math.random() < 0.5 ? 0 : 1;
   room.game.introUntil = Date.now() + 5_000;
   room.game.deadline = 0;
   room.game.choices = {};
@@ -369,7 +374,7 @@ export default async function handler(req: any, res: any) {
       const entries = await Promise.all(ids.map(async (id) => ({ id, player: await redis.get<RankingPlayer>(rankingPlayerKey(id)) })));
       const ranking = entries
         .filter((entry): entry is { id: string; player: RankingPlayer } => Boolean(entry.player))
-        .map(({ player }) => ({ name: rankingName(player.name), points: Math.max(0, Math.round(player.points)), wins: Math.max(0, player.wins), games: Math.max(0, player.games) }))
+        .map(({ player }) => ({ name: rankingName(player.name), points: Math.max(0, Math.round(player.points)), wins: Math.max(0, player.wins), losses: Math.max(0, player.losses ?? 0), draws: Math.max(0, player.draws ?? 0), games: Math.max(0, player.games) }))
         .sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name, "ko"));
       return res.status(200).json({ ranking });
     }
