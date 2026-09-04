@@ -1389,8 +1389,12 @@ render=function(){
   if(swap&&pitcherName&&swap.parentElement!==pitcherName)pitcherName.append(swap);
 };
 </script><style id="pressure-pulse-v1">
-@keyframes pitchitPressurePulse{0%,100%{box-shadow:inset 0 0 0 2px #d93832,0 0 5px #d9383244}50%{box-shadow:inset 0 0 0 3px #ff746b,0 0 18px #e33b31a8}}
-.score.critical{animation:pitchitPressurePulse 1.25s ease-in-out infinite!important}
-.zoneWrap.critical .zone{outline:2px solid #df4038;outline-offset:5px;animation:pitchitPressurePulse 1.25s ease-in-out infinite}
+@keyframes pitchitPressurePulse{0%,100%{box-shadow:inset 0 0 0 2px #d93832,0 0 5px #d9383244}12%{box-shadow:inset 0 0 0 3px #ff746b,0 0 17px #e33b31a8}24%{box-shadow:inset 0 0 0 2px #d93832,0 0 7px #d9383266}38%{box-shadow:inset 0 0 0 3px #ff746b,0 0 20px #e33b31b8}52%{box-shadow:inset 0 0 0 2px #d93832,0 0 5px #d9383244}}
+.score.critical{animation:pitchitPressurePulse 1.8s cubic-bezier(.25,.1,.3,1) infinite!important}
+.zoneWrap.critical .zone{outline:2px solid #df4038;outline-offset:5px;animation:pitchitPressurePulse 1.8s cubic-bezier(.25,.1,.3,1) infinite}
+.feedback-off .score.critical,.feedback-off .zoneWrap.critical .zone{animation:none!important}
 @media(prefers-reduced-motion:reduce){.score.critical,.zoneWrap.critical .zone{animation:none!important}}
-</style></body></html>
+</style><script id="pressure-feedback-toggle-v1">
+const renderBeforePressureFeedbackToggle=render;
+render=function(){renderBeforePressureFeedbackToggle();document.body.classList.toggle('feedback-off',typeof feedbackEnabled!=='undefined'&&!feedbackEnabled)};
+</script></body></html>
