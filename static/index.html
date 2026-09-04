@@ -1319,4 +1319,27 @@ watchMatch=function(){
 // role on the next state poll, before rendering score, turn, or team data.
 const applyMatchBeforeRoleSync=applyMatch;
 applyMatch=function(data){if(matchSession&&data?.player&&data?.token===matchSession.token)matchSession.player=data.player;return applyMatchBeforeRoleSync(data)};
+</script><style id="compact-online-turn-v1">
+/* Keep the critical-state cue subtle: the previous red label covered the zone. */
+.zoneWrap.critical:before{display:none!important}.zoneWrap.critical{filter:drop-shadow(0 0 5px #e8b83a55)!important}.score.critical{box-shadow:inset 0 0 0 2px #e9b83d,inset 0 12px 30px #000,0 0 14px #e9b83d55!important}
+/* Coordinates duplicate the board marker and make the play area noisy. */
+#opponentReadout{display:none!important}
+.action.opponentReady{background:#178a56!important;box-shadow:0 5px 0 #0d5c38!important}
+</style><script id="compact-online-turn-v1">
+const renderBeforeCompactOnlineTurn=render;
+render=function(){
+  renderBeforeCompactOnlineTurn();
+  const status=document.getElementById('onlineTurnStatus');
+  // The action button already owns this decision; do not spend a separate row.
+  status?.remove();
+  document.getElementById('opponentReadout')?.remove();
+  if(!state.net||!state.mode)return;
+  const action=$('swing');if(!action)return;
+  const waiting=Boolean(matchSubmitted),opponentReady=!waiting&&Boolean(state.opponentSubmitted);
+  action.classList.toggle('opponentReady',opponentReady);
+  if(waiting){action.disabled=true;action.textContent='선택 완료 · 상대방의 선택을 기다리는 중';return}
+  if(opponentReady){action.disabled=false;action.textContent='상대 선택 완료 · 내 선택을 확정하세요';return}
+  const seconds=Math.max(0,Math.ceil(((state.deadline||Date.now())-Date.now())/1000));
+  action.disabled=false;action.textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;
+};
 </script></body></html>
