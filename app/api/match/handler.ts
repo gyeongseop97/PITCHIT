@@ -11,6 +11,9 @@ type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; atta
 type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
 type Game = {
   status: "waiting" | "playing" | "finished";
+  // The pre-game card is not part of a turn: keep its countdown separate
+  // from the 20-second decision deadline.
+  introUntil?: number;
   inning: number;
   half: 0 | 1;
   scores: [number, number];
@@ -273,8 +276,10 @@ async function release(keyName: string, lockToken: string) {
 function startRoom(room: Room, joining: { token: string; name: string }) {
   room.players.p2 = joining;
   room.game.status = "playing";
-  room.game.event = "매칭 완료! 20초 안에 작전을 선택하세요.";
-  nextPitch(room.game);
+  room.game.introUntil = Date.now() + 5_000;
+  room.game.deadline = 0;
+  room.game.choices = {};
+  room.game.event = "매칭 완료! 양 팀 소개 후 경기가 시작됩니다.";
 }
 function identify(room: Room, supplied: string): PlayerId | null {
   return room.players.p1?.token === supplied ? "p1" : room.players.p2?.token === supplied ? "p2" : null;
@@ -330,7 +335,7 @@ export default async function handler(req: any, res: any) {
     }
     let room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
-    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "forfeit";
+    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "forfeit" || (input.action === "state" && Boolean(room.game.introUntil));
     const roomLockKey = `pitchit:room:${room.code}:lock`;
     const roomLock = needsRoomLock ? await acquire(roomLockKey, 12) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
@@ -370,7 +375,16 @@ export default async function handler(req: any, res: any) {
     }
     const player = identify(room, input.token);
     if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
-    if (room.game.status === "playing" && Date.now() >= room.game.deadline) resolve(room);
+    if (room.game.introUntil) {
+      if (Date.now() < room.game.introUntil) {
+        if (input.action === "choose") return res.status(409).json({ error: "매칭 안내가 끝난 뒤 작전을 선택할 수 있습니다." });
+      } else {
+        room.game.introUntil = undefined;
+        room.game.event = "경기 시작! 20초 안에 작전을 선택하세요.";
+        nextPitch(room.game);
+      }
+    }
+    if (!room.game.introUntil && room.game.status === "playing" && Date.now() >= room.game.deadline) resolve(room);
     if (input.action === "choose") {
       if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
