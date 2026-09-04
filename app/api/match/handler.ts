@@ -332,11 +332,22 @@ export default async function handler(req: any, res: any) {
     }
     const room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
-    const needsRoomLock = input.action === "join" || input.action === "choose";
+    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "forfeit";
     const roomLockKey = `pitchit:room:${room.code}:lock`;
     const roomLock = needsRoomLock ? await acquire(roomLockKey) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
     try {
+    if (input.action === "forfeit") {
+      const player = identify(room, input.token);
+      if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
+      if (room.game.status === "finished") return res.status(200).json({ ...publicRoom(room), player, token: input.token });
+      room.game.status = "finished";
+      room.game.deadline = 0;
+      room.game.choices = {};
+      room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다.`;
+      await save(room);
+      return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });
+    }
     if (input.action === "cancel") {
       const player = identify(room, input.token);
       if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });

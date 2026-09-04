@@ -1035,4 +1035,21 @@ render=function(){
   const stats=document.getElementById('stadiumStats');
   if(stats)stats.innerHTML=`<table class="lineScore" aria-label="이닝별 점수 기록"><thead><tr><th>TEAM</th>${headers}<th>R</th><th>H</th><th>BB</th></tr></thead><tbody>${row(state.myTeamName||'MY',0,state.hits,state.walks)}${row(state.opponentTeamName||'AI',1,state.awayHits,state.awayWalks)}</tbody></table>`;
 };
+</script><script id="reliable-home-exit-v1">
+/* 홈으로 나가면 대기·재접속·턴 타이머까지 함께 끊어 이전 경기에 갇히지 않는다. */
+function leaveCurrentGame(event){
+  event?.preventDefault();
+  event?.stopImmediatePropagation();
+  const room=matchSession?.code&&matchSession?.token?{code:matchSession.code,token:matchSession.token}:null;
+  clearInterval(matchPoll);matchPoll=null;matchSubmitted=false;
+  clearActiveRoom();
+  matchSession=null;
+  state.mode='';state.net=false;state.finished=false;state.deadline=0;state.pitcherSwapOpen=false;state.netOutcome='';state.localOutcome='';
+  document.getElementById('broadcastCall')?.remove();
+  document.getElementById('pitcherSwapPanel')?.remove();
+  history.replaceState({},'',location.pathname);
+  render();
+  if(room)requestMatch({action:'forfeit',code:room.code,token:room.token}).catch(()=>undefined);
+}
+document.getElementById('back').addEventListener('click',leaveCurrentGame,true);
 </script></body></html>
