@@ -45,6 +45,10 @@ const ttl = 60 * 60 * 6;
 const key = (code: string) => `pitchit:room:${code}`;
 const quickQueueKey = "pitchit:quick:queue";
 const quickQueueLockKey = "pitchit:quick:queue:lock";
+// Presence is intentionally anonymous and short-lived. A browser renews its
+// own random id while visible; stale entries disappear after 75 seconds.
+const presenceKey = "pitchit:presence";
+const presenceLifetimeMs = 75_000;
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
@@ -302,6 +306,15 @@ export default async function handler(req: any, res: any) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") return res.status(204).end();
     const input = req.method === "GET" ? req.query : await readBody(req);
+    if (input.action === "presence") {
+      const clientId = String(input.clientId ?? "");
+      if (!/^[A-Za-z0-9_-]{12,96}$/.test(clientId)) return res.status(400).json({ error: "유효하지 않은 접속 정보입니다." });
+      const now = Date.now();
+      await redis.zadd(presenceKey, { score: now, member: clientId });
+      await redis.zremrangebyscore(presenceKey, 0, now - presenceLifetimeMs);
+      const online = await redis.zcard(presenceKey);
+      return res.status(200).json({ online, expiresIn: Math.ceil(presenceLifetimeMs / 1000) });
+    }
     if (input.action === "stats") {
       const stats = await redis.hgetall<Record<string, number>>(balanceKey);
       return res.status(200).json({ stats: stats ?? {} });
