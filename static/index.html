@@ -357,7 +357,7 @@ watchMatch=async function(){
         const box=document.getElementById('friendLobby'),status=document.getElementById('friendStatus');
         if(status&&!box?.classList.contains('codeReady'))status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`;
       }
-    }catch(error){clearInterval(matchPoll)}
+    }catch(error){/* 일시적인 네트워크·잠금 충돌은 다음 폴링에서 자동 복구한다. */}
   },700);
 };
 </script><style id="quick-match-v1">
@@ -375,7 +375,7 @@ function quickLobby(){
   };
 }
 function watchQuickMatch(){
-  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){clearInterval(matchPoll);const status=document.getElementById('quickStatus');if(status)status.textContent='매칭 연결이 끊겼습니다. 다시 시도해 주세요.'}},700);
+  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){const status=document.getElementById('quickStatus');if(status)status.textContent='연결을 다시 확인 중입니다…'}},700);
 }
 document.querySelector('[data-mode="quick"]').onclick=quickLobby;
 </script><style id="strike-ball-zone-v1">

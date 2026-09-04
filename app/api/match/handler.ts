@@ -257,10 +257,14 @@ async function readBody(req: any) {
 }
 async function load(code: string) { return redis.get<Room>(key(code)); }
 async function save(room: Room) { await redis.set(key(room.code), room, { ex: ttl }); }
-async function acquire(keyName: string) {
-  const lockToken = token();
-  const acquired = await redis.set(keyName, lockToken, { nx: true, ex: 3 });
-  return acquired ? lockToken : null;
+async function acquire(keyName: string, attempts = 1) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const lockToken = token();
+    const acquired = await redis.set(keyName, lockToken, { nx: true, ex: 3 });
+    if (acquired) return lockToken;
+    if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, 60));
+  }
+  return null;
 }
 async function release(keyName: string, lockToken: string) {
   // Only the holder deletes the short-lived lock. The check prevents an expired lock from deleting a newer one.
@@ -324,13 +328,21 @@ export default async function handler(req: any, res: any) {
       await save(room);
       return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token });
     }
-    const room = await load(String(input.code || "").toUpperCase());
+    let room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
     const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "forfeit";
     const roomLockKey = `pitchit:room:${room.code}:lock`;
-    const roomLock = needsRoomLock ? await acquire(roomLockKey) : null;
+    const roomLock = needsRoomLock ? await acquire(roomLockKey, 12) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
     try {
+    // A second player may have loaded this room while the first player was
+    // saving a choice. Always re-read after taking the lock so that choices
+    // are merged instead of one request overwriting the other.
+    if (needsRoomLock) {
+      const lockedRoom = await load(room.code);
+      if (!lockedRoom) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
+      room = lockedRoom;
+    }
     if (input.action === "forfeit") {
       const player = identify(room, input.token);
       if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
