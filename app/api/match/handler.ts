@@ -60,7 +60,7 @@ const makeTeam = (): Team => {
   return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
 };
 const freshGame = (): Game => ({
-  status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [[0, 0, 0], [0, 0, 0]], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
+  status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
   bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "유인구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
@@ -132,6 +132,12 @@ function endPlate(game: Game) {
     game.status = "finished";
     game.deadline = 0;
     game.event = `${game.inning}이닝 종료 · ${game.scores[0] > game.scores[1] ? "p1" : "p2"} 승리`;
+    return;
+  }
+  if (game.inning >= 9) {
+    game.status = "finished";
+    game.deadline = 0;
+    game.event = "9이닝 종료 · 무승부";
     return;
   }
   game.inning++;
