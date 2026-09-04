@@ -1076,4 +1076,30 @@ render=function(){
   if(pitch.parentElement!==matchup)matchup.append(pitch);
   pitch.textContent=state.lastPitchInfo?`방금 공 · ${state.lastPitchInfo}`:'다음 공 대기';
 };
+</script><style id="pitcher-modal-and-result-tones-v1">
+/* 투수 교체는 전광판을 밀지 않는 독립 선택창으로 연다. */
+#pitcherSwapPanel{display:none!important}.pitcherModal{position:fixed;z-index:80;inset:0;display:grid;place-items:center;padding:18px;background:#071525aa}.pitcherModal[hidden]{display:none}.pitcherModalCard{width:min(460px,100%);padding:18px;border:3px solid #193a61;background:#fff;box-shadow:0 18px 55px #0009;color:#102846}.pitcherModalHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;border-bottom:2px solid #dbe5ee;padding-bottom:10px}.pitcherModalHead h3{margin:0;font-size:19px}.pitcherModalClose{border:0;background:#e33b31;color:#fff;padding:7px 10px;font-weight:900;cursor:pointer}.pitcherModalChoices{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.pitcherModalChoices button{min-height:64px;padding:8px;border:1px solid #bdccd9;background:#f8fbff;color:#102846;font-weight:900;cursor:pointer}.pitcherModalChoices button:hover{border-color:#e33b31;background:#fff1ef}.pitcherModalChoices small{display:block;margin-top:4px;color:#60758a;font-weight:700}.pitcherModalNote{margin:10px 0 0;color:#6b7f90;font-size:12px}
+/* 결과 종류마다 중계 박스와 존 결과의 색을 일치시킨다. */
+.broadcastCall.tone-ball,.zoneOutcome.tone-ball{border-color:#60d394;background:linear-gradient(90deg,#0e5b46,#16785c)!important}.broadcastCall.tone-strike,.zoneOutcome.tone-strike{border-color:#ffe169;background:linear-gradient(90deg,#765d08,#aa8710)!important}.broadcastCall.tone-out,.zoneOutcome.tone-out{border-color:#ff9a90;background:linear-gradient(90deg,#8e2725,#bc4039)!important}.broadcastCall.tone-single,.zoneOutcome.tone-single{border-color:#76e4e1;background:linear-gradient(90deg,#12616b,#19858c)!important}.broadcastCall.tone-double,.zoneOutcome.tone-double{border-color:#ffd073;background:linear-gradient(90deg,#9a5512,#cc7a20)!important}.broadcastCall.tone-triple,.zoneOutcome.tone-triple{border-color:#d4a8ff;background:linear-gradient(90deg,#5b348d,#7d4bb5)!important}.broadcastCall.tone-homerun,.zoneOutcome.tone-homerun{border-color:#ff8f81;background:linear-gradient(90deg,#9f1e2b,#e03930)!important}.broadcastCall.tone-walk,.zoneOutcome.tone-walk{border-color:#8ce9a5;background:linear-gradient(90deg,#197343,#2c9c59)!important}
+@media(max-width:760px){.pitcherModal{padding:14px}.pitcherModalCard{padding:14px}.pitcherModalChoices button{min-height:54px;font-size:12px}.pitcherModalHead h3{font-size:16px}}
+</style><script id="pitcher-modal-and-result-tones-v1">
+function resultTone(text){const value=text||'';if(/홈런/.test(value))return'homerun';if(/3루타/.test(value))return'triple';if(/2루타/.test(value))return'double';if(/안타|내야안타/.test(value))return'single';if(/볼넷/.test(value))return'walk';if(/땅볼|뜬공|삼진|아웃/.test(value))return'out';if(/볼/.test(value))return'ball';return'strike'}
+const renderBeforePitcherModalAndTones=render;
+render=function(){
+  renderBeforePitcherModalAndTones();
+  if(!state.mode)return;
+  const message=state.net?state.netOutcome||state.serverEvent||'':state.localOutcome||document.getElementById('result')?.textContent||'';
+  const tone=resultTone(message);
+  const call=document.getElementById('broadcastCall');if(call){call.className=`broadcastCall tone-${tone}`;call.dataset.tone=tone;}
+  const outcome=document.getElementById('zoneOutcome');if(outcome){outcome.classList.add(`tone-${tone}`);outcome.dataset.tone=tone;}
+  const legacy=document.getElementById('pitcherSwapPanel');if(legacy)legacy.style.display='none';
+  const attacking=state.half==='top',canSwap=!attacking&&Array.isArray(state.pitchers)&&state.pitchers.some((_,i)=>!state.usedPitchers?.includes(i));
+  const scoreSwap=document.getElementById('scoreSwap');if(scoreSwap){scoreSwap.onclick=(event)=>{event.preventDefault();event.stopPropagation();if(canSwap){state.pitcherSwapOpen=true;render();}};}
+  let modal=document.getElementById('pitcherModal');if(!modal){modal=document.createElement('section');modal.id='pitcherModal';modal.className='pitcherModal';modal.setAttribute('role','dialog');document.body.append(modal)}
+  if(!state.pitcherSwapOpen||!canSwap){modal.hidden=true;return;}
+  const choices=(state.pitchers||[]).map((pitcher,index)=>state.usedPitchers?.includes(index)?'':`<button type="button" data-modal-pitcher="${index}"><b>${pitcher.n}</b><small>${pitcher.t} · 구속 ${pitcher.v} / 제구 ${pitcher.c}<br>구위 ${pitcher.s} / 변화 ${pitcher.m}</small></button>`).join('');
+  modal.hidden=false;modal.innerHTML=`<div class="pitcherModalCard"><header class="pitcherModalHead"><h3>투수 교체</h3><button type="button" class="pitcherModalClose">닫기</button></header><div class="pitcherModalChoices">${choices||'<p>교체 가능한 투수가 없습니다.</p>'}</div><p class="pitcherModalNote">교체된 투수는 다시 등판할 수 없습니다.</p></div>`;
+  modal.querySelector('.pitcherModalClose').onclick=()=>{state.pitcherSwapOpen=false;render()};modal.onclick=event=>{if(event.target===modal){state.pitcherSwapOpen=false;render()}};
+  modal.querySelectorAll('[data-modal-pitcher]').forEach(button=>button.onclick=()=>{const index=+button.dataset.modalPitcher;if(state.usedPitchers?.includes(index))return;state.activePitcher=index;state.usedPitchers=[...(state.usedPitchers||[]),index];state.pitcherSwapOpen=false;state.pitcherSwapNotice=`${state.pitchers[index].n} 투수가 등판했습니다.`;setResult(state.pitcherSwapNotice,'strike');render()});
+};
 </script></body></html>
