@@ -886,7 +886,9 @@ document.querySelector('[data-mode="friend"]')?.addEventListener('click', () => 
 document.querySelector('[data-mode="quick"]')?.addEventListener('click', () => setTimeout(() => { const input = document.getElementById('quickName'); if (input && !input.value) input.value = loadCareer().nickname; }, 0));
 function recordFinishedGame(game) {
   const code = matchSession?.code; const me = matchSession?.player; const plays = game?.playLog || [];
-  if (!code || !me || !plays.length) return;
+  // AI practice is intentionally excluded from the device career. Only
+  // completed matches against another player become a recorded result.
+  if (!code || !me || !plays.length || matchSession?.mode === 'solo') return;
   const career = loadCareer(); if (career.recordedGames.includes(code)) return;
   const mine = plays.filter(play => play.attacker === me), pitching = plays.filter(play => play.attacker !== me);
   const plateEnds = mine.filter(play => ['single', 'double', 'triple', 'homerun', 'groundout', 'flyout'].includes(play.outcome) || /삼진|볼넷/.test(play.event));
@@ -1223,4 +1225,29 @@ document.querySelector('[data-mode="friend"]').onclick=friendLobby;
 document.querySelector('[data-mode="quick"]').onclick=quickLobby;
 const beginMatchBeforeExclusiveLobby=beginMatch;
 beginMatch=function(data){clearMatchLobbies();return beginMatchBeforeExclusiveLobby(data)};
+</script><style id="ranking-and-guide-tabs-v1">
+.guideTabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:15px 0 0}.guideTabs button{padding:10px;border:1px solid #b8c9da;background:#f5f9fd;color:#264a6d;font-weight:900;cursor:pointer}.guideTabs button.on{border-color:#102846;background:#102846;color:#fff}.guideTabPanel[hidden]{display:none}.rankingDialog{width:min(620px,100%)}.rankingLead{margin:15px 0 10px;color:#405b76;font-size:13px;line-height:1.55}.rankingTable{width:100%;border-collapse:collapse;font-size:13px}.rankingTable th,.rankingTable td{padding:10px 7px;border-bottom:1px solid #dbe4ed;text-align:right}.rankingTable th:first-child,.rankingTable td:first-child,.rankingTable th:nth-child(2),.rankingTable td:nth-child(2){text-align:left}.rankingTable th{color:#60768d;font-size:10px;letter-spacing:.08em}.rankingTable td:nth-child(3){color:#d53d32;font-weight:1000}.rankEmpty{padding:22px;text-align:center;color:#60768d;background:#f6f9fc}.rankResult{margin:14px 0 0;padding:11px 13px;border-left:4px solid #f0bd42;background:#fff9e9;color:#66500c;font-weight:900}.rankResult.negative{border-left-color:#e2534b;background:#fff4f2;color:#9c312b}@media(max-width:760px){.homeGuideActions{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.homeGuideActions button{min-width:0;font-size:12px}.rankingTable th,.rankingTable td{padding:8px 4px;font-size:11px}}
+</style><script id="ranking-and-guide-tabs-v1">
+// A persistent device profile owns the ranking identity. Changing the public
+// nickname updates its display name only; its wins and rating stay attached.
+const rankingProfileStorageKey='pitchit:ranking-profile:v1';
+function rankingProfileId(){try{let id=localStorage.getItem(rankingProfileStorageKey)||'';if(!/^[A-Za-z0-9_-]{12,96}$/.test(id)){id=(crypto.randomUUID?.()||`${Date.now()}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,'');localStorage.setItem(rankingProfileStorageKey,id)}return id}catch(_){return `p${Date.now()}${Math.random().toString(36).slice(2)}`}}
+const requestMatchBeforeRanking=requestMatch;
+requestMatch=body=>{if(['quick','create','join','solo'].includes(body?.action))body={...body,profileId:rankingProfileId()};return requestMatchBeforeRanking(body)};
+function openRanking(){
+  let overlay=document.getElementById('rankingOverlay');if(!overlay){overlay=document.createElement('div');overlay.id='rankingOverlay';overlay.className='guideOverlay';document.body.append(overlay)}
+  overlay.innerHTML='<section class="guideDialog rankingDialog" role="dialog" aria-modal="true"><header><h2>온라인 랭킹</h2><button class="guideClose">닫기</button></header><p class="rankingLead">온라인 대전만 반영됩니다. 승리 수와 포인트 순으로 표시되며, 닉네임을 바꿔도 이 기기의 랭킹 기록은 유지됩니다.</p><div class="rankEmpty">랭킹을 불러오는 중…</div></section>';
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.querySelector('.guideClose').onclick=()=>overlay.remove();
+  requestMatch({action:'ranking'}).then(data=>{const body=overlay.querySelector('.rankEmpty');if(!body)return;const rows=(data.ranking||[]).map((entry,index)=>`<tr><td>${index+1}</td><td>${String(entry.name||'플레이어').replace(/[&<>"']/g,'')}</td><td>${entry.points} P</td><td>${entry.wins}승</td><td>${entry.games}경기</td></tr>`).join('');body.outerHTML=rows?`<table class="rankingTable"><thead><tr><th>#</th><th>선수</th><th>POINT</th><th>승리</th><th>경기</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="rankEmpty">아직 랭킹에 반영된 온라인 대전이 없습니다.</div>'}).catch(()=>{const body=overlay.querySelector('.rankEmpty');if(body)body.textContent='랭킹을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'});
+}
+const guideButton=document.querySelector('[data-guide="guide"]');
+document.querySelector('[data-guide="info"]')?.remove();
+if(guideButton){guideButton.textContent='게임 가이드';guideButton.onclick=()=>{
+  const info=guideContent.info,detail=guideContent.guide;let overlay=document.getElementById('guideOverlay');if(!overlay){overlay=document.createElement('div');overlay.id='guideOverlay';overlay.className='guideOverlay';document.body.append(overlay)}
+  overlay.innerHTML=`<section class="guideDialog" role="dialog" aria-modal="true"><header><h2>게임 가이드</h2><button class="guideClose">닫기</button></header><nav class="guideTabs"><button class="on" data-guide-tab="quick">간단 가이드</button><button data-guide-tab="detail">상세 가이드</button></nav><div class="guideTabPanel" data-guide-panel="quick">${info.body}</div><div class="guideTabPanel" data-guide-panel="detail" hidden>${detail.body}</div></section>`;
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.querySelector('.guideClose').onclick=()=>overlay.remove();overlay.querySelectorAll('[data-guide-tab]').forEach(button=>button.onclick=()=>{const tab=button.dataset.guideTab;overlay.querySelectorAll('[data-guide-tab]').forEach(item=>item.classList.toggle('on',item===button));overlay.querySelectorAll('[data-guide-panel]').forEach(panel=>panel.hidden=panel.dataset.guidePanel!==tab)});
+};}
+const rankingButton=document.createElement('button');rankingButton.type='button';rankingButton.textContent='랭킹';rankingButton.onclick=openRanking;document.querySelector('.homeGuideActions')?.append(rankingButton);
+const showGameSummaryBeforeRanking=showGameSummary;
+showGameSummary=function(game){showGameSummaryBeforeRanking(game);const result=game?.ranking?.[matchSession?.player];const dialog=document.querySelector('.gameSummary');if(!result||!dialog||dialog.querySelector('.rankResult'))return;const gain=result.change>=0?`+${result.change}`:String(result.change);const card=document.createElement('p');card.className='rankResult'+(result.change<0?' negative':'');card.textContent=`온라인 랭킹 · ${gain} P → ${result.points} P · ${result.wins}승 ${result.games}경기`;dialog.querySelector('.gameSummaryActions')?.before(card)};
 </script></body></html>

@@ -9,12 +9,15 @@ type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: numbe
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
 type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
+type RankingResult = { before: number; points: number; change: number; wins: number; games: number };
 type Game = {
   status: "waiting" | "playing" | "finished";
   // The pre-game card is not part of a turn: keep its countdown separate
   // from the 20-second decision deadline.
   introUntil?: number;
   forfeitWinner?: PlayerId;
+  rankingApplied?: boolean;
+  ranking?: Partial<Record<PlayerId, RankingResult>>;
   inning: number;
   half: 0 | 1;
   scores: [number, number];
@@ -35,7 +38,8 @@ type Game = {
   aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
   event: string;
 };
-type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, { token: string; name: string } | null>; game: Game };
+type Player = { token: string; name: string; profileId?: string };
+type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, Player | null>; game: Game };
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -49,6 +53,9 @@ const quickQueueLockKey = "pitchit:quick:queue:lock";
 // own random id while visible; stale entries disappear after 75 seconds.
 const presenceKey = "pitchit:presence";
 const presenceLifetimeMs = 75_000;
+const rankingBoardKey = "pitchit:ranking:v1";
+const rankingPlayerKey = (profileId: string) => `pitchit:ranking:v1:${profileId}`;
+type RankingPlayer = { name: string; points: number; wins: number; games: number; updatedAt: number };
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
@@ -72,6 +79,47 @@ const freshGame = (): Game => ({
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
+const profileId = (value: unknown) => {
+  const candidate = String(value ?? "");
+  return /^[A-Za-z0-9_-]{12,96}$/.test(candidate) ? candidate : token();
+};
+const rankingName = (value: unknown) => String(value ?? "플레이어").trim().slice(0, 16) || "플레이어";
+const ratingChange = (points: number, opponentPoints: number, result: "win" | "loss" | "draw") => {
+  const expected = 1 / (1 + Math.pow(10, (opponentPoints - points) / 400));
+  if (result === "draw") return 6;
+  // Winning against a stronger player is worth much more; losses are softer
+  // than gains so frequent play remains rewarding without erasing upset value.
+  return result === "win" ? Math.round(26 + (1 - expected) * 28) : -Math.round(6 + expected * 17);
+};
+async function applyRankings(room: Room) {
+  const game = room.game;
+  if (game.status !== "finished" || game.rankingApplied || room.mode === "solo") return;
+  const p1 = room.players.p1, p2 = room.players.p2;
+  if (!p1?.profileId || !p2?.profileId || p1.profileId === p2.profileId) return;
+  const [savedP1, savedP2] = await Promise.all([
+    redis.get<RankingPlayer>(rankingPlayerKey(p1.profileId)),
+    redis.get<RankingPlayer>(rankingPlayerKey(p2.profileId)),
+  ]);
+  const first: RankingPlayer = { name: rankingName(p1.name), points: Math.max(0, Number(savedP1?.points ?? 1000)), wins: Number(savedP1?.wins ?? 0), games: Number(savedP1?.games ?? 0), updatedAt: Date.now() };
+  const second: RankingPlayer = { name: rankingName(p2.name), points: Math.max(0, Number(savedP2?.points ?? 1000)), wins: Number(savedP2?.wins ?? 0), games: Number(savedP2?.games ?? 0), updatedAt: Date.now() };
+  const winner = game.forfeitWinner ?? (game.scores[0] === game.scores[1] ? null : game.scores[0] > game.scores[1] ? "p1" : "p2");
+  const firstResult = winner === "p1" ? "win" : winner === "p2" ? "loss" : "draw";
+  const secondResult = winner === "p2" ? "win" : winner === "p1" ? "loss" : "draw";
+  const firstChange = ratingChange(first.points, second.points, firstResult);
+  const secondChange = ratingChange(second.points, first.points, secondResult);
+  const firstBefore = first.points, secondBefore = second.points;
+  first.points = Math.max(0, first.points + firstChange); second.points = Math.max(0, second.points + secondChange);
+  first.games++; second.games++; if (firstResult === "win") first.wins++; if (secondResult === "win") second.wins++;
+  game.ranking = {
+    p1: { before: firstBefore, points: first.points, change: first.points - firstBefore, wins: first.wins, games: first.games },
+    p2: { before: secondBefore, points: second.points, change: second.points - secondBefore, wins: second.wins, games: second.games },
+  };
+  game.rankingApplied = true;
+  await Promise.all([
+    redis.set(rankingPlayerKey(p1.profileId), first), redis.set(rankingPlayerKey(p2.profileId), second),
+    redis.zadd(rankingBoardKey, { score: first.points, member: p1.profileId }), redis.zadd(rankingBoardKey, { score: second.points, member: p2.profileId }),
+  ]);
+}
 const publicRoom = (room: Room) => ({
   code: room.code,
   mode: room.mode,
@@ -160,7 +208,7 @@ function endPlate(game: Game) {
   game.bases = [0, 55, 0];
   game.event = `${game.inning - 1}이닝 종료 · 승부치기! 무사 2루에서 시작합니다.`;
 }
-function resolve(room: Room) {
+async function resolve(room: Room) {
   const game = room.game;
   if (game.status !== "playing") return;
   const battingPlayer = actor(game);
@@ -231,6 +279,7 @@ function resolve(room: Room) {
     strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
   trackBalance(plate.outcome, batting.swing ?? "contact", pitching.pitch ?? "fast");
+  if (room.game.status === "finished") await applyRankings(room);
   if (game.status === "playing") nextPitch(game);
 }
 
@@ -286,7 +335,7 @@ async function release(keyName: string, lockToken: string) {
   // Only the holder deletes the short-lived lock. The check prevents an expired lock from deleting a newer one.
   if (await redis.get<string>(keyName) === lockToken) await redis.del(keyName);
 }
-function startRoom(room: Room, joining: { token: string; name: string }) {
+function startRoom(room: Room, joining: Player) {
   room.players.p2 = joining;
   room.game.status = "playing";
   room.game.introUntil = Date.now() + 5_000;
@@ -315,12 +364,21 @@ export default async function handler(req: any, res: any) {
       const online = await redis.zcard(presenceKey);
       return res.status(200).json({ online, expiresIn: Math.ceil(presenceLifetimeMs / 1000) });
     }
+    if (input.action === "ranking") {
+      const ids = await redis.zrange<string[]>(rankingBoardKey, 0, 49, { rev: true });
+      const entries = await Promise.all(ids.map(async (id) => ({ id, player: await redis.get<RankingPlayer>(rankingPlayerKey(id)) })));
+      const ranking = entries
+        .filter((entry): entry is { id: string; player: RankingPlayer } => Boolean(entry.player))
+        .map(({ player }) => ({ name: rankingName(player.name), points: Math.max(0, Math.round(player.points)), wins: Math.max(0, player.wins), games: Math.max(0, player.games) }))
+        .sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name, "ko"));
+      return res.status(200).json({ ranking });
+    }
     if (input.action === "stats") {
       const stats = await redis.hgetall<Record<string, number>>(balanceKey);
       return res.status(200).json({ stats: stats ?? {} });
     }
     if (input.action === "solo") {
-      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어" }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
+      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어", profileId: profileId(input.profileId) }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
       room.game.status = "playing";
       room.game.event = "PITCHIT AI와 경기 시작! 20초 안에 작전을 선택하세요.";
       nextPitch(room.game);
@@ -335,7 +393,7 @@ export default async function handler(req: any, res: any) {
         if (waitingCode) {
           const waitingRoom = await load(waitingCode);
           if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting") {
-            const joining = { token: token(), name: input.name || "플레이어 2" };
+            const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) };
             startRoom(waitingRoom, joining);
             await save(waitingRoom);
             await redis.del(quickQueueKey);
@@ -343,7 +401,7 @@ export default async function handler(req: any, res: any) {
           }
           await redis.del(quickQueueKey);
         }
-        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1" }, p2: null }, game: freshGame() };
+        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId) }, p2: null }, game: freshGame() };
         room.game.event = "상대를 찾는 중입니다…";
         await save(room);
         await redis.set(quickQueueKey, room.code, { ex: 45 });
@@ -351,7 +409,7 @@ export default async function handler(req: any, res: any) {
       } finally { await release(quickQueueLockKey, queueLock); }
     }
     if (input.action === "create") {
-      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1" }, p2: null }, game: freshGame() };
+      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId) }, p2: null }, game: freshGame() };
       await save(room);
       return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token });
     }
@@ -380,6 +438,7 @@ export default async function handler(req: any, res: any) {
       room.game.choices = {};
       room.game.forfeitWinner = winner;
       room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
+      await applyRankings(room);
       await save(room);
       return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });
     }
@@ -393,7 +452,7 @@ export default async function handler(req: any, res: any) {
     }
     if (input.action === "join") {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
-      startRoom(room, { token: token(), name: input.name || "플레이어 2" });
+      startRoom(room, { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) });
       await save(room);
       return res.json({ ...publicRoom(room), player: "p2", token: room.players.p2!.token });
     }
@@ -408,7 +467,7 @@ export default async function handler(req: any, res: any) {
         nextPitch(room.game);
       }
     }
-    if (!room.game.introUntil && room.game.status === "playing" && Date.now() >= room.game.deadline) resolve(room);
+    if (!room.game.introUntil && room.game.status === "playing" && Date.now() >= room.game.deadline) await resolve(room);
     if (input.action === "swap") {
       if (room.game.status !== "playing") return res.status(409).json({ error: "경기가 종료되었습니다." });
       if (player !== defender(room.game)) return res.status(409).json({ error: "수비 중에만 투수를 교체할 수 있습니다." });
@@ -431,7 +490,7 @@ export default async function handler(req: any, res: any) {
         const ai = aiChoice(room.game, "p2");
         room.game.choices.p2 = ai;
       }
-      if (room.game.choices.p1 && room.game.choices.p2) resolve(room);
+      if (room.game.choices.p1 && room.game.choices.p2) await resolve(room);
     }
     await save(room);
     return res.json({ ...publicRoom(room), player, token: input.token });
