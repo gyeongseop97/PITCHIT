@@ -58,7 +58,7 @@ const pitcherTypes = [
 ];
 const makeTeam = (): Team => {
   const lineup = Array.from({ length: 9 }, (_, index) => ({ ...batterTypes[Math.floor(Math.random() * batterTypes.length)], n: `${index + 1}번 타자` }));
-  const pitchers = [...pitcherTypes].sort(() => Math.random() - 0.5).map((pitcher, index) => ({ ...pitcher, n: `${index + 1}번 투수` }));
+  const pitchers = [...pitcherTypes].sort(() => Math.random() - 0.5).map((pitcher) => ({ ...pitcher, n: `${pitcher.t} 투수` }));
   const activePitcher = Math.floor(Math.random() * pitchers.length);
   return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
 };
