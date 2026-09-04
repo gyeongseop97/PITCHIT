@@ -1342,4 +1342,23 @@ render=function(){
   const seconds=Math.max(0,Math.ceil(((state.deadline||Date.now())-Date.now())/1000));
   action.disabled=false;action.textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;
 };
+</script><style id="scoreboard-traits-compact-v1">
+/* The board itself carries the player context; keep the play area for choices. */
+#patternHistoryHint,#atBatCall{display:none!important}.scoreMatchup .scoreTrait{margin-top:3px!important;color:#f1ca5d!important;font-size:9px!important;font-weight:800;letter-spacing:-.02em}.pitchSequence .sequenceTitle{display:none!important}@media(max-width:760px){.scoreMatchup .scoreTrait{font-size:7px!important;margin-top:2px!important}}
+</style><script id="scoreboard-traits-compact-v1">
+const renderBeforeScoreboardTraits=render;
+render=function(){
+  renderBeforeScoreboardTraits();
+  document.getElementById('patternHistoryHint')?.remove();
+  document.getElementById('atBatCall')?.remove();
+  const matchup=document.getElementById('scoreMatchup');if(!matchup||!state.mode)return;
+  const attacking=state.half==='top';
+  const batter=attacking?state.batter:(state.awayBatter||state.batter);
+  const staff=attacking?(state.awayPitchers||state.pitchers):(state.pitchers||[]);
+  const pitcher=staff[attacking?(state.awayActivePitcher??state.activePitcher??0):(state.activePitcher??0)];
+  const cards=matchup.querySelectorAll('article');
+  const put=(card,text)=>{if(!card)return;let trait=card.querySelector('.scoreTrait');if(!trait){trait=document.createElement('span');trait.className='scoreTrait';card.append(trait)}trait.textContent=text};
+  put(cards[0],batter?.t?`${batter.t} · ${archetypeTip[batter.t]||''}`:'');
+  put(cards[1],pitcher?.t?`${pitcher.t} · ${archetypeTip[pitcher.t]||''}`:'');
+};
 </script></body></html>
