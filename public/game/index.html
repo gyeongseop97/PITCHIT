@@ -976,4 +976,28 @@ render=function(){
   const outcome=document.getElementById('zoneOutcome');
   if(state.net&&outcome)outcome.style.display='none';
 };
+</script><style id="scoreboard-information-order-v1">
+/* 모바일의 전광판 아래 중복 투타 카드는 표시하지 않는다. */
+#mobileDuelInfo{display:none!important}
+/* 방금 던진 구종·구속은 전광판의 투타 정보 바로 아래 한 곳에서만 보여 준다. */
+.score{padding-bottom:142px!important}
+.scoreMatchup{bottom:8px!important}
+.scoreMatchup .scorePitch{position:static!important;grid-column:1/-1;display:block!important;margin:0;padding:5px 8px;border:1px solid #46576a;background:#111d2a;color:#f6fb38!important;text-align:center;font:900 10px/1.2 Arial,sans-serif!important;letter-spacing:.05em}
+.scoreMatchup .scorePitch:before{content:"방금 투구 · ";color:#9eb3c7}
+.stadiumStats{bottom:86px!important}
+@media(max-width:760px){
+  .score{padding-bottom:122px!important}
+  .scoreMatchup{bottom:5px!important}
+  .scoreMatchup .scorePitch{padding:3px 4px;font-size:7px!important;line-height:10px!important}
+  .stadiumStats{bottom:65px!important}
+}
+</style><script id="scoreboard-information-order-v1">
+const renderBeforeScoreboardInformationOrder=render;
+render=function(){
+  renderBeforeScoreboardInformationOrder();
+  if(!state.mode)return;
+  const matchup=document.getElementById('scoreMatchup');
+  const pitchInfo=document.getElementById('scorePitch');
+  if(matchup&&pitchInfo)matchup.append(pitchInfo);
+};
 </script></body></html>
