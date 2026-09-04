@@ -23,10 +23,10 @@ const cellDistance = (a: number, b: number) => Math.abs(Math.floor(a / 5) - Math
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 /**
- * Contact swing covers the whole 5×5 board, but not evenly. A center target
- * gives broad (and increasingly faint) protection toward the edge; an edge
- * target keeps its strongest area nearby while retaining a light lane back
- * toward the easier center of the zone.
+ * Contact swing uses a 5×5 window centered on the selected cell. That window
+ * is naturally clipped at a board edge, so a corner selection shows only its
+ * in-board part. The exact target remains strongest and the outer rim is
+ * deliberately very faint.
  */
 function contactReachWeight(targetCell: number, actualCell: number) {
   const targetRow = Math.floor(targetCell / 5), targetColumn = targetCell % 5;
@@ -34,7 +34,7 @@ function contactReachWeight(targetCell: number, actualCell: number) {
   const squareDistance = Math.max(Math.abs(targetRow - actualRow), Math.abs(targetColumn - actualColumn));
   const targetCenterDistance = Math.abs(targetRow - 2) + Math.abs(targetColumn - 2);
   const actualCenterDistance = Math.abs(actualRow - 2) + Math.abs(actualColumn - 2);
-  const localReach = Math.max(0, 1 - squareDistance / 4);
+  const localReach = Math.max(0, 1 - squareDistance / 2);
   const centralTarget = (4 - targetCenterDistance) / 4;
   const centralPitch = (4 - actualCenterDistance) / 4;
   const towardCenter = targetCenterDistance >= 2 && actualCenterDistance < targetCenterDistance
@@ -102,7 +102,8 @@ export function resolvePlateAppearance(input: {
   const distance = cellDistance(input.targetCell, actualCell);
   const contactReach = input.swing === "contact" ? contactReachWeight(input.targetCell, actualCell) : 0;
   const covered = input.swing === "contact"
-    ? true
+    ? Math.abs(Math.floor(input.targetCell / 5) - Math.floor(actualCell / 5)) <= 2
+      && Math.abs((input.targetCell % 5) - (actualCell % 5)) <= 2
     : input.swing === "power"
       ? Math.abs(Math.floor(input.targetCell / 5) - Math.floor(actualCell / 5)) <= 1 && Math.abs((input.targetCell % 5) - (actualCell % 5)) <= 1
       : distance === 0;
@@ -154,7 +155,7 @@ export function resolvePlateAppearance(input: {
       ? (input.swing === "contact" ? 0.030 : input.swing === "power" ? 0.028 : 0)
       : 0;
   const reachHitBonus = input.swing === "contact" ? contactReach * 0.13 - 0.035 : 0;
-  const hitChance = clamp(0.365 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus + readHitBonus + reachHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.05 : 0));
+  const hitChance = clamp(0.435 + input.batter.a / 350 + (input.swing === "contact" ? 0.02 : 0) + hitQuality + locationHitBonus + readHitBonus + reachHitBonus - input.pitcher.s / 650 - input.pitcher.v / 1280 + (mistake ? 0.05 : 0));
   const roll = random();
   if (roll < extraChance * 0.18) return { outcome: "homerun", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 완벽한 타이밍, 홈런!` };
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
