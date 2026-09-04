@@ -1361,4 +1361,21 @@ render=function(){
   put(cards[0],batter?.t?`${batter.t} · ${archetypeTip[batter.t]||''}`:'');
   put(cards[1],pitcher?.t?`${pitcher.t} · ${archetypeTip[pitcher.t]||''}`:'');
 };
+</script><style id="impact-feedback-restore-v1">
+.app.feedbackImpact{animation:feedbackImpact .34s ease-out}
+@media(prefers-reduced-motion:reduce){.app.feedbackImpact{animation:none}}
+</style><script id="impact-feedback-restore-v1">
+// Network results are rendered through the broadcast path. Trigger the same
+// visual/audio feedback there, once per resolved pitch, as local results do.
+let impactFeedbackKey='';
+const showBroadcastBeforeImpactFeedback=showBroadcast;
+showBroadcast=function(game){
+  showBroadcastBeforeImpactFeedback(game);
+  const outcome=game?.lastPlay?.outcome||'';
+  const key=`${game?.deadline||0}:${outcome}:${game?.event||''}`;
+  if(key===impactFeedbackKey)return;
+  impactFeedbackKey=key;
+  const kind=outcome==='homerun'?'homerun':outcome==='single'||outcome==='double'||outcome==='triple'?'hit':outcome==='swinging_strike'&&game?.playLog?.[0]?.outsRecorded?'strikeout':outcome==='groundout'||outcome==='flyout'?'out':'';
+  if(kind)playFeedback(kind);
+};
 </script></body></html>
