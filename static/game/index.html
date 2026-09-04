@@ -288,7 +288,7 @@ applyMatch=function(data){
   render();
 };
 const stadiumMessage=(event,pitch)=>{
-  const headline=event.includes('홈런')?'완벽한 타이밍! 담장을 넘겼습니다.':event.includes('루타')?'강한 타구가 외야를 가릅니다.':event.includes('안타')?'노린 코스를 정확히 공략했습니다.':event.includes('볼넷')?'침착하게 공을 골라 출루합니다.':event.includes('삼진')?'결정구에 타이밍을 빼앗겼습니다.':event.includes('땅볼')?'낮게 깔린 타구, 땅볼 아웃.':event.includes('뜬공')?'높이 뜬 타구, 뜬공 아웃.':event.includes('파울')?'끈질긴 파울로 승부를 이어갑니다.':event.includes('볼')?'유인구를 지켜봤습니다.':'노린 범위를 벗어난 공입니다.';
+  const headline=event.includes('홈런')?'완벽한 타이밍! 담장을 넘겼습니다.':event.includes('루타')?'강한 타구가 외야를 가릅니다.':event.includes('안타')?'노린 코스를 정확히 공략했습니다.':event.includes('볼넷')?'침착하게 공을 골라 출루합니다.':event.includes('삼진')?'결정구에 타이밍을 빼앗겼습니다.':event.includes('땅볼')?'낮게 깔린 타구, 땅볼 아웃.':event.includes('뜬공')?'높이 뜬 타구, 뜬공 아웃.':event.includes('파울')?'끈질긴 파울로 승부를 이어갑니다.':event.includes('스트라이크')?'타격 범위를 벗어난 공입니다.':event.includes('볼')?'유인구를 지켜봤습니다.':'노린 범위를 벗어난 공입니다.';
   return `${pitch||''} · ${event} — ${headline}`;
 };
 const startBeforeStadium=start;
@@ -916,7 +916,9 @@ function broadcastText(game) {
   const outcome = game.event || ''; const actual = play.actualCell;
   const contact = distanceBetween(play.bat.cell, actual);
   const reason = play.execution === 'mistake' ? '실투가 노린 타격 범위로 몰렸습니다.' : play.execution === 'wild' ? '제구가 흔들려 존을 벗어났습니다.' : play.execution === 'bait' ? '유인구 승부입니다.' : contact === 0 ? '예측이 정확히 맞았습니다.' : contact <= 1 ? '타겟 주변을 건드렸습니다.' : '타격 범위를 벗어났습니다.';
-  const call = /홈런/.test(outcome) ? '쭉쭉 뻗습니다! 담장을 넘겼습니다!' : /3루타/.test(outcome) ? '외야 깊숙이 빠집니다! 3루까지 갑니다!' : /2루타/.test(outcome) ? '강한 타구, 외야를 가릅니다!' : /안타/.test(outcome) ? '깔끔하게 공략했습니다, 안타!' : /삼진/.test(outcome) ? '헛스윙! 삼진으로 돌려세웁니다!' : /땅볼/.test(outcome) ? '낮게 깔린 타구, 땅볼 처리!' : /뜬공/.test(outcome) ? '높이 뜬 타구, 뜬공 처리!' : /파울/.test(outcome) ? '끈질기게 걷어냅니다, 파울!' : /볼넷/.test(outcome) ? '침착하게 골라냅니다, 볼넷!' : /볼/.test(outcome) ? '유인에 넘어가지 않았습니다, 볼!' : '스트라이크!';
+  const resolved = play.outcome || game?.playLog?.[0]?.outcome;
+  const calls = { ball:'볼입니다. 타자는 배트를 내지 않았습니다.', foul:'파울! 끈질기게 승부를 이어갑니다.', swinging_strike:'헛스윙 스트라이크!', groundout:'낮게 깔린 타구, 땅볼 처리!', flyout:'높이 뜬 타구, 뜬공 처리!', single:'깔끔하게 공략했습니다, 안타!', double:'강한 타구, 외야를 가릅니다!', triple:'외야 깊숙이 빠집니다! 3루까지 갑니다!', homerun:'쭉쭉 뻗습니다! 담장을 넘겼습니다!' };
+  const call = /볼넷/.test(outcome) ? '침착하게 골라냅니다, 볼넷!' : calls[resolved] || (/스트라이크|파울/.test(outcome) ? '스트라이크!' : /볼/.test(outcome) ? '유인에 넘어가지 않았습니다, 볼!' : '스트라이크!');
   return { title: `${play.pitchName} ${play.speed}km/h`, call, reason, actual };
 }
 let broadcastKey = '';
@@ -924,6 +926,8 @@ function showBroadcast(game) {
   const data = broadcastText(game); if (!data) return;
   const key = `${game.deadline}:${game.event}:${data.actual}`; if (key === broadcastKey) return; broadcastKey = key;
   let call = document.getElementById('broadcastCall'); if (!call) { call = document.createElement('section'); call.id = 'broadcastCall'; call.className = 'broadcastCall'; document.querySelector('.zoneWrap').before(call); }
+  const resultTone = { ball:'ball', foul:'strike', swinging_strike:'strike', groundout:'out', flyout:'out', single:'single', double:'double', triple:'triple', homerun:'homerun' };
+  call.className = `broadcastCall tone-${/볼넷/.test(game.event || '') ? 'walk' : (resultTone[game.lastPlay?.outcome || game.playLog?.[0]?.outcome] || 'strike')}`;
   call.innerHTML = `<small>LIVE PLAY-BY-PLAY</small>${data.call}<br><small>${data.reason}</small>`;
   const wrap = document.querySelector('.zoneWrap'); const flight = document.createElement('i'); flight.className = 'pitchFlight'; flight.style.setProperty('--pitch-x', data.actual % 5); flight.style.setProperty('--pitch-y', Math.floor(data.actual / 5)); wrap.append(flight); wrap.classList.remove('resultFlash','hit','out'); wrap.classList.add('resultFlash', /안타|루타|홈런/.test(game.event) ? 'hit' : /아웃|삼진/.test(game.event) ? 'out' : ''); setTimeout(() => { flight.remove(); wrap.classList.remove('resultFlash','hit','out'); }, 700);
 }
@@ -1083,15 +1087,10 @@ render=function(){
 .broadcastCall.tone-ball,.zoneOutcome.tone-ball{border-color:#60d394;background:linear-gradient(90deg,#0e5b46,#16785c)!important}.broadcastCall.tone-strike,.zoneOutcome.tone-strike{border-color:#ffe169;background:linear-gradient(90deg,#765d08,#aa8710)!important}.broadcastCall.tone-out,.zoneOutcome.tone-out{border-color:#ff9a90;background:linear-gradient(90deg,#8e2725,#bc4039)!important}.broadcastCall.tone-single,.zoneOutcome.tone-single{border-color:#76e4e1;background:linear-gradient(90deg,#12616b,#19858c)!important}.broadcastCall.tone-double,.zoneOutcome.tone-double{border-color:#ffd073;background:linear-gradient(90deg,#9a5512,#cc7a20)!important}.broadcastCall.tone-triple,.zoneOutcome.tone-triple{border-color:#d4a8ff;background:linear-gradient(90deg,#5b348d,#7d4bb5)!important}.broadcastCall.tone-homerun,.zoneOutcome.tone-homerun{border-color:#ff8f81;background:linear-gradient(90deg,#9f1e2b,#e03930)!important}.broadcastCall.tone-walk,.zoneOutcome.tone-walk{border-color:#8ce9a5;background:linear-gradient(90deg,#197343,#2c9c59)!important}
 @media(max-width:760px){.pitcherModal{padding:14px}.pitcherModalCard{padding:14px}.pitcherModalChoices button{min-height:54px;font-size:12px}.pitcherModalHead h3{font-size:16px}}
 </style><script id="pitcher-modal-and-result-tones-v1">
-function resultTone(text){const value=text||'';if(/홈런/.test(value))return'homerun';if(/3루타/.test(value))return'triple';if(/2루타/.test(value))return'double';if(/안타|내야안타/.test(value))return'single';if(/볼넷/.test(value))return'walk';if(/땅볼|뜬공|삼진|아웃/.test(value))return'out';if(/볼/.test(value))return'ball';return'strike'}
 const renderBeforePitcherModalAndTones=render;
 render=function(){
   renderBeforePitcherModalAndTones();
   if(!state.mode)return;
-  const message=state.net?state.netOutcome||state.serverEvent||'':state.localOutcome||document.getElementById('result')?.textContent||'';
-  const tone=resultTone(message);
-  const call=document.getElementById('broadcastCall');if(call){call.className=`broadcastCall tone-${tone}`;call.dataset.tone=tone;}
-  const outcome=document.getElementById('zoneOutcome');if(outcome){outcome.classList.add(`tone-${tone}`);outcome.dataset.tone=tone;}
   const legacy=document.getElementById('pitcherSwapPanel');if(legacy)legacy.style.display='none';
   const attacking=state.half==='top',canSwap=!attacking&&Array.isArray(state.pitchers)&&state.pitchers.some((_,i)=>!state.usedPitchers?.includes(i));
   const scoreSwap=document.getElementById('scoreSwap');if(scoreSwap){scoreSwap.onclick=(event)=>{event.preventDefault();event.stopPropagation();if(canSwap){state.pitcherSwapOpen=true;render();}};}
@@ -1101,45 +1100,5 @@ render=function(){
   modal.hidden=false;modal.innerHTML=`<div class="pitcherModalCard"><header class="pitcherModalHead"><h3>투수 교체</h3><button type="button" class="pitcherModalClose">닫기</button></header><div class="pitcherModalChoices">${choices||'<p>교체 가능한 투수가 없습니다.</p>'}</div><p class="pitcherModalNote">교체된 투수는 다시 등판할 수 없습니다.</p></div>`;
   modal.querySelector('.pitcherModalClose').onclick=()=>{state.pitcherSwapOpen=false;render()};modal.onclick=event=>{if(event.target===modal){state.pitcherSwapOpen=false;render()}};
   modal.querySelectorAll('[data-modal-pitcher]').forEach(button=>button.onclick=()=>{const index=+button.dataset.modalPitcher;if(state.usedPitchers?.includes(index))return;state.activePitcher=index;state.usedPitchers=[...(state.usedPitchers||[]),index];state.pitcherSwapOpen=false;state.pitcherSwapNotice=`${state.pitchers[index].n} 투수가 등판했습니다.`;setResult(state.pitcherSwapNotice,'strike');render()});
-};
-</script><script id="result-record-synchronization-v1">
-/* 이전 플레이의 중계가 다음 B/S/O와 함께 남지 않도록 결과 생명주기를 한 턴으로 제한한다. */
-function clearResolvedResult(){
-  state.netOutcome='';state.localOutcome='';state.netOutcomeUntil=0;state.localOutcomeUntil=0;
-  const call=document.getElementById('broadcastCall');if(call){call.style.display='none';call.dataset.resultKey='';}
-  const outcome=document.getElementById('zoneOutcome');if(outcome)outcome.style.display='none';
-}
-const showBroadcastBeforeResultSynchronization=showBroadcast;
-showBroadcast=function(game){
-  showBroadcastBeforeResultSynchronization(game);
-  const call=document.getElementById('broadcastCall');if(!call)return;
-  const key=`${game?.deadline||''}:${game?.event||''}:${game?.lastPlay?.actualCell??''}`;
-  call.style.display='block';call.dataset.resultKey=key;
-  const tone=resultTone(game?.event||'');call.className=`broadcastCall tone-${tone}`;
-  setTimeout(()=>{const current=document.getElementById('broadcastCall');if(current?.dataset.resultKey===key)current.style.display='none';},3200);
-};
-['zone','types','swing'].forEach(id=>document.getElementById(id)?.addEventListener('click',clearResolvedResult,true));
-</script><script id="authoritative-result-copy-v1">
-/* 구종명 '패스트볼'의 '볼'을 볼 판정으로 오인하지 않는다. */
-const broadcastTextBeforeAuthoritativeCopy=broadcastText;
-broadcastText=function(game){
-  const data=broadcastTextBeforeAuthoritativeCopy(game);
-  if(!data)return data;
-  const resolved=game?.lastPlay?.outcome||game?.playLog?.[0]?.outcome;
-  const calls={ball:'볼입니다. 타자는 배트를 내지 않았습니다.',foul:'파울! 끈질기게 승부를 이어갑니다.',swinging_strike:'헛스윙 스트라이크!',groundout:'낮게 깔린 타구, 땅볼 처리!',flyout:'높이 뜬 타구, 뜬공 처리!',single:'깔끔하게 공략했습니다, 안타!',double:'강한 타구, 외야를 가릅니다!',triple:'외야 깊숙이 빠집니다! 3루까지 갑니다!',homerun:'쭉쭉 뻗습니다! 담장을 넘겼습니다!'};
-  if(resolved&&calls[resolved])data.call=calls[resolved];
-  if(/볼넷/.test(game?.event||''))data.call='침착하게 골라냅니다, 볼넷!';
-  return data;
-};
-resultTone=function(text){const value=text||'';if(/홈런/.test(value))return'homerun';if(/3루타/.test(value))return'triple';if(/2루타/.test(value))return'double';if(/안타|내야안타/.test(value))return'single';if(/볼넷/.test(value))return'walk';if(/땅볼|뜬공|삼진|아웃/.test(value))return'out';if(/스트라이크|파울/.test(value))return'strike';if(/볼/.test(value))return'ball';return'strike'};
-stadiumMessage=function(event,pitch){const headline=/홈런/.test(event)?'완벽한 타이밍! 담장을 넘겼습니다.':/루타|안타/.test(event)?'노린 코스를 정확히 공략했습니다.':/볼넷/.test(event)?'침착하게 공을 골라 출루합니다.':/삼진/.test(event)?'결정구에 타이밍을 빼앗겼습니다.':/땅볼/.test(event)?'낮게 깔린 타구, 땅볼 아웃.':/뜬공/.test(event)?'높이 뜬 타구, 뜬공 아웃.':/파울/.test(event)?'끈질긴 파울로 승부를 이어갑니다.':/스트라이크/.test(event)?'타격 범위를 벗어난 공입니다.':/볼/.test(event)?'유인구를 지켜봤습니다.':'결과를 확인하세요.';return `${pitch||''} · ${event} — ${headline}`};
-/* 직전 결과는 다음 실제 결과가 도착할 때까지 유지한다. */
-['zone','types','swing'].forEach(id=>document.getElementById(id)?.removeEventListener('click',clearResolvedResult,true));
-const showBroadcastBeforePersistentResult=showBroadcastBeforeResultSynchronization;
-showBroadcast=function(game){
-  showBroadcastBeforePersistentResult(game);
-  const call=document.getElementById('broadcastCall');if(!call)return;
-  call.style.display='block';call.dataset.resultKey=`${game?.deadline||''}:${game?.event||''}:${game?.lastPlay?.actualCell??''}`;
-  call.className=`broadcastCall tone-${resultTone(game?.event||'')}`;
 };
 </script></body></html>
