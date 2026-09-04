@@ -1378,4 +1378,14 @@ showBroadcast=function(game){
   const kind=outcome==='homerun'?'homerun':outcome==='single'||outcome==='double'||outcome==='triple'?'hit':outcome==='swinging_strike'&&game?.playLog?.[0]?.outsRecorded?'strikeout':outcome==='groundout'||outcome==='flyout'?'out':'';
   if(kind)playFeedback(kind);
 };
+</script><style id="inline-pitcher-swap-v1">
+.scoreMatchup article:nth-child(2)>b{display:flex!important;align-items:center;gap:5px;overflow:visible!important}.scoreMatchup .scoreSwap{flex:0 0 auto;margin:0 0 0 auto!important;padding:3px 6px!important;font-size:8px!important;line-height:1.1;white-space:nowrap}@media(max-width:760px){.scoreMatchup .scoreSwap{padding:2px 4px!important;font-size:7px!important}}
+</style><script id="inline-pitcher-swap-v1">
+const renderBeforeInlinePitcherSwap=render;
+render=function(){
+  renderBeforeInlinePitcherSwap();
+  const matchup=document.getElementById('scoreMatchup'),swap=document.getElementById('scoreSwap');
+  const pitcherName=matchup?.querySelector('article:nth-child(2)>b');
+  if(swap&&pitcherName&&swap.parentElement!==pitcherName)pitcherName.append(swap);
+};
 </script></body></html>
