@@ -1,6 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
-import { resolvePlateAppearance, type BallDirection, type PitchType, type SwingType } from "../../../lib/game-engine";
+import { resolvePlateAppearance, type BallDirection, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string; ball?: BallDirection };
@@ -8,7 +8,7 @@ type Batter = { n: string; t: string; p: number; a: number; e: number; v: number
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
-type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "bait" | "mistake" | "wild" };
+type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "bait" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
 type Game = {
   status: "waiting" | "playing" | "finished";
   inning: number;
@@ -26,7 +26,7 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "bait" | "mistake" | "wild" } | null;
+  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "bait" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
   aiStyle: "공격형" | "모서리형" | "유인구형" | "혼합형";
@@ -166,7 +166,7 @@ function resolve(room: Room) {
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
   });
-  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution };
+  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
   game.history = [{ batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
   const executionNotice = plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : "";
   game.event = `${executionNotice}${plate.message}`;
@@ -179,7 +179,7 @@ function resolve(room: Room) {
     game.strikes = Math.min(2, game.strikes + 1);
   } else if (plate.outcome === "swinging_strike") {
     game.strikes++;
-    if (game.strikes >= 3) { game.outs++; game.event = `${plate.message} · 삼진 아웃`; endPlate(game); }
+    if (game.strikes >= 3) { game.outs++; game.event = `${plate.message} · ${plate.strikeStyle === "looking" ? "루킹 삼진 아웃" : "헛스윙 스트라이크 삼진 아웃"}`; endPlate(game); }
   } else if (plate.outcome === "groundout" || plate.outcome === "flyout") {
     let tagUp = "";
     if (plate.outcome === "flyout" && game.outs < 2 && game.bases[2]) {
@@ -214,6 +214,7 @@ function resolve(room: Room) {
     runsBattedIn: game.scores[battingSide] - scoreBefore,
     outsRecorded: plate.outcome === "groundout" || plate.outcome === "flyout" || (plate.outcome === "swinging_strike" && strikesBefore >= 2) ? 1 : 0,
     execution: plate.execution,
+    strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
   trackBalance(plate.outcome, batting.swing ?? "contact", pitching.ball ? "bait" : (pitching.pitch ?? "fast"));
   if (game.status === "playing") nextPitch(game);

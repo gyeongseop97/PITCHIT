@@ -13,6 +13,8 @@ export type PlateAppearance = {
   pitchName: string;
   speed: number;
   message: string;
+  /** Swing/looking wording is cosmetic; the shared count outcome remains a strike. */
+  strikeStyle?: "swinging" | "looking";
   execution?: "command" | "bait" | "mistake" | "wild";
 };
 
@@ -78,7 +80,7 @@ export function resolvePlateAppearance(input: {
     const chaseChance = clamp((predictedDirection ? 0.64 : 0.13) + (64 - input.batter.e) / 260 + (breaking ? 0.07 : -0.03) + (input.count.strikes >= 2 ? 0.035 : 0));
     const actualBallCell = ballDirectionCell(direction, input.pitchCell);
     if (random() < baitExecution) {
-      if (random() < chaseChance) return { outcome: "swinging_strike", actualCell: actualBallCell, isBall: false, pitchName, speed, execution: "bait", message: `${pitchName} ${speed}km/h · ${direction === "high" ? "높은" : direction === "low" ? "낮은" : direction === "in" ? "몸쪽" : "바깥쪽"} 유인구에 타자가 속았습니다.` };
+    if (random() < chaseChance) return { outcome: "swinging_strike", actualCell: actualBallCell, isBall: false, pitchName, speed, execution: "bait", strikeStyle: "swinging", message: `${pitchName} ${speed}km/h · ${direction === "high" ? "높은" : direction === "low" ? "낮은" : direction === "in" ? "몸쪽" : "바깥쪽"} 유인구에 타자가 속았습니다.` };
       return { outcome: "ball", actualCell: actualBallCell, isBall: true, pitchName, speed, execution: "bait", message: `${pitchName} ${speed}km/h · 유인구를 잘 골라냈습니다.` };
     }
   }
@@ -128,7 +130,11 @@ export function resolvePlateAppearance(input: {
     if (nearTarget && random() < nearFoulChance) return { outcome: "foul", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 타겟 바로 옆 공을 파울로 걷어냈습니다.` };
     const foulChance = clamp(0.16 + input.batter.a / 520 + (input.swing === "contact" ? 0.09 : 0) - input.pitcher.s / 900 + (input.count.strikes >= 2 ? 0.065 : 0));
     if (covered && random() < foulChance) return { outcome: "foul", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 파울, 끈질기게 승부를 이어갑니다.` };
-    return { outcome: "swinging_strike", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 헛스윙 스트라이크.` };
+    // A missed ball inside the coloured hitting range is always a swing and
+    // miss. When the hitter read a different square, keep the same strike
+    // ruling but vary the broadcast between a chase and a called strike.
+    const strikeStyle = covered || random() < 0.5 ? "swinging" : "looking";
+    return { outcome: "swinging_strike", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", strikeStyle, message: `${pitchName} ${speed}km/h · ${strikeStyle === "looking" ? "루킹 스트라이크." : "헛스윙 스트라이크."}` };
   }
 
   const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;

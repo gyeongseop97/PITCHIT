@@ -917,8 +917,10 @@ function broadcastText(game) {
   const contact = distanceBetween(play.bat.cell, actual);
   const reason = play.execution === 'mistake' ? '실투가 노린 타격 범위로 몰렸습니다.' : play.execution === 'wild' ? '제구가 흔들려 존을 벗어났습니다.' : play.execution === 'bait' ? '유인구 승부입니다.' : contact === 0 ? '예측이 정확히 맞았습니다.' : contact <= 1 ? '타겟 주변을 건드렸습니다.' : '타격 범위를 벗어났습니다.';
   const resolved = play.outcome || game?.playLog?.[0]?.outcome;
+  const strikeStyle = play.strikeStyle || game?.playLog?.[0]?.strikeStyle;
+  const strikeout = /삼진/.test(outcome);
   const calls = { ball:'볼입니다. 타자는 배트를 내지 않았습니다.', foul:'파울! 끈질기게 승부를 이어갑니다.', swinging_strike:'헛스윙 스트라이크!', groundout:'낮게 깔린 타구, 땅볼 처리!', flyout:'높이 뜬 타구, 뜬공 처리!', single:'깔끔하게 공략했습니다, 안타!', double:'강한 타구, 외야를 가릅니다!', triple:'외야 깊숙이 빠집니다! 3루까지 갑니다!', homerun:'쭉쭉 뻗습니다! 담장을 넘겼습니다!' };
-  const call = /볼넷/.test(outcome) ? '침착하게 골라냅니다, 볼넷!' : calls[resolved] || (/스트라이크|파울/.test(outcome) ? '스트라이크!' : /볼/.test(outcome) ? '유인에 넘어가지 않았습니다, 볼!' : '스트라이크!');
+  const call = strikeout ? `${strikeStyle === 'looking' ? '루킹 스트라이크' : '헛스윙 스트라이크'} · ${strikeStyle === 'looking' ? '루킹 삼진 아웃!' : '삼진 아웃!'}` : /볼넷/.test(outcome) ? '침착하게 골라냅니다, 볼넷!' : resolved === 'swinging_strike' && strikeStyle === 'looking' ? '루킹 스트라이크!' : calls[resolved] || (/스트라이크|파울/.test(outcome) ? '스트라이크!' : /볼/.test(outcome) ? '유인에 넘어가지 않았습니다, 볼!' : '스트라이크!');
   return { title: `${play.pitchName} ${play.speed}km/h`, call, reason, actual };
 }
 let broadcastKey = '';
@@ -927,7 +929,7 @@ function showBroadcast(game) {
   const key = `${game.deadline}:${game.event}:${data.actual}`; if (key === broadcastKey) return; broadcastKey = key;
   let call = document.getElementById('broadcastCall'); if (!call) { call = document.createElement('section'); call.id = 'broadcastCall'; call.className = 'broadcastCall'; document.querySelector('.zoneWrap').before(call); }
   const resultTone = { ball:'ball', foul:'strike', swinging_strike:'strike', groundout:'out', flyout:'out', single:'single', double:'double', triple:'triple', homerun:'homerun' };
-  call.className = `broadcastCall tone-${/볼넷/.test(game.event || '') ? 'walk' : (resultTone[game.lastPlay?.outcome || game.playLog?.[0]?.outcome] || 'strike')}`;
+  call.className = `broadcastCall tone-${strikeout ? 'out' : (/볼넷/.test(game.event || '') ? 'walk' : (resultTone[game.lastPlay?.outcome || game.playLog?.[0]?.outcome] || 'strike'))}`;
   call.innerHTML = `<small>LIVE PLAY-BY-PLAY</small>${data.call}<br><small>${data.reason}</small>`;
   const wrap = document.querySelector('.zoneWrap'); const flight = document.createElement('i'); flight.className = 'pitchFlight'; flight.style.setProperty('--pitch-x', data.actual % 5); flight.style.setProperty('--pitch-y', Math.floor(data.actual / 5)); wrap.append(flight); wrap.classList.remove('resultFlash','hit','out'); wrap.classList.add('resultFlash', /안타|루타|홈런/.test(game.event) ? 'hit' : /아웃|삼진/.test(game.event) ? 'out' : ''); setTimeout(() => { flight.remove(); wrap.classList.remove('resultFlash','hit','out'); }, 700);
 }
