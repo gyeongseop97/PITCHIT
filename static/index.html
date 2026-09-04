@@ -1119,4 +1119,27 @@ showBroadcast=function(game){
   setTimeout(()=>{const current=document.getElementById('broadcastCall');if(current?.dataset.resultKey===key)current.style.display='none';},3200);
 };
 ['zone','types','swing'].forEach(id=>document.getElementById(id)?.addEventListener('click',clearResolvedResult,true));
+</script><script id="authoritative-result-copy-v1">
+/* 구종명 '패스트볼'의 '볼'을 볼 판정으로 오인하지 않는다. */
+const broadcastTextBeforeAuthoritativeCopy=broadcastText;
+broadcastText=function(game){
+  const data=broadcastTextBeforeAuthoritativeCopy(game);
+  if(!data)return data;
+  const resolved=game?.lastPlay?.outcome||game?.playLog?.[0]?.outcome;
+  const calls={ball:'볼입니다. 타자는 배트를 내지 않았습니다.',foul:'파울! 끈질기게 승부를 이어갑니다.',swinging_strike:'헛스윙 스트라이크!',groundout:'낮게 깔린 타구, 땅볼 처리!',flyout:'높이 뜬 타구, 뜬공 처리!',single:'깔끔하게 공략했습니다, 안타!',double:'강한 타구, 외야를 가릅니다!',triple:'외야 깊숙이 빠집니다! 3루까지 갑니다!',homerun:'쭉쭉 뻗습니다! 담장을 넘겼습니다!'};
+  if(resolved&&calls[resolved])data.call=calls[resolved];
+  if(/볼넷/.test(game?.event||''))data.call='침착하게 골라냅니다, 볼넷!';
+  return data;
+};
+resultTone=function(text){const value=text||'';if(/홈런/.test(value))return'homerun';if(/3루타/.test(value))return'triple';if(/2루타/.test(value))return'double';if(/안타|내야안타/.test(value))return'single';if(/볼넷/.test(value))return'walk';if(/땅볼|뜬공|삼진|아웃/.test(value))return'out';if(/스트라이크|파울/.test(value))return'strike';if(/볼/.test(value))return'ball';return'strike'};
+stadiumMessage=function(event,pitch){const headline=/홈런/.test(event)?'완벽한 타이밍! 담장을 넘겼습니다.':/루타|안타/.test(event)?'노린 코스를 정확히 공략했습니다.':/볼넷/.test(event)?'침착하게 공을 골라 출루합니다.':/삼진/.test(event)?'결정구에 타이밍을 빼앗겼습니다.':/땅볼/.test(event)?'낮게 깔린 타구, 땅볼 아웃.':/뜬공/.test(event)?'높이 뜬 타구, 뜬공 아웃.':/파울/.test(event)?'끈질긴 파울로 승부를 이어갑니다.':/스트라이크/.test(event)?'타격 범위를 벗어난 공입니다.':/볼/.test(event)?'유인구를 지켜봤습니다.':'결과를 확인하세요.';return `${pitch||''} · ${event} — ${headline}`};
+/* 직전 결과는 다음 실제 결과가 도착할 때까지 유지한다. */
+['zone','types','swing'].forEach(id=>document.getElementById(id)?.removeEventListener('click',clearResolvedResult,true));
+const showBroadcastBeforePersistentResult=showBroadcastBeforeResultSynchronization;
+showBroadcast=function(game){
+  showBroadcastBeforePersistentResult(game);
+  const call=document.getElementById('broadcastCall');if(!call)return;
+  call.style.display='block';call.dataset.resultKey=`${game?.deadline||''}:${game?.event||''}:${game?.lastPlay?.actualCell??''}`;
+  call.className=`broadcastCall tone-${resultTone(game?.event||'')}`;
+};
 </script></body></html>
