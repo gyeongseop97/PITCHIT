@@ -1404,4 +1404,68 @@ render=function(){
 </style><script id="pressure-feedback-toggle-v1">
 const renderBeforePressureFeedbackToggle=render;
 render=function(){renderBeforePressureFeedbackToggle();document.body.classList.toggle('feedback-off',typeof feedbackEnabled!=='undefined'&&!feedbackEnabled)};
+</script><style id="stadium-immersion-v2">
+/* A short reveal before the call makes each pitch feel like a real delivery. */
+.pitchPrelude{position:absolute;z-index:20;left:50%;top:-7%;transform:translate(-50%,-100%);min-width:176px;padding:7px 12px;border:1px solid #e5edf4;border-radius:999px;background:#091b31ee;color:#f4f7fb;text-align:center;font:900 12px/1 Arial,"Noto Sans KR",sans-serif;letter-spacing:.03em;box-shadow:0 6px 18px #07152755;pointer-events:none;animation:pitchPreludeIn .12s ease-out both}.pitchPrelude b{color:#f6d64a}.pitchPreludeBall{position:absolute;z-index:19;width:13%;aspect-ratio:1;left:50%;top:-13%;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 4px 4px #08182b99);pointer-events:none;animation:pitchPreludeBall .3s cubic-bezier(.2,.72,.25,1) forwards}@keyframes pitchPreludeIn{from{opacity:0;transform:translate(-50%,-82%) scale(.92)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}@keyframes pitchPreludeBall{from{transform:translate(-50%,-20%) scale(.38);opacity:.3}to{transform:translate(-50%,88%) scale(1.08);opacity:1}}
+/* Stadium atmosphere rises with runners in scoring position and bases loaded. */
+.score.risp:before{background:linear-gradient(90deg,#542929,#23303d 48%,#23303d)!important;color:#ffe3a1!important}.score.risp .bases{filter:drop-shadow(0 0 8px #f4c74188)}.score.basesLoaded:before{background:linear-gradient(90deg,#802b27,#23303d 55%,#802b27)!important;animation:stadiumLamp 1.5s ease-in-out infinite}.score.basesLoaded .bases{filter:drop-shadow(0 0 12px #f5c942)!important}@keyframes stadiumLamp{50%{filter:brightness(1.32)}}
+/* Calls use a distinct visual weight for each baseball outcome. */
+.broadcastCall.tone-homerun{border-left-color:#ffdf3b;background:linear-gradient(90deg,#8c251f,#e33b31,#8c251f);box-shadow:0 0 24px #e33b3188}.broadcastCall.tone-single,.broadcastCall.tone-double,.broadcastCall.tone-triple{border-left-color:#ffb15c;background:linear-gradient(90deg,#833823,#c7562e)}.broadcastCall.tone-walk,.broadcastCall.tone-ball{border-left-color:#55d889;background:linear-gradient(90deg,#164c3b,#1e7860)}.broadcastCall.tone-out{border-left-color:#94aec7;background:linear-gradient(90deg,#152238,#294869)}.broadcastCall .playDetail{margin-top:4px;color:#ffe3a1;font-size:10px;letter-spacing:.01em}
+/* The existing score never reflows; only a changed value lights up briefly. */
+.lineScore .scoreboardFlash{animation:scoreboardFlash .72s ease-out}@keyframes scoreboardFlash{25%{background:#e9f83e;color:#101820;box-shadow:0 0 14px #edff56}100%{background:inherit;color:inherit;box-shadow:none}}
+/* Result impact is intentionally different in weight, but remains optional. */
+.app.feedbackHit{animation:feedbackHit .25s ease-out!important}.app.feedbackOut{animation:feedbackOut .3s ease-out!important}.app.feedbackHomerun{animation:feedbackHomerun .48s cubic-bezier(.2,.75,.25,1)!important}.app.feedbackStrikeout{animation:feedbackStrikeout .34s ease-out!important}@keyframes feedbackHit{35%{transform:translateX(-3px) scale(1.004);filter:brightness(1.1)}70%{transform:translateX(3px)}to{transform:none;filter:none}}@keyframes feedbackOut{40%{transform:translateX(-4px);filter:brightness(.94)}to{transform:none;filter:none}}@keyframes feedbackHomerun{18%{transform:translateX(-8px) scale(1.014);filter:brightness(1.3)}38%{transform:translateX(8px) scale(1.01)}58%{transform:translateX(-5px)}to{transform:none;filter:none}}@keyframes feedbackStrikeout{35%{transform:translateY(3px);filter:brightness(.88)}to{transform:none;filter:none}}@media(max-width:760px){.pitchPrelude{top:-3%;min-width:136px;padding:5px 9px;font-size:9px}.pitchPreludeBall{width:15%}.broadcastCall .playDetail{font-size:8px}}
+</style><script id="stadium-immersion-v2">
+function showPitchPrelude(play){
+  const wrap=document.querySelector('.zoneWrap');if(!wrap||!play)return;
+  wrap.querySelector('.pitchPrelude')?.remove();wrap.querySelector('.pitchPreludeBall')?.remove();
+  const label=document.createElement('div');label.className='pitchPrelude';label.innerHTML=`<b>${play.pitchName||'패스트볼'}</b> · ${play.speed||'-'} km/h`;
+  const ball=document.createElement('i');ball.className='pitchPreludeBall';
+  wrap.append(label,ball);setTimeout(()=>{label.remove();ball.remove()},340);
+}
+let cinematicBroadcastKey='',cinematicBroadcastPending='';
+const showBroadcastBeforeCinematic=showBroadcast;
+showBroadcast=function(game){
+  const play=game?.lastPlay,key=play?`${game.deadline}:${game.event}:${play.actualCell}`:'';
+  if(play&&key!==cinematicBroadcastKey){
+    cinematicBroadcastKey=key;cinematicBroadcastPending=key;showPitchPrelude(play);
+    setTimeout(()=>{if(cinematicBroadcastPending===key){cinematicBroadcastPending='';showBroadcastBeforeCinematic(game)}},320);
+    return;
+  }
+  if(key&&cinematicBroadcastPending===key)return;
+  showBroadcastBeforeCinematic(game);
+  const call=document.getElementById('broadcastCall'),event=String(game?.event||'');
+  if(call&&event&&(/주력으로|태그업|득점/.test(event))&&!call.querySelector('.playDetail')){
+    const detail=document.createElement('small');detail.className='playDetail';detail.textContent=event.match(/(주력으로.*|3루 주자가 태그업 득점!)/)?.[1]||event;call.append(detail);
+  }
+};
+const playFeedbackBeforeStadiumImmersion=playFeedback;
+playFeedback=function(kind){
+  playFeedbackBeforeStadiumImmersion(kind);
+  if(!feedbackEnabled)return;
+  const app=document.querySelector('.app');if(!app)return;
+  const className=kind==='homerun'?'feedbackHomerun':kind==='hit'?'feedbackHit':kind==='strikeout'?'feedbackStrikeout':'feedbackOut';
+  app.classList.remove('feedbackHit','feedbackOut','feedbackHomerun','feedbackStrikeout');void app.offsetWidth;app.classList.add(className);setTimeout(()=>app.classList.remove(className),520);
+};
+function playCrowdSwell(intensity){
+  if(!feedbackEnabled)return;const context=getFeedbackAudio();if(!context)return;
+  const frames=Math.floor(context.sampleRate*.24),buffer=context.createBuffer(1,frames,context.sampleRate),samples=buffer.getChannelData(0);
+  for(let i=0;i<frames;i++)samples[i]=(Math.random()*2-1)*(1-i/frames);
+  const source=context.createBufferSource(),filter=context.createBiquadFilter(),gain=context.createGain();filter.type='bandpass';filter.frequency.value=intensity==='loaded'?1050:760;gain.gain.setValueAtTime(.012,context.currentTime);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.24);source.buffer=buffer;source.connect(filter).connect(gain).connect(context.destination);source.start();
+}
+let stadiumAtmosphereKey='',scoreboardSnapshot='';
+const renderBeforeStadiumImmersion=render;
+render=function(){
+  renderBeforeStadiumImmersion();if(!state.mode)return;
+  const score=document.querySelector('.score'),bases=Array.isArray(state.bases)?state.bases:[0,0,0],risp=Boolean(bases[1]||bases[2]),loaded=Boolean(bases[0]&&bases[1]&&bases[2]);
+  score?.classList.toggle('risp',risp);score?.classList.toggle('basesLoaded',loaded);
+  const atmosphereKey=`${state.inning||1}:${state.half||''}:${bases.join(',')}`;
+  if(stadiumAtmosphereKey&&atmosphereKey!==stadiumAtmosphereKey&&(loaded||risp)&&!state.finished)playCrowdSwell(loaded?'loaded':'risp');stadiumAtmosphereKey=atmosphereKey;
+  const snapshot=`${state.r||0}:${state.away||0}:${state.hits||0}:${state.awayHits||0}:${state.walks||0}:${state.awayWalks||0}:${state.inning||1}`;
+  if(scoreboardSnapshot&&snapshot!==scoreboardSnapshot){
+    const rows=document.querySelectorAll('.lineScore tbody tr');const previous=scoreboardSnapshot.split(':').map(Number),current=snapshot.split(':').map(Number);
+    [0,1].forEach(side=>{if(previous[side]!==current[side]||previous[side+2]!==current[side+2]||previous[side+4]!==current[side+4])rows[side]?.querySelectorAll('.total,.stat').forEach(cell=>{cell.classList.remove('scoreboardFlash');void cell.offsetWidth;cell.classList.add('scoreboardFlash')})});
+  }
+  scoreboardSnapshot=snapshot;
+};
 </script></body></html>
