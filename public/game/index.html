@@ -1111,7 +1111,29 @@ render=function(){renderBeforeWeightedContactZone();if(!state.mode||state.half==
   .scoreMatchup article{min-height:47px;padding:5px 6px!important}.scoreMatchup small{font-size:7px!important}.scoreMatchup b{font-size:10px!important}.scoreMatchup span{font-size:8px!important}
   .scoreMatchup .scorePitch{grid-column:1/-1!important;margin:0!important;padding:4px 5px!important;font-size:8px!important;line-height:11px!important}
 }
-</style><style id="developer-support-v1">
+</style><script id="guide-current-v3">
+Object.assign(guideContent,{
+  info:{title:'간단 가이드 · 바로 플레이하기',body:`
+    <p class="guideLead"><b>한 구의 심리전:</b> 타자는 ‘어디로 올지’와 스윙을, 투수는 구종과 코스를 고릅니다. 서로의 선택이 모두 들어오면 한 구의 결과가 공개됩니다.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>타격 3단계</h3><ul><li><b>컨택</b>: 선택 칸 중심 5×5 범위. 보드 끝에서는 범위가 잘립니다.</li><li><b>파워</b>: 3×3 범위. 맞히면 장타 보상이 큽니다.</li><li><b>스팟</b>: 한 칸 집중. 정확히 읽었을 때 가장 강력합니다.</li></ul></section>
+      <section class="guideCard"><h3>타자 유형</h3><ul><li><b>컨택형</b>: 안타·정확한 타구</li><li><b>파워형</b>: 2루타·홈런</li><li><b>선구안형</b>: 빗나간 공을 볼로 판단</li><li><b>주루형</b>: 내야안타·추가 진루·3루타</li></ul></section>
+      <section class="guideCard"><h3>투수 선택</h3><p><b>패스트볼</b>은 구속으로 타이밍을 빼앗고, <b>변화구</b>는 변화 능력으로 헛스윙을 노립니다. 중앙은 맞기 쉽고, 구석은 안타 위험이 낮지만 볼·실투 위험이 조금 큽니다.</p></section>
+      <section class="guideCard"><h3>경기와 대전</h3><p>기본은 <b>3이닝</b>, 동점이면 4회부터 무사 2루 승부치기이며 9회 뒤에는 무승부입니다. 온라인 대전은 <b>20초</b> 안에 선택하고, 시간 초과 시 자동 선택됩니다.</p></section>
+      <section class="guideCard wide"><h3>첫 판 팁</h3><p><b>타자:</b> 확신이 없을 땐 중앙 부근 컨택으로 시작하고, 상대 패턴을 읽으면 파워·스팟을 꺼내세요. <b>투수:</b> 같은 구종·코스를 반복하지 말고 중앙 승부와 구석 승부를 섞으세요. 최근 5개 표식이 다음 심리전의 힌트입니다.</p></section>
+    </div>`},
+  guide:{title:'상세 가이드 · 판정과 전략',body:`
+    <p class="guideLead">PITCHIT은 반사신경 게임이 아니라 <b>위치·능력치·카운트·최근 패턴</b>을 읽는 게임입니다. 정확히 맞춘 칸일수록 좋은 타구 확률이 가장 높습니다.</p>
+    <div class="guideGrid">
+      <section class="guideCard"><h3>1. 타격 범위와 결과</h3><p>선택 칸에 정확히 맞으면 강한 타구 확률이 가장 높습니다. 바로 주변 색칠 칸은 헛스윙이 줄고 파울·약한 타구가 늘어납니다. 컨택의 가장 바깥 테두리는 타격 가능성은 있으나 좋은 타구 확률이 낮습니다.</p><p class="tip"><b>예시:</b> 상대가 중앙을 반복한다면 중앙 스팟·파워가 큰 보상입니다. 패턴이 불확실할 때는 컨택이 안전합니다.</p></section>
+      <section class="guideCard"><h3>2. 코스와 제구</h3><p>가운데 공은 타격하기 쉬워 안타 위험이 높습니다. 변두리·모서리 공은 맞히기 어렵지만 제구가 흔들리면 볼 또는 타자가 노린 범위로 몰리는 실투가 날 수 있습니다. 실제 공 위치는 결과 뒤 야구공으로 표시됩니다.</p><p class="tip"><b>투수:</b> 유리한 카운트에는 구석·변화구, 불리한 카운트에는 제구 좋은 코스를 섞어 보세요.</p></section>
+      <section class="guideCard"><h3>3. 능력치 영향</h3><ul><li><b>파워</b>: 장타 확률 상승</li><li><b>정확도</b>: 헛스윙·파울·범타 감소, 안타 상승</li><li><b>선구안</b>: 범위 밖 공을 볼로 판단할 확률</li><li><b>주력</b>: 내야안타·3루타·추가 진루·태그업</li></ul><ul><li><b>구속</b>: 헛스윙 유도</li><li><b>제구</b>: 볼·실투 감소</li><li><b>구위</b>: 타구를 아웃으로 만들 확률</li><li><b>변화</b>: 변화구의 위력</li></ul></section>
+      <section class="guideCard"><h3>4. 카운트와 주루</h3><p>볼 4개는 볼넷, 스트라이크 3개는 삼진입니다. 파울은 2스트라이크 이후에도 삼진이 되지 않습니다. 땅볼·뜬공은 아웃이지만 빠른 타자는 내야안타가 가능하고, 3루 주자는 외야 뜬공에 태그업 득점할 수 있습니다.</p></section>
+      <section class="guideCard"><h3>5. 전광판 읽기</h3><p>B/S/O 램프는 각각 볼·스트라이크·아웃입니다. 이닝별 표에는 R(득점), H(안타), BB(볼넷)가 쌓입니다. 전광판 하단의 타자·투수 정보와 방금 투구 구종·구속을 함께 확인하세요.</p></section>
+      <section class="guideCard"><h3>6. 모드별 규칙</h3><ul><li><b>싱글 플레이</b>: AI 상대로 연습</li><li><b>빠른 대전</b>: 온라인 상대 자동 매칭</li><li><b>친구와 플레이</b>: 초대 코드로 실시간 대결</li></ul><p>온라인에서는 선택 후 버튼이 회색으로 바뀌며 상대 선택을 기다립니다. 직전 선택과 최근 5개 패턴 표식은 상대의 버릇을 읽는 핵심 정보입니다.</p></section>
+    </div>`}
+});
+</script><style id="developer-support-v1">
 .developerSupport{margin:28px 0 4px;padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;background:linear-gradient(120deg,#091c33,#163a63);color:#fff;border-left:5px solid #e33b31;box-shadow:0 10px 24px #10284620}.developerSupport small{display:block;color:#a9bed4;font-weight:900;letter-spacing:.12em;font-size:10px}.developerSupport strong{display:block;margin-top:5px;font-size:18px;letter-spacing:-.03em}.developerSupport p{margin:5px 0 0;color:#d9e5f1;font-size:13px}.supportAccount{flex:0 0 auto;min-width:184px;padding:12px 18px;border:1px solid #fff8;background:#ffffff10;color:#ffcf64;text-align:center;font:inherit;font-weight:900;cursor:pointer;transition:.18s transform,.18s background}.supportAccount:hover{background:#e33b31;color:#fff;transform:translateY(-2px)}.supportAccount:active{transform:translateY(1px)}@media(max-width:680px){.developerSupport{margin:20px 0 0;padding:18px;display:grid;gap:14px}.developerSupport strong{font-size:16px}.supportAccount{width:100%;min-width:0}}
 </style><script id="developer-support-v1">
 const developerSupport=document.createElement('section');developerSupport.className='developerSupport';developerSupport.innerHTML='<div><small>SUPPORT THE DEVELOPER</small><strong>다음 이닝을 만드는 작은 응원</strong><p>PITCHIT을 재미있게 즐기셨다면 개발자를 응원해 주세요.</p></div><button type="button" class="supportAccount">후원하기</button>';document.querySelector('.home').append(developerSupport);
