@@ -35,7 +35,7 @@ const pitchingChoice = () => ({ kind: "pitch", cell: 24, pitch: "fast" as const 
 async function playFullGame() {
   const p1 = await request({ action: "create", name: auditName, profileId: auditId }, 201);
   const p2 = await request({ action: "join", code: p1.code, name: auditName, profileId: auditId });
-  const sessions: Record<string, any> = { p1, p2 };
+  const sessions: Record<string, any> = { [p1.player]: p1, [p2.player]: p2 };
   await wait(5_200);
   let current = await state(p1);
   let pitches = 0;

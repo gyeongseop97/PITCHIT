@@ -354,16 +354,24 @@ async function release(keyName: string, lockToken: string) {
   // Only the holder deletes the short-lived lock. The check prevents an expired lock from deleting a newer one.
   if (await redis.get<string>(keyName) === lockToken) await redis.del(keyName);
 }
-function startRoom(room: Room, joining: Player) {
-  room.players.p2 = joining;
+function startRoom(room: Room, joining: Player): PlayerId {
+  const host = room.players.p1!;
+  // Keep the inning state in the canonical top-to-bottom order. Randomising
+  // `game.half` skips a half-inning, so randomise the player roles instead.
+  const joiningBatsFirst = Math.random() < 0.5;
+  if (joiningBatsFirst) {
+    room.players.p1 = joining;
+    room.players.p2 = host;
+  } else {
+    room.players.p2 = joining;
+  }
   room.game.status = "playing";
-  // The host should not always get the first at-bat.  Decide the visiting
-  // side when the second player joins, before the match-intro is shown.
-  room.game.half = Math.random() < 0.5 ? 0 : 1;
+  room.game.half = 0;
   room.game.introUntil = Date.now() + 5_000;
   room.game.deadline = 0;
   room.game.choices = {};
   room.game.event = "매칭 완료! 양 팀 소개 후 경기가 시작됩니다.";
+  return joiningBatsFirst ? "p1" : "p2";
 }
 function identify(room: Room, supplied: string): PlayerId | null {
   return room.players.p1?.token === supplied ? "p1" : room.players.p2?.token === supplied ? "p2" : null;
@@ -416,10 +424,10 @@ export default async function handler(req: any, res: any) {
           const waitingRoom = await load(waitingCode);
           if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting") {
             const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) };
-            startRoom(waitingRoom, joining);
+            const player = startRoom(waitingRoom, joining);
             await save(waitingRoom);
             await redis.del(quickQueueKey);
-            return res.json({ ...publicRoom(waitingRoom), player: "p2", token: joining.token });
+            return res.json({ ...publicRoom(waitingRoom), player, token: joining.token });
           }
           await redis.del(quickQueueKey);
         }
@@ -474,9 +482,10 @@ export default async function handler(req: any, res: any) {
     }
     if (input.action === "join") {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
-      startRoom(room, { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) });
+      const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) };
+      const player = startRoom(room, joining);
       await save(room);
-      return res.json({ ...publicRoom(room), player: "p2", token: room.players.p2!.token });
+      return res.json({ ...publicRoom(room), player, token: joining.token });
     }
     const player = identify(room, input.token);
     if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
