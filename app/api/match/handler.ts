@@ -14,6 +14,7 @@ type Game = {
   inning: number;
   half: 0 | 1;
   scores: [number, number];
+  inningScores: [number[], number[]];
   hits: [number, number];
   walks: [number, number];
   balls: number;
@@ -59,7 +60,7 @@ const makeTeam = (): Team => {
   return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
 };
 const freshGame = (): Game => ({
-  status: "waiting", inning: 1, half: 0, scores: [0, 0], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
+  status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [[0, 0, 0], [0, 0, 0]], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
   bases: [0, 0, 0], baitUsed: [0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "유인구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
@@ -73,6 +74,12 @@ const publicRoom = (room: Room) => ({
   attacker: actor(room.game),
 });
 
+function addRun(game: Game, side: 0 | 1 = game.half) {
+  game.inningScores ??= [[], []];
+  game.scores[side]++;
+  const inningIndex = Math.max(0, game.inning - 1);
+  game.inningScores[side][inningIndex] = (game.inningScores[side][inningIndex] ?? 0) + 1;
+}
 function advance(game: Game, runs: number, batterSpeed: number) {
   const side = game.half;
   const next: [number, number, number] = [0, 0, 0];
@@ -88,18 +95,18 @@ function advance(game: Game, runs: number, batterSpeed: number) {
     if (runs === 1 && i === 0 && Math.random() < Math.min(.36, .06 + (runnerSpeed - 40) / 70)) { destination = 3; extraAdvance = " · 주력으로 1루에서 홈까지 질주합니다!"; }
     else if (runs === 1 && i === 0 && Math.random() < Math.min(.82, .45 + (runnerSpeed - 40) / 80)) destination = 2;
     if (runs === 2 && i === 0 && Math.random() < Math.min(.96, .74 + (runnerSpeed - 40) / 80)) destination = 3;
-    if (destination >= 3) game.scores[side]++;
+    if (destination >= 3) addRun(game, side);
     else next[destination as 0 | 1 | 2] = runnerSpeed;
   }
-  if (runs >= 4) game.scores[side]++;
+  if (runs >= 4) addRun(game, side);
   else next[(runs - 1) as 0 | 1 | 2] = batterSpeed;
-  if (runs === 1 && next[2] && Math.random() < Math.min(.20, Math.max(.02, (next[2] - 58) / 130))) { game.scores[side]++; next[2] = 0; extraAdvance = " · 주력으로 2루에서 홈까지 파고듭니다!"; }
+  if (runs === 1 && next[2] && Math.random() < Math.min(.20, Math.max(.02, (next[2] - 58) / 130))) { addRun(game, side); next[2] = 0; extraAdvance = " · 주력으로 2루에서 홈까지 파고듭니다!"; }
   game.bases = next;
   return extraAdvance;
 }
 function walk(game: Game, batterSpeed: number) {
   const side = game.half;
-  if (game.bases[0] && game.bases[1] && game.bases[2]) game.scores[side]++;
+  if (game.bases[0] && game.bases[1] && game.bases[2]) addRun(game, side);
   if (game.bases[1]) game.bases[2] = game.bases[1];
   if (game.bases[0]) game.bases[1] = game.bases[0];
   game.bases[0] = batterSpeed;
@@ -174,7 +181,7 @@ function resolve(room: Room) {
       const tagUpChance = Math.min(0.42, Math.max(0.10, 0.12 + (runnerSpeed - 40) / 145));
       if (Math.random() < tagUpChance) {
         game.bases[2] = 0;
-        game.scores[game.half]++;
+        addRun(game);
         tagUp = " · 3루 주자가 태그업 득점!";
       }
     }
