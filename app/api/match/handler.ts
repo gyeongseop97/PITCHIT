@@ -126,6 +126,14 @@ function endPlate(game: Game) {
   game.outs = 0;
   game.bases = [0, 0, 0];
   if (game.half === 0) {
+    // In the final regulation inning the home side does not bat when it is
+    // already ahead after recording the third out in the top half.
+    if (game.inning >= 3 && game.scores[1] > game.scores[0]) {
+      game.status = "finished";
+      game.deadline = 0;
+      game.event = `${game.inning}회초 종료 · p2 승리`;
+      return;
+    }
     game.half = 1;
     if (game.inning >= 4) game.bases = [0, 55, 0];
     return;
@@ -336,7 +344,7 @@ export default async function handler(req: any, res: any) {
     }
     let room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
-    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "forfeit" || (input.action === "state" && Boolean(room.game.introUntil));
+    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || (input.action === "state" && Boolean(room.game.introUntil));
     const roomLockKey = `pitchit:room:${room.code}:lock`;
     const roomLock = needsRoomLock ? await acquire(roomLockKey, 12) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
@@ -388,6 +396,19 @@ export default async function handler(req: any, res: any) {
       }
     }
     if (!room.game.introUntil && room.game.status === "playing" && Date.now() >= room.game.deadline) resolve(room);
+    if (input.action === "swap") {
+      if (room.game.status !== "playing") return res.status(409).json({ error: "경기가 종료되었습니다." });
+      if (player !== defender(room.game)) return res.status(409).json({ error: "수비 중에만 투수를 교체할 수 있습니다." });
+      const index = Number(input.index);
+      const team = room.game.teams[player];
+      if (!Number.isInteger(index) || index < 0 || index >= team.pitchers.length) return res.status(400).json({ error: "올바르지 않은 투수입니다." });
+      if (team.usedPitchers.includes(index)) return res.status(409).json({ error: "이미 등판한 투수입니다." });
+      team.activePitcher = index;
+      team.usedPitchers.push(index);
+      room.game.event = `${room.players[player]?.name || "플레이어"} · ${team.pitchers[index].n} 투수 교체`;
+      await save(room);
+      return res.json({ ...publicRoom(room), player, token: input.token, swapped: true });
+    }
     if (input.action === "choose") {
       if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
