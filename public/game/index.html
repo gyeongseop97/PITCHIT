@@ -824,6 +824,9 @@ quickLobby = function() {
   const startButton = document.getElementById('startQuick'), status = document.getElementById('quickStatus'), controls = document.getElementById('quickControls'), countdown = document.getElementById('queueCountdown');
   let timer = null, poll = null, startedAt = 0;
   const stop = () => { if (timer) clearInterval(timer); if (poll) clearInterval(poll); timer = poll = null; };
+  // The exclusive-lobby controller calls this when the player switches to
+  // friend play, so no detached polling/timer keeps running in the background.
+  window.pitchitQuickLobbyStop = stop;
   const reset = () => { stop(); startButton.disabled = false; startButton.textContent = '자동 매칭 시작'; controls.innerHTML = ''; countdown.textContent = ''; };
   const useAi = async () => { stop(); if (matchSession?.code) { try { await requestMatch({ action: 'cancel', code: matchSession.code, token: matchSession.token }); } catch (_) {} } matchSession = null; box.remove(); start('solo'); };
   const waitForOpponent = () => {
@@ -1194,4 +1197,29 @@ const renderBeforeLivePresence=render;
 render=function(){renderBeforeLivePresence();let card=document.getElementById('livePresence');if(!state.mode){if(!card){card=document.createElement('div');card.id='livePresence';card.className='livePresence';card.setAttribute('aria-live','polite');card.innerHTML='<i aria-hidden="true"></i><span id="livePresenceCount">실시간 접속자 확인 중…</span>';document.querySelector('.modes')?.after(card)}refreshPresence()}else card?.remove()};
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshPresence()});
 refreshPresence();setInterval(refreshPresence,30000);
+</script><script id="exclusive-match-lobby-v1">
+// Quick match and friend play are mutually exclusive home-screen flows.
+// Removing the unused card also cancels its polling and a pending quick queue.
+function clearMatchLobbies(keep){
+  if(keep!=='friend')document.getElementById('friendLobby')?.remove();
+  if(keep!=='quick')document.getElementById('quickLobby')?.remove();
+}
+function discardPendingLobby(nextMode){
+  const pending=matchSession;
+  if(!pending||state.mode)return;
+  const pendingQuick=pending.mode==='quick'||Boolean(document.getElementById('quickLobby'));
+  if((pendingQuick?'quick':'friend')===nextMode)return;
+  clearInterval(matchPoll);matchPoll=null;
+  try{window.pitchitQuickLobbyStop?.()}catch(_){}
+  matchSession=null;clearActiveRoom();
+  if(pendingQuick&&pending.code&&pending.token)requestMatch({action:'cancel',code:pending.code,token:pending.token}).catch(()=>undefined);
+}
+const friendLobbyBeforeExclusive=friendLobby;
+friendLobby=function(){discardPendingLobby('friend');clearMatchLobbies('friend');return friendLobbyBeforeExclusive()};
+const quickLobbyBeforeExclusive=quickLobby;
+quickLobby=function(){discardPendingLobby('quick');clearMatchLobbies('quick');return quickLobbyBeforeExclusive()};
+document.querySelector('[data-mode="friend"]').onclick=friendLobby;
+document.querySelector('[data-mode="quick"]').onclick=quickLobby;
+const beginMatchBeforeExclusiveLobby=beginMatch;
+beginMatch=function(data){clearMatchLobbies();return beginMatchBeforeExclusiveLobby(data)};
 </script></body></html>
