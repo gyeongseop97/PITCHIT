@@ -1094,7 +1094,7 @@ render=function(){
   modal.querySelectorAll('[data-modal-pitcher]').forEach(button=>button.onclick=()=>{const index=+button.dataset.modalPitcher;if(state.usedPitchers?.includes(index))return;state.activePitcher=index;state.usedPitchers=[...(state.usedPitchers||[]),index];state.pitcherSwapOpen=false;state.pitcherSwapNotice=`${state.pitchers[index].n} 투수가 등판했습니다.`;setResult(state.pitcherSwapNotice,'strike');render()});
 };
 </script><style id="weighted-contact-zone-v1">
-.zone button.contact-strong{background:#f7c69faa!important}.zone button.contact-medium{background:#f9d9c1a3!important}.zone button.contact-soft{background:#fdf0e626!important}.zone button.power-range{background:#f6d3b7a8!important}
+.zone button.contact-strong{background:#f7c69faa!important}.zone button.contact-medium{background:#f9d9c1a3!important}.zone button.contact-soft{background:#fdf0e60d!important}.zone button.power-range{background:#f6d3b7a8!important}
 </style><script id="weighted-contact-zone-v1">
 function contactZoneWeight(target, actual){const tr=Math.floor(target/5),tc=target%5,ar=Math.floor(actual/5),ac=actual%5;const square=Math.max(Math.abs(tr-ar),Math.abs(tc-ac));const targetCenter=Math.abs(tr-2)+Math.abs(tc-2),actualCenter=Math.abs(ar-2)+Math.abs(ac-2);const local=Math.max(0,1-square/4),centralTarget=(4-targetCenter)/4,centralPitch=(4-actualCenter)/4,toward=targetCenter>=2&&actualCenter<targetCenter?.1375*(targetCenter-actualCenter)/targetCenter:0;return Math.min(1,.20+local*.42+centralTarget*centralPitch*.25+toward+(target===actual?.13:0))}
 const renderBeforeWeightedContactZone=render;
