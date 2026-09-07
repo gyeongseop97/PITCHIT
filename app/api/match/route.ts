@@ -1,4 +1,5 @@
 import matchHandler from "./handler";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,15 @@ async function respond(request: Request) {
     json(value: unknown) { payload = value; },
     end() { ended = true; },
   };
-  const body = request.method === "GET" ? undefined : await request.text();
+  let body = request.method === "GET" ? undefined : await request.text();
+  // Guests keep their device profile id.  A signed-in player cannot spoof a
+  // different profile id: rankings and rooms are bound to the Clerk account.
+  if (body) {
+    const { userId } = await auth();
+    if (userId) {
+      try { body = JSON.stringify({ ...JSON.parse(body), profileId: userId }); } catch { /* handler reports malformed input */ }
+    }
+  }
   const url = new URL(request.url);
   const query = Object.fromEntries(url.searchParams.entries());
   await matchHandler({ method: request.method, body, query }, response);

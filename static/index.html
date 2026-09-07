@@ -920,6 +920,62 @@ function recordFinishedGame(game) {
 }
 const showGameSummaryBeforeCareer = showGameSummary;
 showGameSummary = function(game) { recordFinishedGame(game); showGameSummaryBeforeCareer(game); };
+</script><style id="account-sync-v1">
+.accountSync{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding:11px 13px;border:1px solid #b8cce0;background:#f4f9ff;color:#183a60;font-size:12px}.accountSync b{display:block;font-size:13px}.accountSync small{display:block;margin-top:3px;color:#607286}.accountSync button{flex:0 0 auto;border:0;background:#183a60;color:#fff;padding:9px 11px;font:inherit;font-weight:900;cursor:pointer}.accountSync button:hover{background:#e33b31}.accountSync .accountDone{color:#16785c;font-weight:900}@media(max-width:760px){.accountSync{align-items:flex-start}.accountSync button{font-size:11px;padding:8px}.accountSync small{font-size:10px}}
+</style><script id="account-sync-v1">
+// Guests still play without an account.  On the Vercel app, Clerk's session
+// lets this small bridge sync the existing device career with the same Google
+// account on another device.
+const accountApi = location.hostname.endsWith('github.io') ? '' : '/api/account';
+let accountState = { signedIn: false, career: null, mergedLocal: false, name: '' };
+let cloudCareerReady = false, cloudSaveTimer = null;
+const accountRequest = async (body) => {
+  if (!accountApi) throw new Error('이 배포에서는 계정 동기화를 지원하지 않습니다.');
+  const response = await fetch(accountApi, { method: body ? 'POST' : 'GET', headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
+  const data = await response.json(); if (!response.ok) throw new Error(data.error || '계정 정보를 저장하지 못했습니다.'); return data;
+};
+function accountPanel() {
+  const home = document.getElementById('home'); if (!home) return;
+  let panel = document.getElementById('accountSync');
+  if (!panel) { panel = document.createElement('section'); panel.id = 'accountSync'; panel.className = 'accountSync'; document.querySelector('.homeGuideActions')?.before(panel); }
+  if (!accountApi) { panel.remove(); return; }
+  if (!accountState.signedIn) {
+    panel.innerHTML = '<span><b>기기 기록으로 플레이 중</b><small>Google 로그인으로 전적·랭킹·경기 기록을 기기 간 동기화하세요.</small></span><button type="button">Google 로그인</button>';
+    panel.querySelector('button').onclick = () => { window.top.location.href = '/sign-in?redirect_url=' + encodeURIComponent('/'); };
+    return;
+  }
+  const local = loadCareer(), hasLocal = Number(local.games || 0) > 0, hasCloud = Number(accountState.career?.games || 0) > 0;
+  let label = '<span class="accountDone">계정 동기화 사용 중</span>', action = '';
+  if (!accountState.mergedLocal && hasLocal) { label = '<span><b>이 기기의 기존 기록이 있습니다</b><small>한 번만 계정에 합치면 이후부터 자동 동기화됩니다.</small></span>'; action = '기록 합치기'; }
+  else if (hasCloud && !hasLocal) { label = '<span><b>계정에 저장된 기록이 있습니다</b><small>이 기기로 불러와 이어서 플레이하세요.</small></span>'; action = '기록 불러오기'; }
+  panel.innerHTML = `${label}${action ? `<button type="button">${action}</button>` : ''}`;
+  const button = panel.querySelector('button'); if (!button) return;
+  button.onclick = async () => {
+    try {
+      if (action === '기록 합치기') {
+        if (!confirm('현재 기기의 온라인 대전 기록을 Google 계정에 합칠까요? 같은 기기의 기록은 한 번만 합쳐집니다.')) return;
+        accountState = await accountRequest({ action: 'merge', name: local.nickname, career: local }); cloudCareerReady = true;
+      } else {
+        if (!confirm('계정 기록으로 현재 기기의 기록을 바꿀까요?')) return;
+        saveCareer({ ...emptyCareer(), ...accountState.career }); cloudCareerReady = true;
+      }
+      accountPanel();
+    } catch (error) { alert(error.message || '기록을 동기화하지 못했습니다.'); }
+  };
+}
+async function loadAccount() {
+  if (!accountApi) return;
+  try { accountState = await accountRequest(); cloudCareerReady = Boolean(accountState.signedIn && accountState.mergedLocal); accountPanel(); } catch (_) { /* game stays fully playable offline */ }
+}
+function queueCloudCareerSave(value) {
+  if (!accountState.signedIn || !cloudCareerReady) return;
+  clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(async () => {
+    try { accountState = await accountRequest({ action: 'sync', name: value.nickname, career: value }); accountPanel(); } catch (_) { /* retain the device copy and retry next save */ }
+  }, 400);
+}
+const saveCareerBeforeAccountSync = saveCareer;
+saveCareer = function(value) { saveCareerBeforeAccountSync(value); queueCloudCareerSave(value); };
+loadAccount();
 </script><style id="broadcast-and-ai-v1">
 .broadcastCall{width:min(620px,100%);margin:8px auto 12px;padding:10px 16px;border-left:5px solid #e33b31;background:linear-gradient(90deg,#102846,#1a4678);color:#fff;box-shadow:0 6px 14px #10284622;font-size:15px;font-weight:900;line-height:1.4;animation:broadcastIn .26s ease-out}.broadcastCall small{display:block;margin-bottom:2px;color:#9bc7f3;font-size:10px;letter-spacing:.13em}.pitchFlight{position:absolute;z-index:15;width:18%;aspect-ratio:1;left:50%;top:-16%;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 5px 4px #10284688);pointer-events:none;animation:pitchFlight .62s cubic-bezier(.18,.78,.3,1) forwards}.zoneWrap.resultFlash .zone{animation:zoneFlash .52s ease-out}.zoneWrap.resultFlash.hit .zone{box-shadow:0 0 0 4px #e33b31,0 0 28px #e33b3180}.zoneWrap.resultFlash.out .zone{box-shadow:0 0 0 4px #173b62,0 0 25px #173b6280}@keyframes pitchFlight{0%{transform:translate(-50%,0) scale(.45);opacity:.2}70%{opacity:1}100%{left:calc(14% + var(--pitch-x) * 14.4%);top:calc(14% + var(--pitch-y) * 14.4%);transform:translate(-50%,-50%) scale(1.05);opacity:0}}@keyframes broadcastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}@keyframes zoneFlash{50%{filter:brightness(1.2)}}.aiScout{margin:8px 0 0;padding:10px 11px;border:1px solid #b9cadc;background:#f3f8fe;color:#264966;font-size:12px;line-height:1.45}.aiScout b{color:#e33b31}@media(max-width:760px){.broadcastCall{width:min(70vw,31dvh,250px);margin:3px auto 5px;padding:6px 8px;font-size:10px}.broadcastCall small{font-size:7px}.aiScout{font-size:10px;padding:7px}.pitchFlight{width:20%}}
 </style><script id="broadcast-and-ai-v1">
