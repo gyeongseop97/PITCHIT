@@ -114,26 +114,31 @@ export function resolvePlateAppearance(input: {
   // 낮추는 유형이다. 따라서 구속은 contact 난도 대신 타구 질에 쓴다.
   const fastballContactWindow = !breaking ? clamp((input.pitcher.v - 45) / 1100, 0, 0.04) : 0;
   const fastballSluggingSuppression = !breaking ? clamp((input.pitcher.v - 45) / 360, 0, 0.13) : 0;
+  const perfectTarget = distance === 0;
+  const nearTarget = !perfectTarget && Math.abs(targetRow - actualRow) <= 1 && Math.abs(targetColumn - actualColumn) <= 1;
   const contactReach = input.swing === "contact" ? contactReachWeight(input.targetCell, actualCell) : 0;
   const covered = input.swing === "contact"
     ? Math.abs(Math.floor(input.targetCell / 5) - Math.floor(actualCell / 5)) <= 2
       && Math.abs((input.targetCell % 5) - (actualCell % 5)) <= 2
     : input.swing === "power"
-      ? Math.abs(Math.floor(input.targetCell / 5) - Math.floor(actualCell / 5)) <= 1 && Math.abs((input.targetCell % 5) - (actualCell % 5)) <= 1
-      : distance === 0;
-  const perfectTarget = distance === 0;
-  const nearTarget = !perfectTarget && Math.abs(targetRow - actualRow) <= 1 && Math.abs(targetColumn - actualColumn) <= 1;
+      ? nearTarget || perfectTarget
+      // 스팟은 UI상 한 칸을 노리지만, 바로 옆 공은 극히 좁은
+      // 스침 판정으로만 살린다. 맞혔을 때의 보상은 모든 스윙 중 최고다.
+      : perfectTarget || nearTarget;
   // The coloured range is intentionally not a flat hit zone. Exact reads are
   // rewarded most; neighbouring contact squares merely keep the at-bat alive.
   const contactQuality = input.swing === "contact"
-    ? (perfectTarget ? 0.03 : -0.04)
-    : input.swing === "power" ? (perfectTarget ? 0.12 : 0.025) : 0.18;
+    ? (perfectTarget ? 0.03 : nearTarget ? -0.04 : -0.07)
+    : input.swing === "power" ? (perfectTarget ? 0.12 : 0.025)
+      : (perfectTarget ? 0.22 : 0.10);
   const hitQuality = input.swing === "contact"
-    ? (perfectTarget ? 0.015 : -0.06)
-    : input.swing === "power" ? (perfectTarget ? 0.085 : 0.03) : 0.14;
+    ? (perfectTarget ? 0.015 : nearTarget ? -0.06 : -0.09)
+    : input.swing === "power" ? (perfectTarget ? 0.13 : 0.03)
+      : (perfectTarget ? 0.18 : 0.10);
   const barrelQuality = input.swing === "contact"
-    ? (perfectTarget ? -0.01 : -0.04)
-    : input.swing === "power" ? (perfectTarget ? 0.09 : 0.035) : 0.15;
+    ? (perfectTarget ? -0.01 : nearTarget ? -0.04 : -0.06)
+    : input.swing === "power" ? (perfectTarget ? 0.09 : 0.035)
+      : (perfectTarget ? 0.24 : 0.21);
   // Plate discipline is deliberately strongest when the hitter's prediction
   // is wrong.  It turns a bad read into a possible ball rather than making
   // every hitter equally safe across the whole board.
@@ -143,13 +148,13 @@ export function resolvePlateAppearance(input: {
   // Velocity's trade-off is resolved below as in-play / extra-base quality,
   // rather than blanket contact denial. Stuff and movement create misses.
   const pitchDifficulty = input.pitcher.s / 350 + (breaking ? input.pitcher.m / 250 : 0);
-  const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "spot" ? 0.04 : 0.06;
+  const swingBonus = input.swing === "contact" ? 0.03 : input.swing === "power" ? 0.06 : 0.10;
   const contactChance = clamp(0.65 + input.batter.a / 180 + swingBonus + contactQuality - pitchDifficulty * 0.32 - distance * 0.16 + fastballContactWindow + (breaking ? -0.02 - breakingDeception : -0.01) + (mistake ? 0.075 : 0) + (nearTarget ? 0.04 : 0) + (input.count.strikes >= 2 ? 0.018 : 0));
   const reachFactor = input.swing === "contact" ? 0.62 + contactReach * 0.38 : 1;
   const contact = covered && random() < contactChance * reachFactor;
   if (!contact) {
     const reachFoulFactor = input.swing === "contact" ? 0.60 + contactReach * 0.40 : 1;
-    const nearFoulChance = clamp((0.48 + input.batter.a / 430 + (input.swing === "contact" ? 0.10 : input.swing === "power" ? 0.065 : 0.04) - input.pitcher.s / 1050 + (input.count.strikes >= 2 ? 0.10 : 0)) * reachFoulFactor);
+    const nearFoulChance = clamp((0.48 + input.batter.a / 430 + (input.swing === "contact" ? 0.10 : input.swing === "power" ? 0.065 : 0.035) - input.pitcher.s / 1050 + (input.count.strikes >= 2 ? 0.10 : 0)) * reachFoulFactor);
     if (nearTarget && random() < nearFoulChance) return { outcome: "foul", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 타겟 바로 옆 공을 파울로 걷어냈습니다.` };
     const foulChance = clamp((0.16 + input.batter.a / 520 + (input.swing === "contact" ? 0.09 : 0) - input.pitcher.s / 900 + (input.count.strikes >= 2 ? 0.065 : 0)) * reachFoulFactor);
     if (covered && random() < foulChance) return { outcome: "foul", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 파울, 끈질기게 승부를 이어갑니다.` };
@@ -160,7 +165,7 @@ export function resolvePlateAppearance(input: {
     return { outcome: "swinging_strike", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", strikeStyle, message: `${pitchName} ${speed}km/h · ${strikeStyle === "looking" ? "루킹 스트라이크." : "헛스윙 스트라이크."}` };
   }
 
-  const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.05 : -0.04) - input.pitcher.s / 260;
+  const power = input.batter.p / 100 + (input.swing === "power" ? 0.24 : input.swing === "spot" ? 0.08 : -0.04) - input.pitcher.s / 260;
   // Short 3-inning games need a little more payoff when a hitter barrels the
   // ball.  This changes hit quality (not the chance to put the ball in play).
   // 변화구는 헛스윙을 얻는 대신, 맞으면 회전이 풀린 장타를 감수한다.
@@ -172,9 +177,9 @@ export function resolvePlateAppearance(input: {
   // Neighbouring coloured squares still earn a smaller boost: they are
   // forgiving contact, not the same thing as a perfect barrel.
   const readHitBonus = perfectTarget
-    ? (input.swing === "contact" ? 0.045 : input.swing === "power" ? 0.040 : 0.035)
+    ? (input.swing === "contact" ? 0.045 : input.swing === "power" ? 0.040 : 0.060)
     : nearTarget && covered
-      ? (input.swing === "contact" ? 0.030 : input.swing === "power" ? 0.028 : 0)
+      ? (input.swing === "contact" ? 0.030 : input.swing === "power" ? 0.028 : 0.045)
       : 0;
   const reachHitBonus = input.swing === "contact" ? contactReach * 0.13 - 0.035 : 0;
   const edgeCommandBonus = selectedCenterDistance >= 2 ? Math.max(0, input.pitcher.c - 50) / 700 : 0;
