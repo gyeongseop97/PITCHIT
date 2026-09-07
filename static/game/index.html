@@ -75,7 +75,7 @@ const matchApi=location.hostname.endsWith('github.io')?'https://pitchit-baseball
 function friendLobby(){let box=document.getElementById('friendLobby');if(!box){box=document.createElement('section');box.id='friendLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}box.innerHTML='<h3>친구와 실시간 대전</h3><p class="hint">방을 만들거나 친구의 초대 코드를 입력하세요. 경기 중 선택 시간은 20초입니다.</p><input id="friendName" placeholder="내 이름" maxlength="16"><div class="types"><button id="createRoom">초대 코드 생성</button><button id="joinRoom">초대 코드 입력</button></div><p class="result" id="friendStatus">서버 연결 준비 완료</p>';document.getElementById('createRoom').onclick=async()=>{try{const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};document.getElementById('friendStatus').textContent=`초대 코드: ${data.code} · 친구의 입장을 기다리는 중`;watchMatch()}catch(e){document.getElementById('friendStatus').textContent=e.message}};document.getElementById('joinRoom').onclick=async()=>{const code=prompt('친구에게 받은 6자리 초대 코드를 입력하세요.');if(!code)return;try{const data=await requestMatch({action:'join',code,name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};beginMatch(data)}catch(e){document.getElementById('friendStatus').textContent=e.message}}}
 function applyMatch(data){if(!matchSession)return;const g=data.game,me=matchSession.player,index=me==='p1'?0:1;state.mode='friend';state.net=true;state.inning=g.inning;state.r=g.scores[index];state.away=g.scores[index?0:1];state.b=g.balls;state.s=g.strikes;state.o=g.outs;state.bases=g.bases;state.turn=g.batter[index];state.awayTurn=g.batter[index?0:1];state.batter=lineup[state.turn];state.awayBatter=state.awayLineup?.[state.awayTurn]||state.batter;state.half=(g.half===0?'p1':'p2')===me?'top':'bottom';state.deadline=g.deadline;state.serverEvent=g.event;render()}
 function beginMatch(data){document.getElementById('friendLobby')?.remove();applyMatch(data);watchMatch()}
-async function watchMatch(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data);else document.getElementById('friendStatus').textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}catch(e){clearInterval(matchPoll)}},700)}
+async function watchMatch(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data);else document.getElementById('friendStatus').textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}catch(e){clearInterval(matchPoll)}},500)}
 async function submitMatch(){if(!matchSession)return;const kind=state.half==='top'?'bat':'pitch';try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data);$('result').textContent='작전을 전송했습니다. 상대 선택 또는 제한 시간을 기다리는 중입니다.'}catch(e){$('result').textContent=e.message}}
 const renderBeforeMultiplayer=render;render=()=>{renderBeforeMultiplayer();if(!state.net)return;$('swing').onclick=submitMatch;$('reveal').textContent=state.serverEvent||'상대의 선택을 기다리는 중입니다.';const seconds=Math.max(0,Math.ceil((state.deadline-Date.now())/1000));$('swing').textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`;};
 document.querySelector('[data-mode="friend"]').onclick=friendLobby;
@@ -357,7 +357,7 @@ function watchInviteRoom(){
   matchPoll=setInterval(async()=>{
     if(!matchSession)return;
     try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){clearInterval(matchPoll)}
-  },700);
+  },500);
 }
 watchMatch=async function(){
   clearInterval(matchPoll);
@@ -371,7 +371,7 @@ watchMatch=async function(){
         if(status&&!box?.classList.contains('codeReady'))status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`;
       }
     }catch(error){/* 일시적인 네트워크·잠금 충돌은 다음 폴링에서 자동 복구한다. */}
-  },700);
+  },500);
 };
 </script><style id="quick-match-v1">
 #quickLobby{margin-top:24px}#quickLobby .matchPulse{display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:50%;background:#e33b31;animation:quickPulse 1s ease-in-out infinite}@keyframes quickPulse{50%{transform:scale(.55);opacity:.45}}#quickLobby .cancelMatch{margin-top:8px;border:1px solid #cbd7e4;background:#fff;padding:8px 11px;color:#17385e;font-weight:800;cursor:pointer}@media(max-width:760px){#quickLobby{margin:14px 12px!important;padding:16px!important;scroll-margin-top:14px}}
@@ -388,7 +388,7 @@ function quickLobby(){
   };
 }
 function watchQuickMatch(){
-  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){const status=document.getElementById('quickStatus');if(status)status.textContent='연결을 다시 확인 중입니다…'}},700);
+  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data)}catch(error){const status=document.getElementById('quickStatus');if(status)status.textContent='연결을 다시 확인 중입니다…'}},500);
 }
 document.querySelector('[data-mode="quick"]').onclick=quickLobby;
 </script><style id="strike-ball-zone-v1">
@@ -846,7 +846,7 @@ quickLobby = function() {
     poll = setInterval(async () => {
       try { const data = await requestMatch({ action: 'state', code: matchSession.code, token: matchSession.token }); if (data.ready) { stop(); beginMatch(data); } }
       catch (_) { status.textContent = '매칭 연결이 끊겼습니다. 다시 시도해 주세요.'; reset(); }
-    }, 700);
+    }, 500);
     timer = setInterval(() => {
       const seconds = Math.max(0, 45 - Math.floor((Date.now() - startedAt) / 1000));
       countdown.textContent = `자동 매칭 대기 ${seconds}초`;
@@ -1242,7 +1242,7 @@ render=function(){renderBeforeWeightedContactZone();if(!state.mode||state.half==
 </style><script id="finished-match-summary-v1">
 // A finished room is no longer `ready`, so it must still be applied once;
 // otherwise the losing player would remain on the board without a summary.
-watchMatch=function(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game?.status==='finished'){clearInterval(matchPoll);applyMatch(data);return}if(data.ready)beginMatch(data);else{const status=document.getElementById('friendStatus');if(status)status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}}catch(_){/* transient polling failures retry on the next tick */}},700)};
+watchMatch=function(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game?.status==='finished'){clearInterval(matchPoll);applyMatch(data);return}if(data.ready)beginMatch(data);else{const status=document.getElementById('friendStatus');if(status)status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}}catch(_){/* transient polling failures retry on the next tick */}},500)};
 </script><style id="match-intro-v1">
 .matchIntro{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 18%,#ffffff24 0 2px,transparent 3px 100%),linear-gradient(145deg,#071426ee,#0e3157f5 58%,#e33b31e8);color:#fff;text-align:center;overflow:hidden}.matchIntro:before,.matchIntro:after{content:"";position:absolute;width:65vmin;height:65vmin;border:2px solid #ffffff24;border-radius:50%;pointer-events:none}.matchIntro:before{left:-30vmin;bottom:-37vmin}.matchIntro:after{right:-36vmin;top:-39vmin}.matchIntroCard{position:relative;width:min(520px,100%);padding:38px 28px 34px;border:1px solid #ffffff6e;background:#061426a8;box-shadow:0 18px 60px #0008,inset 0 0 0 5px #ffffff10}.matchIntroEyebrow{margin:0 0 16px;color:#f6cf62;font-size:11px;font-weight:900;letter-spacing:.24em}.matchIntroTitle{margin:0;color:#fff;font-size:clamp(25px,6vw,43px);letter-spacing:-.06em}.matchIntroNames{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:14px;margin:30px 0 22px}.matchIntroNames b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(18px,5vw,30px)}.matchIntroNames span{display:grid;place-items:center;width:58px;height:58px;border:2px solid #f6cf62;border-radius:50%;color:#f6cf62;font:900 22px/1 Impact,Arial,sans-serif}.matchIntroFirst{margin:0;padding:11px 13px;border-top:1px solid #ffffff30;border-bottom:1px solid #ffffff30;color:#dce9f7;font-size:15px;font-weight:800}.matchIntroFirst b{color:#fff}.matchIntroCount{margin:18px 0 0;color:#b8cce0;font-size:12px}.matchIntroCount b{color:#f6cf62;font-size:16px}@media(max-width:520px){.matchIntroCard{padding:30px 18px 26px}.matchIntroNames{gap:8px;margin:24px 0 18px}.matchIntroNames span{width:46px;height:46px;font-size:18px}.matchIntroFirst{font-size:13px}}
 </style><script id="match-intro-v1">
@@ -1418,7 +1418,7 @@ showGameSummary=function(game){
 const watchMatchBeforeRematch=watchMatch;
 watchMatch=function(){
   if(!matchSession?.rematchWaiting)return watchMatchBeforeRematch();
-  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game.status==='playing'){matchSession.rematchWaiting=false;state.finished=false;beginMatch(data)}}catch(_){/* retry */}},700);
+  clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game.status==='playing'){matchSession.rematchWaiting=false;state.finished=false;beginMatch(data)}}catch(_){/* retry */}},500);
 };
 </script><script id="match-role-sync-v1">
 // A joiner can be assigned the first at-bat. The host learns its randomized
