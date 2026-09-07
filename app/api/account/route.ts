@@ -54,12 +54,6 @@ export async function POST(request: Request) {
     return Response.json({ signedIn: true, ...next });
   }
 
-  if (action === "sync") {
-    const next = { ...saved, career: boundedCareer(input.career), updatedAt: Date.now() };
-    await redis.set(careerKey(userId), next);
-    return Response.json({ signedIn: true, ...next });
-  }
-
   if (action === "name") {
     if (name.length < 2) return Response.json({ error: "닉네임은 2~16자로 입력해 주세요." }, { status: 400 });
     const key = nicknameKey(normalizedNickname(name));

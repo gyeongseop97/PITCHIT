@@ -17,6 +17,7 @@ type Game = {
   introUntil?: number;
   forfeitWinner?: PlayerId;
   rankingApplied?: boolean;
+  careerApplied?: boolean;
   ranking?: Partial<Record<PlayerId, RankingResult>>;
   rematch?: Partial<Record<PlayerId, boolean>>;
   inning: number;
@@ -39,7 +40,7 @@ type Game = {
   aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
   event: string;
 };
-type Player = { token: string; name: string; profileId?: string };
+type Player = { token: string; name: string; profileId?: string; authenticated?: boolean };
 type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, Player | null>; game: Game };
 
 const redis = new Redis({
@@ -56,6 +57,7 @@ const presenceKey = "pitchit:presence";
 const presenceLifetimeMs = 75_000;
 const rankingBoardKey = "pitchit:ranking:v1";
 const rankingPlayerKey = (profileId: string) => `pitchit:ranking:v1:${profileId}`;
+const accountCareerKey = (profileId: string) => `pitchit:account-career:v1:${profileId}`;
 const guestNicknameKey = (profileId: string) => `pitchit:guest-nickname:v1:${profileId}`;
 const guestNicknameIndexKey = (name: string) => `pitchit:guest-nickname:index:v1:${name}`;
 type RankingPlayer = { name: string; points: number; wins: number; losses: number; draws: number; games: number; updatedAt: number };
@@ -148,6 +150,61 @@ async function applyRankings(room: Room) {
     redis.set(rankingPlayerKey(p1.profileId), first), redis.set(rankingPlayerKey(p2.profileId), second),
     redis.zadd(rankingBoardKey, { score: first.points, member: p1.profileId }), redis.zadd(rankingBoardKey, { score: second.points, member: p2.profileId }),
   ]);
+}
+
+type Career = Record<string, unknown> & {
+  games?: number; wins?: number; losses?: number; draws?: number; atBats?: number;
+  hits?: number; rbi?: number; homeRuns?: number; walks?: number; strikeouts?: number;
+  outsRecorded?: number; earnedRuns?: number; recordedGames?: string[]; matchHistory?: unknown[];
+};
+const numberOf = (value: unknown) => Math.max(0, Number(value) || 0);
+const koreaDate = () => {
+  const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "2-digit", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const value = (kind: string) => parts.find((part) => part.type === kind)?.value ?? "00";
+  return `${value("year")}.${value("month")}.${value("day")}`;
+};
+const careerDefaults = () => ({ games: 0, wins: 0, losses: 0, draws: 0, atBats: 0, hits: 0, rbi: 0, homeRuns: 0, walks: 0, strikeouts: 0, outsRecorded: 0, earnedRuns: 0, recordedGames: [] as string[], matchHistory: [] as unknown[] });
+
+// A finished online game is recorded here, beside the final game state.  This
+// means a signed-in player's record comes from the server, not whichever phone
+// happened to save last.
+async function applyCareerRecords(room: Room) {
+  const game = room.game;
+  if (game.status !== "finished" || game.careerApplied || room.mode === "solo") return;
+  const p1 = room.players.p1, p2 = room.players.p2;
+  const members: Array<[PlayerId, Player, Player]> = [];
+  if (p1?.authenticated && p1.profileId && p2) members.push(["p1", p1, p2]);
+  if (p2?.authenticated && p2.profileId && p1) members.push(["p2", p2, p1]);
+  game.careerApplied = true;
+  await Promise.all(members.map(async ([playerId, player, opponent]) => {
+    const saved = await redis.get<Record<string, unknown>>(accountCareerKey(player.profileId!));
+    const career: Career = { ...careerDefaults(), ...(saved?.career as Career || {}) };
+    const recorded = Array.isArray(career.recordedGames) ? career.recordedGames.map(String) : [];
+    if (recorded.includes(room.code)) return;
+    const mine = (game.playLog || []).filter(play => play.attacker === playerId);
+    const pitching = (game.playLog || []).filter(play => play.attacker !== playerId);
+    const plateEnds = mine.filter(play => ["single", "double", "triple", "homerun", "groundout", "flyout"].includes(play.outcome) || /삼진|볼넷/.test(play.event));
+    const side = playerId === "p1" ? 0 : 1, otherSide = side === 0 ? 1 : 0;
+    const won = game.forfeitWinner === playerId || (!game.forfeitWinner && game.scores[side] > game.scores[otherSide]);
+    const lost = Boolean(game.forfeitWinner && game.forfeitWinner !== playerId) || (!game.forfeitWinner && game.scores[side] < game.scores[otherSide]);
+    const result = won ? "WIN" : lost ? "LOSS" : "DRAW";
+    career.games = numberOf(career.games) + 1;
+    career.wins = numberOf(career.wins) + (won ? 1 : 0);
+    career.losses = numberOf(career.losses) + (lost ? 1 : 0);
+    career.draws = numberOf(career.draws) + (result === "DRAW" ? 1 : 0);
+    career.walks = numberOf(career.walks) + plateEnds.filter(play => /볼넷/.test(play.event)).length;
+    career.atBats = numberOf(career.atBats) + plateEnds.filter(play => !/볼넷/.test(play.event)).length;
+    career.hits = numberOf(career.hits) + plateEnds.filter(play => ["single", "double", "triple", "homerun"].includes(play.outcome)).length;
+    career.homeRuns = numberOf(career.homeRuns) + plateEnds.filter(play => play.outcome === "homerun").length;
+    career.rbi = numberOf(career.rbi) + plateEnds.reduce((total, play) => total + numberOf(play.runsBattedIn), 0);
+    career.strikeouts = numberOf(career.strikeouts) + plateEnds.filter(play => /삼진/.test(play.event)).length;
+    career.outsRecorded = numberOf(career.outsRecorded) + pitching.reduce((total, play) => total + numberOf(play.outsRecorded), 0);
+    career.earnedRuns = numberOf(career.earnedRuns) + numberOf(game.scores[otherSide]);
+    career.recordedGames = [...recorded, room.code].slice(-100);
+    const history = Array.isArray(career.matchHistory) ? career.matchHistory : [];
+    career.matchHistory = [{ code: room.code, date: koreaDate(), opponent: opponent.name, mine: game.scores[side], theirs: game.scores[otherSide], result }, ...history].slice(0, 30);
+    await redis.set(accountCareerKey(player.profileId!), { ...saved, career, updatedAt: Date.now() });
+  }));
 }
 const publicRoom = (room: Room) => ({
   code: room.code,
@@ -311,7 +368,7 @@ async function resolve(room: Room) {
     strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
   trackBalance(plate.outcome, batting.swing ?? "contact", pitching.pitch ?? "fast");
-  if (room.game.status === "finished") await applyRankings(room);
+  if (room.game.status === "finished") { await applyRankings(room); await applyCareerRecords(room); }
   if (game.status === "playing") nextPitch(game);
 }
 
@@ -438,7 +495,7 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: "비회원 닉네임을 발급하지 못했습니다. 잠시 후 다시 시도해 주세요." });
     }
     if (input.action === "solo") {
-      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어", profileId: profileId(input.profileId) }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
+      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어", profileId: profileId(input.profileId), authenticated: input.authenticated === true }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
       room.game.status = "playing";
       room.game.event = "PITCHIT AI와 경기 시작! 20초 안에 작전을 선택하세요.";
       nextPitch(room.game);
@@ -453,7 +510,7 @@ export default async function handler(req: any, res: any) {
         if (waitingCode) {
           const waitingRoom = await load(waitingCode);
           if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting") {
-            const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) };
+            const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId), authenticated: input.authenticated === true };
             const player = startRoom(waitingRoom, joining);
             await save(waitingRoom);
             await redis.del(quickQueueKey);
@@ -461,7 +518,7 @@ export default async function handler(req: any, res: any) {
           }
           await redis.del(quickQueueKey);
         }
-        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId) }, p2: null }, game: freshGame() };
+        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId), authenticated: input.authenticated === true }, p2: null }, game: freshGame() };
         room.game.event = "상대를 찾는 중입니다…";
         await save(room);
         await redis.set(quickQueueKey, room.code, { ex: 45 });
@@ -469,7 +526,7 @@ export default async function handler(req: any, res: any) {
       } finally { await release(quickQueueLockKey, queueLock); }
     }
     if (input.action === "create") {
-      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId) }, p2: null }, game: freshGame() };
+      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId), authenticated: input.authenticated === true }, p2: null }, game: freshGame() };
       await save(room);
       return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token });
     }
@@ -499,6 +556,7 @@ export default async function handler(req: any, res: any) {
       room.game.forfeitWinner = winner;
       room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
       await applyRankings(room);
+      await applyCareerRecords(room);
       await save(room);
       return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });
     }
@@ -530,7 +588,7 @@ export default async function handler(req: any, res: any) {
     }
     if (input.action === "join") {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
-      const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId) };
+      const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId), authenticated: input.authenticated === true };
       const player = startRoom(room, joining);
       await save(room);
       return res.json({ ...publicRoom(room), player, token: joining.token });

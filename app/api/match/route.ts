@@ -21,12 +21,17 @@ async function respond(request: Request) {
   // different profile id: rankings and rooms are bound to the Clerk account.
   if (body) {
     const { userId } = await auth();
-    if (userId) {
-      try {
+    try {
+      const input = JSON.parse(body);
+      // Never trust a browser-provided "member" flag.  The Clerk session is
+      // the only authority that marks a player as an account holder.
+      if (userId) {
         const profile = await redis.get<{ name?: string }>(`pitchit:account-career:v1:${userId}`);
-        body = JSON.stringify({ ...JSON.parse(body), profileId: userId, name: profile?.name || "플레이어" });
-      } catch { /* handler reports malformed input */ }
-    }
+        body = JSON.stringify({ ...input, profileId: userId, name: profile?.name || "플레이어", authenticated: true });
+      } else {
+        body = JSON.stringify({ ...input, authenticated: false });
+      }
+    } catch { /* handler reports malformed input */ }
   }
   const url = new URL(request.url);
   const query = Object.fromEntries(url.searchParams.entries());

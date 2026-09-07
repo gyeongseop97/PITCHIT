@@ -918,6 +918,9 @@ function recordFinishedGame(game) {
   const now=new Date(),date=`${String(now.getFullYear()).slice(-2)}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
   career.matchHistory=[{code,date,opponent:state.opponentName||'상대',mine:game.scores[side],theirs:game.scores[opponent],result},...(Array.isArray(career.matchHistory)?career.matchHistory:[])].slice(0,30);
   saveCareer(career);
+  // The signed-in account receives this same result from the match server.
+  // Refreshing once makes this device show that official copy immediately.
+  if (accountState?.signedIn) setTimeout(() => loadAccount?.(), 0);
 }
 const showGameSummaryBeforeCareer = showGameSummary;
 showGameSummary = function(game) { recordFinishedGame(game); showGameSummaryBeforeCareer(game); };
@@ -929,7 +932,7 @@ showGameSummary = function(game) { recordFinishedGame(game); showGameSummaryBefo
 // account on another device.
 const accountApi = location.hostname.endsWith('github.io') ? '' : '/api/account';
 let accountState = { signedIn: false, career: null, mergedLocal: false, name: '' };
-let cloudCareerReady = false, cloudSaveTimer = null;
+let cloudCareerReady = false;
 const accountRequest = async (body) => {
   if (!accountApi) throw new Error('이 배포에서는 계정 동기화를 지원하지 않습니다.');
   const response = await fetch(accountApi, { method: body ? 'POST' : 'GET', headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
@@ -966,16 +969,23 @@ function accountPanel() {
 }
 async function loadAccount() {
   if (!accountApi) return;
-  try { accountState = await accountRequest(); globalThis.pitchitMemberSignedIn = Boolean(accountState.signedIn); cloudCareerReady = Boolean(accountState.signedIn && accountState.mergedLocal); if (accountState.signedIn) { const current = loadCareer(); current.nickname = accountState.name; localStorage.setItem(careerStorageKey, JSON.stringify(current)); } accountPanel(); } catch (_) { /* game stays fully playable offline */ }
-}
-function queueCloudCareerSave(value) {
-  if (!accountState.signedIn || !cloudCareerReady) return;
-  clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(async () => {
-    try { accountState = await accountRequest({ action: 'sync', name: value.nickname, career: value }); accountPanel(); } catch (_) { /* retain the device copy and retry next save */ }
-  }, 400);
+  try {
+    accountState = await accountRequest(); globalThis.pitchitMemberSignedIn = Boolean(accountState.signedIn); cloudCareerReady = Boolean(accountState.signedIn && accountState.mergedLocal);
+    if (accountState.signedIn) {
+      const current = loadCareer();
+      // Once the one-time import is complete, the account copy is the source
+      // of truth.  A second phone therefore receives the same career.
+      const next = cloudCareerReady && accountState.career ? { ...emptyCareer(), ...accountState.career, nickname: accountState.name } : { ...current, nickname: accountState.name };
+      localStorage.setItem(careerStorageKey, JSON.stringify(next));
+    }
+    accountPanel();
+  } catch (_) { /* game stays fully playable offline */ }
 }
 const saveCareerBeforeAccountSync = saveCareer;
-saveCareer = function(value) { saveCareerBeforeAccountSync(value); queueCloudCareerSave(value); };
+// The browser keeps a convenient local view, but it never writes a complete
+// career snapshot back to the account. Online results are written by the
+// match server, preventing two devices from overwriting one another.
+saveCareer = function(value) { saveCareerBeforeAccountSync(value); };
 loadAccount();
 </script><style id="player-identity-v1">
 .careerGuestName{margin:14px 0;padding:12px;background:#f4f8fc;border:1px solid #cfdae6;color:#234666;font-weight:900}.careerGuestName small{display:block;margin-top:4px;color:#607286;font-weight:400}.careerMemberHint{margin:10px 0 0;color:#607286;font-size:12px}.accountSync .accountDone{display:block}.accountSync .accountDone:before{content:'●';margin-right:6px;color:#28b66b}
