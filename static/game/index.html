@@ -1507,4 +1507,17 @@ function pitcherTypeLabel(pitcher){const type=String(pitcher?.t||pitcher?.n||'�
 function showPitcherSwapNotice(previousPitcher,nextPitcher){const text=`투수 교체 · ${pitcherTypeLabel(previousPitcher)} → ${pitcherTypeLabel(nextPitcher)}`;state.localOutcome='';state.netOutcome='';state.pitcherSwapNotice=text;clearTimeout(zoneEventImageTimer);zoneEventImageKey='';document.getElementById('zoneEventImage')?.remove();const outcome=document.getElementById('zoneOutcome');if(outcome){outcome.textContent='';outcome.style.display='none';outcome.className='zoneOutcome'}const call=document.getElementById('broadcastCall');if(call){call.className='broadcastCall tone-strike';call.hidden=false;call.style.display='block';call.innerHTML=`<small>PITCHING CHANGE</small>${text}`}const result=$('result');if(result)result.textContent=text}
 const showBroadcastBeforePitcherSwapNotice=showBroadcast;
 showBroadcast=function(game){if(state.suppressLastPlayDisplay)return;showBroadcastBeforePitcherSwapNotice(game)};
+</script><style id="locked-zone-after-submit-v1">
+/* Once a choice is sent, it is final for that pitch. */
+.zone.choiceLocked button{cursor:not-allowed!important;pointer-events:none!important}.zone.choiceLocked{filter:saturate(.82)}
+</style><script id="locked-zone-after-submit-v1">
+const renderBeforeLockedZoneAfterSubmit=render;
+render=function(){
+  renderBeforeLockedZoneAfterSubmit();
+  if(!state.mode)return;
+  const zone=$('zone');if(!zone)return;
+  const locked=Boolean(state.net&&(matchSubmitted||state.finished||state.introUntil>Date.now()||!state.deadline));
+  zone.classList.toggle('choiceLocked',locked);
+  zone.querySelectorAll('[data-z]').forEach(button=>{button.disabled=locked;button.setAttribute('aria-disabled',locked?'true':'false')});
+};
 </script></body></html>

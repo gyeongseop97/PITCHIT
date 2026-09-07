@@ -379,7 +379,10 @@ function startRoom(room: Room, joining: Player): PlayerId {
   room.game.status = "playing";
   room.game.half = 0;
   room.game.introUntil = Date.now() + 5_000;
-  room.game.deadline = 0;
+  // Reserve the opening decision window now.  Clients can receive the
+  // match-intro state a few milliseconds before its expiry; a zero deadline
+  // in that gap used to leave the first defender unable to submit a pitch.
+  room.game.deadline = room.game.introUntil + 20_000;
   room.game.choices = {};
   room.game.event = "매칭 완료! 양 팀 소개 후 경기가 시작됩니다.";
   return joiningBatsFirst ? "p1" : "p2";
@@ -494,7 +497,7 @@ export default async function handler(req: any, res: any) {
         const next = freshGame();
         next.status = "playing";
         next.introUntil = Date.now() + 5_000;
-        next.deadline = 0;
+        next.deadline = next.introUntil + 20_000;
         next.event = "리매치 성사! 양 팀 소개 후 경기가 시작됩니다.";
         room.game = next;
       }
