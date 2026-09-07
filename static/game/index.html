@@ -1344,7 +1344,15 @@ beginMatch=function(data){clearMatchLobbies();return beginMatchBeforeExclusiveLo
 const rankingProfileStorageKey='pitchit:ranking-profile:v1';
 function rankingProfileId(){try{let id=localStorage.getItem(rankingProfileStorageKey)||'';if(!/^[A-Za-z0-9_-]{12,96}$/.test(id)){id=(crypto.randomUUID?.()||`${Date.now()}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,'');localStorage.setItem(rankingProfileStorageKey,id)}return id}catch(_){return `p${Date.now()}${Math.random().toString(36).slice(2)}`}}
 const requestMatchBeforeRanking=requestMatch;
-requestMatch=body=>{if(['quick','create','join','solo'].includes(body?.action))body={...body,profileId:rankingProfileId()};return requestMatchBeforeRanking(body)};
+requestMatch=body=>{if(['quick','create','join','solo','identity'].includes(body?.action))body={...body,profileId:rankingProfileId()};return requestMatchBeforeRanking(body)};
+// A guest name is reserved server-side against the device profile id.  The
+// random digits therefore remain stable on this device and cannot be handed
+// to a different guest device.
+async function reserveGuestNickname(){
+  if(globalThis.pitchitMemberSignedIn)return;
+  try{const data=await requestMatch({action:'identity'});if(/^Player\d{4}$/.test(data?.name)){localStorage.setItem(guestNicknameStorageKey,data.name);const current=loadCareer();current.nickname=data.name;saveCareer(current);accountPanel?.();}}catch(_){/* keep the local provisional name until the next retry */}
+}
+reserveGuestNickname();
 function openRanking(){
   let overlay=document.getElementById('rankingOverlay');if(!overlay){overlay=document.createElement('div');overlay.id='rankingOverlay';overlay.className='guideOverlay';document.body.append(overlay)}
   overlay.innerHTML='<section class="guideDialog rankingDialog" role="dialog" aria-modal="true"><header><h2>온라인 랭킹</h2><button class="guideClose">닫기</button></header><p class="rankingLead">온라인 대전만 반영됩니다. 닉네임을 바꿔도 이 기기의 랭킹 기록은 유지됩니다.</p><nav class="rankingTabs"><button class="on" data-ranking-tab="points">랭킹포인트</button><button data-ranking-tab="wins">승리수</button></nav><div class="rankEmpty">랭킹을 불러오는 중…</div></section>';

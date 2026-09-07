@@ -56,6 +56,8 @@ const presenceKey = "pitchit:presence";
 const presenceLifetimeMs = 75_000;
 const rankingBoardKey = "pitchit:ranking:v1";
 const rankingPlayerKey = (profileId: string) => `pitchit:ranking:v1:${profileId}`;
+const guestNicknameKey = (profileId: string) => `pitchit:guest-nickname:v1:${profileId}`;
+const guestNicknameIndexKey = (name: string) => `pitchit:guest-nickname:index:v1:${name}`;
 type RankingPlayer = { name: string; points: number; wins: number; losses: number; draws: number; games: number; updatedAt: number };
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
@@ -420,6 +422,20 @@ export default async function handler(req: any, res: any) {
     if (input.action === "stats") {
       const stats = await redis.hgetall<Record<string, number>>(balanceKey);
       return res.status(200).json({ stats: stats ?? {} });
+    }
+    if (input.action === "identity") {
+      const id = String(input.profileId ?? "");
+      if (!/^[A-Za-z0-9_-]{12,96}$/.test(id)) return res.status(400).json({ error: "유효하지 않은 기기 정보입니다." });
+      const saved = await redis.get<string>(guestNicknameKey(id));
+      if (saved) return res.status(200).json({ name: saved });
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const name = `Player${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+        const claimed = await redis.set(guestNicknameIndexKey(name), id, { nx: true });
+        if (!claimed) continue;
+        await redis.set(guestNicknameKey(id), name);
+        return res.status(201).json({ name });
+      }
+      return res.status(503).json({ error: "비회원 닉네임을 발급하지 못했습니다. 잠시 후 다시 시도해 주세요." });
     }
     if (input.action === "solo") {
       const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어", profileId: profileId(input.profileId) }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
