@@ -880,10 +880,11 @@ showGameSummary = function(game) {
 </script><style id="local-career-v1">
 .careerDialog{width:min(620px,100%)}.careerName{display:flex;gap:8px;margin:14px 0}.careerName input{flex:1;min-width:0;padding:10px;border:1px solid #b9c9d8;font:inherit}.careerName button{border:0;background:#e33b31;color:#fff;padding:10px 13px;font-weight:900;cursor:pointer}.careerHero{padding:16px;background:linear-gradient(135deg,#102846,#1d4e89);color:#fff}.careerHero small{display:block;letter-spacing:.14em;font-weight:900;opacity:.7}.careerHero b{display:block;margin-top:4px;font-size:28px}.careerStats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.careerStats article{padding:11px;background:#f6f9fc;border:1px solid #d8e2ec}.careerStats small{display:block;color:#607286;font-size:10px;font-weight:900}.careerStats b{display:block;margin-top:4px;color:#102846;font-size:21px}.careerMatches{margin-top:18px;border-top:2px solid #102846}.careerMatches h3{margin:14px 0 8px;font-size:16px}.careerMatch{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:10px 0;border-top:1px solid #dbe4ed;font-size:12px}.careerMatch:first-of-type{border-top:0}.careerMatch time{color:#71849a;font-weight:800;white-space:nowrap}.careerMatch .opponent{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:900}.careerMatch .matchScore{color:#102846;font-size:14px;font-weight:1000;white-space:nowrap}.careerMatch .outcome{min-width:42px;padding:4px 5px;background:#102846;color:#fff;text-align:center;font-size:10px;font-weight:1000}.careerMatch .outcome.win{background:#16785c}.careerMatch .outcome.loss{background:#b73b35}.careerMatch .outcome.draw{background:#8a6710}.careerMatchEmpty{margin:0;padding:14px;background:#f6f9fc;color:#71849a;font-size:12px}@media(max-width:760px){.careerStats{grid-template-columns:repeat(2,1fr)}.careerHero b{font-size:24px}.careerMatch{grid-template-columns:auto minmax(0,1fr) auto;gap:6px}.careerMatch .outcome{grid-column:3;grid-row:1 / span 2}.careerMatch .matchScore{grid-column:2;grid-row:2}}
 </style><script id="local-career-v1">
-const careerStorageKey = 'pitchit:local-career:v1';
-const emptyCareer = () => ({ nickname: '플레이어', games: 0, wins: 0, losses: 0, draws: 0, atBats: 0, hits: 0, rbi: 0, homeRuns: 0, walks: 0, strikeouts: 0, outsRecorded: 0, earnedRuns: 0, recordedGames: [], matchHistory: [] });
-function loadCareer() { try { return { ...emptyCareer(), ...(JSON.parse(localStorage.getItem(careerStorageKey) || '{}')) }; } catch (_) { return emptyCareer(); } }
-function saveCareer(value) { try { localStorage.setItem(careerStorageKey, JSON.stringify(value)); } catch (_) {} }
+const careerStorageKey = 'pitchit:local-career:v1', guestNicknameStorageKey = 'pitchit:guest-nickname:v1';
+function guestNickname() { try { let value = localStorage.getItem(guestNicknameStorageKey) || ''; if (!/^Player\d{4}$/.test(value)) { value = `Player${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`; localStorage.setItem(guestNicknameStorageKey, value); } return value; } catch (_) { return 'Player0000'; } }
+const emptyCareer = () => ({ nickname: guestNickname(), games: 0, wins: 0, losses: 0, draws: 0, atBats: 0, hits: 0, rbi: 0, homeRuns: 0, walks: 0, strikeouts: 0, outsRecorded: 0, earnedRuns: 0, recordedGames: [], matchHistory: [] });
+function loadCareer() { try { const value = { ...emptyCareer(), ...(JSON.parse(localStorage.getItem(careerStorageKey) || '{}')) }; if (!globalThis.pitchitMemberSignedIn) value.nickname = guestNickname(); return value; } catch (_) { return emptyCareer(); } }
+function saveCareer(value) { try { const next = { ...value }; if (!globalThis.pitchitMemberSignedIn) next.nickname = guestNickname(); localStorage.setItem(careerStorageKey, JSON.stringify(next)); } catch (_) {} }
 function careerNumber(value) { return Number(value || 0); }
 function careerRate(top, bottom) { return bottom ? (top / bottom).toFixed(3).replace(/^0/, '') : '.000'; }
 function openCareer() {
@@ -965,7 +966,7 @@ function accountPanel() {
 }
 async function loadAccount() {
   if (!accountApi) return;
-  try { accountState = await accountRequest(); cloudCareerReady = Boolean(accountState.signedIn && accountState.mergedLocal); accountPanel(); } catch (_) { /* game stays fully playable offline */ }
+  try { accountState = await accountRequest(); globalThis.pitchitMemberSignedIn = Boolean(accountState.signedIn); cloudCareerReady = Boolean(accountState.signedIn && accountState.mergedLocal); if (accountState.signedIn) { const current = loadCareer(); current.nickname = accountState.name; localStorage.setItem(careerStorageKey, JSON.stringify(current)); } accountPanel(); } catch (_) { /* game stays fully playable offline */ }
 }
 function queueCloudCareerSave(value) {
   if (!accountState.signedIn || !cloudCareerReady) return;
@@ -976,6 +977,43 @@ function queueCloudCareerSave(value) {
 const saveCareerBeforeAccountSync = saveCareer;
 saveCareer = function(value) { saveCareerBeforeAccountSync(value); queueCloudCareerSave(value); };
 loadAccount();
+</script><style id="player-identity-v1">
+.careerGuestName{margin:14px 0;padding:12px;background:#f4f8fc;border:1px solid #cfdae6;color:#234666;font-weight:900}.careerGuestName small{display:block;margin-top:4px;color:#607286;font-weight:400}.careerMemberHint{margin:10px 0 0;color:#607286;font-size:12px}.accountSync .accountDone{display:block}.accountSync .accountDone:before{content:'●';margin-right:6px;color:#28b66b}
+</style><script id="player-identity-v1">
+const identitySafe = value => String(value || '').replace(/[&<>"']/g, '');
+function currentPlayerNickname() { return accountState?.signedIn ? (accountState.name || '플레이어') : guestNickname(); }
+const openCareerBeforeIdentity = openCareer;
+openCareer = function() {
+  openCareerBeforeIdentity();
+  const overlay = document.getElementById('careerOverlay'); if (!overlay) return;
+  const member = Boolean(accountState?.signedIn), career = loadCareer();
+  overlay.querySelector('h2').textContent = '내 정보';
+  const hero = overlay.querySelector('.careerHero'), nameBox = overlay.querySelector('.careerName');
+  if (hero) hero.querySelector('small').textContent = member ? 'GOOGLE ACCOUNT · SYNCED' : 'GUEST · THIS DEVICE';
+  if (!nameBox) return;
+  if (!member) {
+    nameBox.outerHTML = `<div class="careerGuestName"><b>${identitySafe(career.nickname)}</b><small>비회원 닉네임은 이 기기에 고정됩니다. Google 로그인 후 원하는 닉네임을 설정할 수 있습니다.</small></div>`;
+    return;
+  }
+  nameBox.innerHTML = `<input id="careerNickname" maxlength="16" value="${identitySafe(accountState.name || '')}" placeholder="닉네임 (2~16자)"><button id="saveCareerName">중복 확인 후 저장</button>`;
+  nameBox.nextElementSibling?.remove?.();
+  nameBox.querySelector('#saveCareerName').onclick = async () => {
+    const button = nameBox.querySelector('#saveCareerName'), value = nameBox.querySelector('#careerNickname').value.trim();
+    button.disabled = true; button.textContent = '확인 중…';
+    try {
+      const response = await accountRequest({ action: 'name', name: value });
+      accountState = { ...accountState, name: response.name }; const updated = loadCareer(); updated.nickname = response.name; saveCareer(updated); openCareer();
+    } catch (error) { alert(error.message || '닉네임을 저장하지 못했습니다.'); button.disabled = false; button.textContent = '중복 확인 후 저장'; }
+  };
+  const hint = document.createElement('p'); hint.className = 'careerMemberHint'; hint.textContent = '닉네임은 다른 회원과 중복해서 사용할 수 없습니다.'; nameBox.after(hint);
+};
+if (typeof careerButton !== 'undefined') careerButton.textContent = '내 정보';
+const friendLobbyBeforeIdentity = friendLobby;
+friendLobby = function() { friendLobbyBeforeIdentity(); const input = document.getElementById('friendName'); if (input) { input.value = currentPlayerNickname(); input.style.display = 'none'; } };
+const quickLobbyBeforeIdentity = quickLobby;
+quickLobby = function() { quickLobbyBeforeIdentity(); const input = document.getElementById('quickName'); if (input) { input.value = currentPlayerNickname(); input.style.display = 'none'; } };
+document.querySelector('[data-mode="friend"]').onclick = friendLobby;
+document.querySelector('[data-mode="quick"]').onclick = quickLobby;
 </script><style id="broadcast-and-ai-v1">
 .broadcastCall{width:min(620px,100%);margin:8px auto 12px;padding:10px 16px;border-left:5px solid #e33b31;background:linear-gradient(90deg,#102846,#1a4678);color:#fff;box-shadow:0 6px 14px #10284622;font-size:15px;font-weight:900;line-height:1.4;animation:broadcastIn .26s ease-out}.broadcastCall small{display:block;margin-bottom:2px;color:#9bc7f3;font-size:10px;letter-spacing:.13em}.pitchFlight{position:absolute;z-index:15;width:18%;aspect-ratio:1;left:50%;top:-16%;background:url("pitch-ball.png") center/contain no-repeat;filter:drop-shadow(0 5px 4px #10284688);pointer-events:none;animation:pitchFlight .62s cubic-bezier(.18,.78,.3,1) forwards}.zoneWrap.resultFlash .zone{animation:zoneFlash .52s ease-out}.zoneWrap.resultFlash.hit .zone{box-shadow:0 0 0 4px #e33b31,0 0 28px #e33b3180}.zoneWrap.resultFlash.out .zone{box-shadow:0 0 0 4px #173b62,0 0 25px #173b6280}@keyframes pitchFlight{0%{transform:translate(-50%,0) scale(.45);opacity:.2}70%{opacity:1}100%{left:calc(14% + var(--pitch-x) * 14.4%);top:calc(14% + var(--pitch-y) * 14.4%);transform:translate(-50%,-50%) scale(1.05);opacity:0}}@keyframes broadcastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}@keyframes zoneFlash{50%{filter:brightness(1.2)}}.aiScout{margin:8px 0 0;padding:10px 11px;border:1px solid #b9cadc;background:#f3f8fe;color:#264966;font-size:12px;line-height:1.45}.aiScout b{color:#e33b31}@media(max-width:760px){.broadcastCall{width:min(70vw,31dvh,250px);margin:3px auto 5px;padding:6px 8px;font-size:10px}.broadcastCall small{font-size:7px}.aiScout{font-size:10px;padding:7px}.pitchFlight{width:20%}}
 </style><script id="broadcast-and-ai-v1">

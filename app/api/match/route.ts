@@ -1,7 +1,9 @@
 import matchHandler from "./handler";
 import { auth } from "@clerk/nextjs/server";
+import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
+const redis = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 
 async function respond(request: Request) {
   const headers = new Headers();
@@ -20,7 +22,10 @@ async function respond(request: Request) {
   if (body) {
     const { userId } = await auth();
     if (userId) {
-      try { body = JSON.stringify({ ...JSON.parse(body), profileId: userId }); } catch { /* handler reports malformed input */ }
+      try {
+        const profile = await redis.get<{ name?: string }>(`pitchit:account-career:v1:${userId}`);
+        body = JSON.stringify({ ...JSON.parse(body), profileId: userId, name: profile?.name || "플레이어" });
+      } catch { /* handler reports malformed input */ }
     }
   }
   const url = new URL(request.url);
