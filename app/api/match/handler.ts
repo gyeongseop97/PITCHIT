@@ -34,6 +34,9 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
+  // A highlighted cell is saved privately so a player who runs out of time
+  // can still use the plan they had prepared.  It is never sent to the rival.
+  drafts: Partial<Record<PlayerId, Choice>>;
   lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
@@ -87,7 +90,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, drafts: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -214,7 +217,7 @@ const publicRoom = (room: Room) => ({
   // Reveal only that a player has locked a choice.  Their target, swing and
   // pitch stay private until both choices are received and resolved.
   choiceReady: { p1: Boolean(room.game.choices.p1), p2: Boolean(room.game.choices.p2) },
-  game: { ...room.game, choices: {} },
+  game: { ...room.game, choices: {}, drafts: {} },
   attacker: actor(room.game),
 });
 
@@ -257,6 +260,7 @@ function walk(game: Game, batterSpeed: number) {
 }
 function nextPitch(game: Game) {
   game.choices = {};
+  game.drafts = {};
   game.deadline = Date.now() + 20000;
 }
 function finishWalkoff(game: Game) {
@@ -266,6 +270,7 @@ function finishWalkoff(game: Game) {
   game.status = "finished";
   game.deadline = 0;
   game.choices = {};
+  game.drafts = {};
   game.event = `${game.event} · 끝내기 승리!`;
   return true;
 }
@@ -311,8 +316,8 @@ async function resolve(room: Room) {
   const game = room.game;
   if (game.status !== "playing") return;
   const battingPlayer = actor(game);
-  const batting = game.choices[battingPlayer] ?? { kind: "bat" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: "contact" };
-  const pitching = game.choices[defender(game)] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
+  const batting = game.choices[battingPlayer] ?? game.drafts[battingPlayer] ?? { kind: "bat" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: "contact" };
+  const pitching = game.choices[defender(game)] ?? game.drafts[defender(game)] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
   const pitcher = game.teams[defender(game)].pitchers[game.teams[defender(game)].activePitcher];
   const batter = game.teams[battingPlayer].lineup[game.batter[game.half]];
   const battingSide = battingPlayer === "p1" ? 0 : 1;
@@ -453,6 +458,7 @@ function startRoom(room: Room, joining: Player): PlayerId {
   // in that gap used to leave the first defender unable to submit a pitch.
   room.game.deadline = room.game.introUntil + 20_000;
   room.game.choices = {};
+  room.game.drafts = {};
   room.game.event = "매칭 완료! 양 팀 소개 후 경기가 시작됩니다.";
   return joiningBatsFirst ? "p1" : "p2";
 }
@@ -542,7 +548,7 @@ export default async function handler(req: any, res: any) {
     }
     let room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
-    const needsRoomLock = input.action === "join" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || input.action === "rematch" || (input.action === "state" && Boolean(room.game.introUntil));
+    const needsRoomLock = input.action === "join" || input.action === "draft" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || input.action === "rematch" || (input.action === "state" && Boolean(room.game.introUntil));
     const roomLockKey = `pitchit:room:${room.code}:lock`;
     const roomLock = needsRoomLock ? await acquire(roomLockKey, 12) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
@@ -640,11 +646,21 @@ export default async function handler(req: any, res: any) {
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
       if (!validChoice(input.choice, expected)) return res.status(400).json({ error: "작전 선택값이 올바르지 않습니다." });
       room.game.choices[player] = input.choice;
+      delete room.game.drafts[player];
       if (room.mode === "solo") {
         const ai = aiChoice(room.game, "p2");
         room.game.choices.p2 = ai;
       }
       if (room.game.choices.p1 && room.game.choices.p2) await resolve(room);
+    }
+    if (input.action === "draft") {
+      if (room.game.status !== "playing") return res.status(409).json({ error: "상대가 입장한 뒤 작전을 선택할 수 있습니다." });
+      // Never let a delayed touch from the prior pitch become the next
+      // pitch's timeout choice.
+      if (Number(input.deadline) !== room.game.deadline) return res.status(409).json({ error: "새 턴이 시작되었습니다." });
+      const expected = player === actor(room.game) ? "bat" : "pitch";
+      if (input.choice?.kind !== expected || !validChoice(input.choice, expected)) return res.status(400).json({ error: "임시 선택값이 올바르지 않습니다." });
+      if (!room.game.choices[player]) room.game.drafts[player] = input.choice;
     }
     await save(room);
     return res.json({ ...publicRoom(room), player, token: input.token });

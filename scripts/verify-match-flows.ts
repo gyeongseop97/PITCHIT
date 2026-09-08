@@ -95,6 +95,9 @@ async function main() {
   const bat = { kind: "bat", cell: 12, swing: "contact" };
   const bad = { kind: "bat", cell: -1, swing: "contact" };
   await request({ action: "choose", code: host.code, token: attacker.token, choice: bad }, 400);
+  const drafted = await request({ action: "draft", code: host.code, token: attacker.token, deadline: initial.game.deadline, choice: bat });
+  assert.equal(drafted.choiceReady[attacker.player], false, "a highlighted cell must not count as a submitted choice");
+  assert.deepEqual(drafted.game.drafts, {}, "a private draft must never be exposed to the opponent");
   const locked = await request({ action: "choose", code: host.code, token: attacker.token, choice: bat });
   assert.equal(locked.choiceReady[attacker.player], true);
   assert.deepEqual(locked.game.choices, {}, "public state must never reveal a chosen target");
@@ -127,11 +130,28 @@ async function main() {
   assert.equal(rematched.game.status, "playing");
   assert.ok(rematched.game.introUntil, "a rematch must show the match intro before its first turn");
 
+  // A selected but unconfirmed cell is used at timeout. An untouched player
+  // remains the only one whose action is randomized.
+  const timeoutHost = await request({ action: "create", name: auditName, profileId: auditId }, 201);
+  const timeoutGuest = await request({ action: "join", code: timeoutHost.code, name: auditName, profileId: auditId });
+  await wait(5_200);
+  const timeoutInitial = await state(timeoutHost);
+  const timeoutGuestView = await state(timeoutGuest);
+  const timeoutSessions = { [timeoutInitial.player]: timeoutHost, [timeoutGuestView.player]: timeoutGuest } as Record<"p1" | "p2", any>;
+  const timeoutAttacker = timeoutInitial.attacker as "p1" | "p2";
+  const timeoutDefender = timeoutAttacker === "p1" ? "p2" : "p1";
+  await request({ action: "draft", code: timeoutHost.code, token: timeoutSessions[timeoutAttacker].token, deadline: timeoutInitial.game.deadline, choice: { kind: "bat", cell: 0, swing: "spot" } });
+  await request({ action: "draft", code: timeoutHost.code, token: timeoutSessions[timeoutDefender].token, deadline: timeoutInitial.game.deadline, choice: { kind: "pitch", cell: 24, pitch: "breaking" } });
+  await wait(20_250);
+  const timedOut = await state(timeoutHost);
+  assert.equal(timedOut.game.lastPlay?.bat.cell, 0, "timeout must use the hitter's selected cell");
+  assert.equal(timedOut.game.lastPlay?.pitch.cell, 24, "timeout must use the pitcher's selected cell");
+
   // A full remote game means dozens of sequential server calls. Keep it
   // opt-in for staging/CI so routine production audits cannot outlive a
   // command runner or contend with live users.
   const fullGame = process.env.RUN_FULL_GAME === "1" ? `, complete game (${await playFullGame()} pitches)` : "";
-  console.log(`PASS: presence, solo, friend lobby/join/intro, validation, choice privacy, swap, forfeit/rematch${fullGame}`);
+  console.log(`PASS: presence, solo, friend lobby/join/intro, validation, draft privacy/timeout, choice privacy, swap, forfeit/rematch${fullGame}`);
 }
 
 main().catch((error) => {

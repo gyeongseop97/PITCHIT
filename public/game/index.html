@@ -1615,4 +1615,47 @@ watchMatch=function(){
   };
   matchPoll=setTimeout(poll,0);
 };
+// Each pitch starts with an empty cursor.  A selected cell is mirrored to the
+// server as a private draft, so timeout resolution can use it without showing
+// the rival where the player is aiming.
+let cursorTurnKey='';
+function saveDraftChoice(){
+  if(!state.net||!matchSession||matchSubmitted||!Number.isInteger(state.pick))return;
+  const kind=state.half==='top'?'bat':'pitch';
+  requestMatch({action:'draft',code:matchSession.code,token:matchSession.token,deadline:state.deadline,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}}).catch(()=>undefined);
+}
+const applyMatchBeforeCursorReset=applyMatch;
+applyMatch=function(data){
+  const game=data?.game||{},turnKey=`${game.status||''}:${game.deadline||0}:${game.inning||0}:${game.half??''}`;
+  if(turnKey&&turnKey!==cursorTurnKey){cursorTurnKey=turnKey;state.pick=null;state.ball=null;}
+  return applyMatchBeforeCursorReset(data);
+};
+const beginMatchBeforeCursorReset=beginMatch;
+beginMatch=function(data){cursorTurnKey='';state.pick=null;state.ball=null;return beginMatchBeforeCursorReset(data)};
+const renderBeforeCursorDraft=render;
+render=function(){
+  renderBeforeCursorDraft();
+  if(!state.mode)return;
+  const zone=$('zone');
+  // The legacy range renderer assumes a number; remove that preview until a
+  // player actually chooses a cell for this turn.
+  if(!Number.isInteger(state.pick))zone?.querySelectorAll('.range,.contact-strong,.contact-medium,.contact-soft,.power-range').forEach(cell=>cell.classList.remove('range','contact-strong','contact-medium','contact-soft','power-range'));
+  if(state.net&&zone){zone.querySelectorAll('[data-z]').forEach(button=>button.onclick=()=>{if(matchSubmitted)return;state.pick=+button.dataset.z;state.ball=null;render();saveDraftChoice()});}
+  const action=$('swing');if(!action||!state.net||state.finished)return;
+  const seconds=state.deadline>Date.now()?Math.ceil((state.deadline-Date.now())/1000):0;
+  if(!matchSubmitted&&!Number.isInteger(state.pick)){action.disabled=true;action.classList.add('waiting');action.textContent=`칸을 선택하세요 · ${seconds}초`;}
+};
+const submitMatchBeforeCursorValidation=submitMatch;
+submitMatch=async function(){
+  if(state.net&&!Number.isInteger(state.pick)){const action=$('swing');if(action)action.textContent='먼저 스트라이크존의 칸을 선택하세요';return;}
+  return submitMatchBeforeCursorValidation();
+};
+const startBeforeCursorBlank=start;
+start=mode=>{state.pick=null;state.ball=null;return startBeforeCursorBlank(mode)};
+const setResultBeforeCursorBlank=setResult;
+setResult=(text,kind)=>{
+  const result=setResultBeforeCursorBlank(text,kind);
+  if(!state.net&&state.mode){state.pick=null;render();}
+  return result;
+};
 </script></body></html>
