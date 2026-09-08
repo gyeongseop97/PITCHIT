@@ -1627,6 +1627,7 @@ function saveDraftChoice(){
 const applyMatchBeforeCursorReset=applyMatch;
 applyMatch=function(data){
   const game=data?.game||{},turnKey=`${game.status||''}:${game.deadline||0}:${game.inning||0}:${game.half??''}`;
+  armResultTransitionHold(game);
   if(turnKey&&turnKey!==cursorTurnKey){cursorTurnKey=turnKey;state.pick=null;state.ball=null;}
   return applyMatchBeforeCursorReset(data);
 };
@@ -1654,8 +1655,31 @@ const startBeforeCursorBlank=start;
 start=mode=>{state.pick=null;state.ball=null;return startBeforeCursorBlank(mode)};
 const setResultBeforeCursorBlank=setResult;
 setResult=(text,kind)=>{
+  if(!state.net&&(/3아웃|이닝 종료/.test(String(text))||state.finished))armResultTransitionHold({status:state.finished?'finished':'playing',lastPlay:{actualCell:state.ball},event:text,half:state.half,inning:state.inning});
   const result=setResultBeforeCursorBlank(text,kind);
   if(!state.net&&state.mode){state.pick=null;render();}
   return result;
 };
+// A third out or final play must remain readable before an inning card or the
+// final-result dialog covers it.  The server has already advanced the game;
+// this only stages the presentation for 2.5 seconds.
+let resultTransitionUntil=0,resultTransitionKey='',delayedInningKey='',delayedSummaryKey='';
+function armResultTransitionHold(game){
+  const changedHalf=state.net&&Number.isInteger(state.gameHalf)&&Number.isInteger(game?.half)&&state.gameHalf!==game.half;
+  if(!game?.lastPlay||(!changedHalf&&game.status!=='finished'))return;
+  const key=`${game.status}:${game.inning}:${game.half}:${game.deadline}:${game.event||''}:${game.lastPlay.actualCell??''}`;
+  if(key===resultTransitionKey)return;
+  resultTransitionKey=key;resultTransitionUntil=Date.now()+2500;
+}
+function deferResultTransition(kind,key,run){
+  const wait=Math.max(0,resultTransitionUntil-Date.now());
+  if(!wait)return run();
+  if(kind==='inning'){if(delayedInningKey===key)return;delayedInningKey=key;}
+  else{if(delayedSummaryKey===key)return;delayedSummaryKey=key;}
+  setTimeout(()=>{if(kind==='inning')delayedInningKey='';else delayedSummaryKey='';run()},wait);
+}
+const showInningBreakBeforeResultHold=showInningBreak;
+showInningBreak=function(inning,half,kind){return deferResultTransition('inning',`${inning}:${half}:${kind}`,()=>showInningBreakBeforeResultHold(inning,half,kind))};
+const showGameSummaryBeforeResultHold=showGameSummary;
+showGameSummary=function(game){const key=`${state.net?'net':'local'}:${state.r}:${state.away}:${state.inning}:${game?.event||''}`;return deferResultTransition('summary',key,()=>showGameSummaryBeforeResultHold(game))};
 </script></body></html>
