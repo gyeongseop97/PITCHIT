@@ -259,6 +259,16 @@ function nextPitch(game: Game) {
   game.choices = {};
   game.deadline = Date.now() + 20000;
 }
+function finishWalkoff(game: Game) {
+  // In the regulation final half and every extra-inning bottom half, the
+  // home team does not need to record three outs once it has taken the lead.
+  if (game.half !== 1 || game.inning < 3 || game.scores[1] <= game.scores[0]) return false;
+  game.status = "finished";
+  game.deadline = 0;
+  game.choices = {};
+  game.event = `${game.event} · 끝내기 승리!`;
+  return true;
+}
 function endPlate(game: Game) {
   game.balls = 0;
   game.strikes = 0;
@@ -325,7 +335,7 @@ async function resolve(room: Room) {
     // A command miss is a forced take: it has already been ruled a ball by
     // the shared engine, regardless of the hitter's target or swing type.
     game.balls++;
-    if (game.balls >= 4) { game.walks[game.half]++; walk(game, batter.v); game.event = `${executionNotice}${plate.message} · 볼넷`; endPlate(game); }
+    if (game.balls >= 4) { game.walks[game.half]++; walk(game, batter.v); game.event = `${executionNotice}${plate.message} · 볼넷`; if (!finishWalkoff(game)) endPlate(game); }
   } else if (plate.outcome === "foul") {
     game.strikes = Math.min(2, game.strikes + 1);
   } else if (plate.outcome === "swinging_strike") {
@@ -344,10 +354,10 @@ async function resolve(room: Room) {
     }
     game.outs++;
     game.event = `${plate.message}${tagUp}`;
-    endPlate(game);
+    if (!finishWalkoff(game)) endPlate(game);
   } else {
     const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
-    game.hits[game.half]++; const extraAdvance = advance(game, bases, batter.v); game.event = `${plate.message}${extraAdvance}`; endPlate(game);
+    game.hits[game.half]++; const extraAdvance = advance(game, bases, batter.v); game.event = `${plate.message}${extraAdvance}`; if (!finishWalkoff(game)) endPlate(game);
   }
   game.playLog = [{
     inning: game.inning,

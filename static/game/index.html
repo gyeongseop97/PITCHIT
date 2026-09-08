@@ -1569,12 +1569,50 @@ render=function(){
 /* A poll is frequent, but most responses are identical. Avoid rebuilding the
    whole iframe until the game state has actually changed. Samsung Internet
    visibly reflows the board when that unnecessary rebuild happens. */
-let lastAppliedMatchSignature='';
+let lastAppliedMatchSignature='',matchRequestSequence=0,lastAppliedMatchRequestSequence=0,latestRoomRequestSequence=0,matchPollInFlight=false;
+// A state poll can leave the phone before a choice is submitted, then return
+// after the choice response.  Tag every client request so that stale snapshots
+// never repaint the previous pitch over a newly resolved result.
+const requestMatchBeforeResponseOrdering=requestMatch;
+requestMatch=async body=>{
+  const sequence=++matchRequestSequence;
+  if(body?.code)latestRoomRequestSequence=sequence;
+  const data=await requestMatchBeforeResponseOrdering(body);
+  if(data&&typeof data==='object')Object.defineProperty(data,'__matchRequestSequence',{value:sequence,enumerable:false});
+  return data;
+};
 function matchSignature(data){const g=data?.game||{};return JSON.stringify({ready:data?.ready,players:data?.players,choiceReady:data?.choiceReady,status:g.status,inning:g.inning,half:g.half,balls:g.balls,strikes:g.strikes,outs:g.outs,bases:g.bases,scores:g.scores,hits:g.hits,walks:g.walks,batter:g.batter,deadline:g.deadline,introUntil:g.introUntil,event:g.event,lastPlay:g.lastPlay,history:g.history,teams:g.teams,inningScores:g.inningScores,baitUsed:g.baitUsed})}
 function refreshMatchCountdown(){if(!state.net||!state.mode||state.finished)return;const action=$('swing');if(!action)return;const seconds=state.deadline>Date.now()?Math.ceil((state.deadline-Date.now())/1000):0;if(matchSubmitted){action.textContent=`선택 완료 · 상대방의 선택을 기다리는 중 · ${seconds}초`;return}if(state.opponentSubmitted){action.textContent=`상대 선택 완료 · 내 선택을 확정하세요 · ${seconds}초`;return}action.textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`}
 const applyMatchBeforePollDedupe=applyMatch;
-applyMatch=function(data){const signature=matchSignature(data);if(signature===lastAppliedMatchSignature){refreshMatchCountdown();return data}lastAppliedMatchSignature=signature;return applyMatchBeforePollDedupe(data)};
+applyMatch=function(data){
+  const sequence=Number(data?.__matchRequestSequence||0);
+  if(data?.code&&matchSession?.code&&data.code!==matchSession.code)return data;
+  if(sequence&&(sequence<lastAppliedMatchRequestSequence||sequence<latestRoomRequestSequence))return data;
+  if(sequence)lastAppliedMatchRequestSequence=sequence;
+  const signature=matchSignature(data);
+  if(signature===lastAppliedMatchSignature){refreshMatchCountdown();return data}
+  lastAppliedMatchSignature=signature;
+  return applyMatchBeforePollDedupe(data);
+};
 const beginMatchBeforePollDedupe=beginMatch;
 beginMatch=function(data){lastAppliedMatchSignature='';return beginMatchBeforePollDedupe(data)};
-watchMatch=function(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game?.status==='finished'){clearInterval(matchPoll);applyMatch(data);return}if(data.ready)applyMatch(data);else{const status=document.getElementById('friendStatus');if(status)status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}}catch(_){/* retry next poll */}},500)};
+watchMatch=function(){
+  clearInterval(matchPoll);matchPollInFlight=false;
+  const poll=async()=>{
+    if(!matchSession||matchPollInFlight)return;
+    matchPollInFlight=true;
+    try{
+      const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});
+      if(data.game?.status==='finished'){applyMatch(data);return}
+      if(matchSession.rematchWaiting&&data.game?.status==='playing'){matchSession.rematchWaiting=false;state.finished=false;beginMatch(data);return}
+      if(data.ready)applyMatch(data);
+      else{const status=document.getElementById('friendStatus');if(status)status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`;}
+    }catch(_){/* A transient network failure is retried after the normal interval. */}
+    finally{
+      matchPollInFlight=false;
+      if(matchSession&&!state.finished)matchPoll=setTimeout(poll,500);
+    }
+  };
+  matchPoll=setTimeout(poll,0);
+};
 </script></body></html>
