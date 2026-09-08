@@ -94,7 +94,9 @@ applyMatch=function(data){
   state.opponentLastLabel=amBatting?'상대 직전 투구':'상대 직전 타격 노림';
   if(matchDeadline&&matchDeadline!==g.deadline)matchSubmitted=false;
   matchDeadline=g.deadline;
-  if(g.lastPlay&&shownNetEvent!==g.event){shownNetEvent=g.event;state.netOutcome=g.event;}
+  // The live play-by-play owns online results. Keeping a second zone banner
+  // here made a previous result survive into the following turn.
+  if(g.lastPlay)shownNetEvent=g.event;
   render();
 };
 async function submitMatch(){
@@ -145,7 +147,6 @@ const setResultBeforeOutcome=setResult;
 setResult=(text,kind)=>{revealOutcome(text,true);setResultBeforeOutcome(text,kind)};
 const applyMatchBeforeFeedbackV3=applyMatch;
 applyMatch=function(data){
-  const previousDeadline=matchDeadline;
   applyMatchBeforeFeedbackV3(data);
   const g=data.game,me=matchSession?.player;
   if(g.lastPlay&&me){
@@ -154,8 +155,8 @@ applyMatch=function(data){
     state.opponentLastIcon=opponentChoice.kind==='pitch'?'⚾':'◎';
     state.opponentLastLabel=opponentChoice.kind==='pitch'?'상대 직전 투구':'상대 직전 타격 노림';
   }
-  if(previousDeadline&&previousDeadline!==g.deadline&&g.lastPlay)revealOutcome(g.event);
-  render();
+  // Online result display is keyed in showBroadcast(), after the full server
+  // state has arrived. Do not start a competing timer here.
 };
 const renderBeforeFeedbackV3=render;
 render=()=>{
@@ -293,7 +294,7 @@ applyMatch=function(data){
   const game=data.game,me=matchSession?.player,side=me==='p1'?0:1;
   state.hits=(game.hits||[0,0])[side];state.awayHits=(game.hits||[0,0])[side?0:1];
   state.walks=(game.walks||[0,0])[side];state.awayWalks=(game.walks||[0,0])[side?0:1];
-  if(game.lastPlay){state.lastPitchInfo=`${game.lastPlay.pitchName||'패스트볼'} · ${game.lastPlay.speed||'-'} km/h`;state.serverEvent=stadiumMessage(game.event,'');state.netOutcome=state.serverEvent;}
+  if(game.lastPlay){state.lastPitchInfo=`${game.lastPlay.pitchName||'패스트볼'} · ${game.lastPlay.speed||'-'} km/h`;state.serverEvent=stadiumMessage(game.event,'');}
   render();
 };
 const stadiumMessage=(event,pitch)=>{
@@ -661,20 +662,6 @@ render=()=>{
   if(coach)coach.innerHTML=`<small>STEP ${tutorialIndex+1} / ${tutorialSteps.length}</small><b>${step.title}</b><p>${step.side==='top'?'준비된 스윙으로 ':'준비된 구종으로 '}<b>노란 테두리 칸</b>을 선택하세요.${step.side==='bottom'&&step.bait?' 이어서 안내된 유인구 방향도 고르세요.':''}</p><p>${step.text}</p>`;
   action.disabled=!(ready.cell&&(!(step.side==='bottom'&&step.bait)||ready.ball));action.classList.toggle('waiting',action.disabled);action.textContent=action.disabled?'노란 칸을 선택하세요':'이 장면 진행';action.onclick=runTutorialStep;
 };
-</script><script id="network-result-banner-fix-v1">
-// The older wrappers update matchDeadline before the result-banner wrapper
-// observes it. Keep a separate deadline snapshot so every completed pitch
-// reliably shows its result for three seconds on both players' boards.
-let resultBannerDeadline = 0;
-const applyMatchBeforeResultBannerFix = applyMatch;
-applyMatch = function(data) {
-  const previousDeadline = resultBannerDeadline;
-  applyMatchBeforeResultBannerFix(data);
-  const game = data.game;
-  const completedTurn = Boolean(previousDeadline && game.lastPlay && game.deadline !== previousDeadline);
-  resultBannerDeadline = game.deadline;
-  if (completedTurn) revealOutcome(state.serverEvent || game.event || '투구 결과가 나왔습니다.');
-};
 </script><script id="match-presentation-polish-v1">
 // The home buttons should describe the mode that actually opens. Keeping
 // this here also updates the static GitHub Pages build without duplicating
@@ -689,7 +676,6 @@ applyMatch = function(data) {
   applyMatchBeforePresentationPolish(data);
   if (data.game?.lastPlay && data.game?.event) {
     state.serverEvent = data.game.event;
-    if ((state.netOutcomeUntil || 0) > Date.now()) state.netOutcome = data.game.event;
     render();
   }
 };
@@ -1485,16 +1471,13 @@ function showPitchPrelude(play){
   const ball=document.createElement('i');ball.className='pitchPreludeBall';
   wrap.append(label,ball);setTimeout(()=>{label.remove();ball.remove()},340);
 }
-let cinematicBroadcastKey='',cinematicBroadcastPending='';
+let cinematicBroadcastKey='';
 const showBroadcastBeforeCinematic=showBroadcast;
 showBroadcast=function(game){
   const play=game?.lastPlay,key=play?`${game.deadline}:${game.event}:${play.actualCell}`:'';
   if(play&&key!==cinematicBroadcastKey){
-    cinematicBroadcastKey=key;cinematicBroadcastPending=key;showPitchPrelude(play);
-    setTimeout(()=>{if(cinematicBroadcastPending===key){cinematicBroadcastPending='';showBroadcastBeforeCinematic(game)}},320);
-    return;
+    cinematicBroadcastKey=key;showPitchPrelude(play);
   }
-  if(key&&cinematicBroadcastPending===key)return;
   showBroadcastBeforeCinematic(game);
   const call=document.getElementById('broadcastCall'),event=String(game?.event||'');
   if(call&&event&&(/주력으로|태그업|득점/.test(event))&&!call.querySelector('.playDetail')){
