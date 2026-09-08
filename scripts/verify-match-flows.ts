@@ -71,9 +71,13 @@ async function main() {
   // Intro cannot consume decision time. After it ends, only the defender may swap.
   await wait(5_200);
   const initial = await state(host);
+  const guestView = await state(guest);
   assert.ok(initial.game.deadline - Date.now() > 18_000, "the opening turn must retain its full 20-second choice window");
-  const attacker = initial.attacker === "p1" ? host : guest;
-  const defender = initial.attacker === "p1" ? guest : host;
+  // The joiner can be assigned p1 for a random first at-bat, so resolve the
+  // current server roles from each session rather than assuming the host is p1.
+  const sessions = { [initial.player]: host, [guestView.player]: guest } as Record<"p1" | "p2", any>;
+  const attacker = sessions[initial.attacker as "p1" | "p2"];
+  const defender = sessions[(initial.attacker === "p1" ? "p2" : "p1") as "p1" | "p2"];
   await request({ action: "swap", code: host.code, token: attacker.token, index: 0 }, 409);
   const staff = initial.game.teams[defender.player].pitchers as unknown[];
   const used = initial.game.teams[defender.player].usedPitchers as number[];
