@@ -73,7 +73,7 @@ if(state.mode&&!state.awayLineup)newPitchers();render();
 let matchSession=null,matchPoll=null;
 const matchApi=location.hostname.endsWith('github.io')?'https://pitchit-baseball.vercel.app/api/match':'/api/match';let requestMatch=async(body)=>{const response=await fetch(matchApi,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error||'서버 연결 실패');return data};
 function friendLobby(){let box=document.getElementById('friendLobby');if(!box){box=document.createElement('section');box.id='friendLobby';box.className='panel';box.style.marginTop='24px';document.querySelector('.modes').after(box)}box.innerHTML='<h3>친구와 실시간 대전</h3><p class="hint">방을 만들거나 친구의 초대 코드를 입력하세요. 경기 중 선택 시간은 20초입니다.</p><input id="friendName" placeholder="내 이름" maxlength="16"><div class="types"><button id="createRoom">초대 코드 생성</button><button id="joinRoom">초대 코드 입력</button></div><p class="result" id="friendStatus">서버 연결 준비 완료</p>';document.getElementById('createRoom').onclick=async()=>{try{const data=await requestMatch({action:'create',name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};document.getElementById('friendStatus').textContent=`초대 코드: ${data.code} · 친구의 입장을 기다리는 중`;watchMatch()}catch(e){document.getElementById('friendStatus').textContent=e.message}};document.getElementById('joinRoom').onclick=async()=>{const code=prompt('친구에게 받은 6자리 초대 코드를 입력하세요.');if(!code)return;try{const data=await requestMatch({action:'join',code,name:document.getElementById('friendName').value});matchSession={code:data.code,token:data.token,player:data.player};beginMatch(data)}catch(e){document.getElementById('friendStatus').textContent=e.message}}}
-function applyMatch(data){if(!matchSession)return;const g=data.game,me=matchSession.player,index=me==='p1'?0:1;state.mode='friend';state.net=true;state.inning=g.inning;state.r=g.scores[index];state.away=g.scores[index?0:1];state.b=g.balls;state.s=g.strikes;state.o=g.outs;state.bases=g.bases;state.turn=g.batter[index];state.awayTurn=g.batter[index?0:1];state.batter=lineup[state.turn];state.awayBatter=state.awayLineup?.[state.awayTurn]||state.batter;state.half=(g.half===0?'p1':'p2')===me?'top':'bottom';state.deadline=g.deadline;state.serverEvent=g.event;render()}
+function applyMatch(data){if(!matchSession)return;const g=data.game,me=matchSession.player,index=me==='p1'?0:1;state.mode=matchSession.mode==='quick'?'quick':'friend';state.net=true;state.inning=g.inning;state.r=g.scores[index];state.away=g.scores[index?0:1];state.b=g.balls;state.s=g.strikes;state.o=g.outs;state.bases=g.bases;state.turn=g.batter[index];state.awayTurn=g.batter[index?0:1];state.batter=lineup[state.turn];state.awayBatter=state.awayLineup?.[state.awayTurn]||state.batter;state.half=(g.half===0?'p1':'p2')===me?'top':'bottom';state.deadline=g.deadline;state.serverEvent=g.event;render()}
 function beginMatch(data){document.getElementById('friendLobby')?.remove();applyMatch(data);watchMatch()}
 async function watchMatch(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.ready)beginMatch(data);else document.getElementById('friendStatus').textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}catch(e){clearInterval(matchPoll)}},500)}
 async function submitMatch(){if(!matchSession)return;const kind=state.half==='top'?'bat':'pitch';try{const data=await requestMatch({action:'choose',code:matchSession.code,token:matchSession.token,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}});applyMatch(data);$('result').textContent='작전을 전송했습니다. 상대 선택 또는 제한 시간을 기다리는 중입니다.'}catch(e){$('result').textContent=e.message}}
@@ -396,22 +396,6 @@ document.querySelector('[data-mode="quick"]').onclick=quickLobby;
 </style><script id="strike-ball-zone-v1">
 const decorateStrikeZone=()=>{const zone=document.getElementById('zone');if(!zone)return;zone.querySelectorAll('[data-z]').forEach(cell=>{cell.classList.remove('strike-space','ball-space')});let hint=document.getElementById('zoneRuleHint');if(!hint){hint=document.createElement('p');hint.id='zoneRuleHint';hint.className='zoneRuleHint';zone.parentElement.before(hint)}hint.textContent='타격과 투구 모두 정확한 5×5 스트라이크존에서 선택합니다.';};
 new MutationObserver(decorateStrikeZone).observe(document.getElementById('zone'),{childList:true});decorateStrikeZone();
-</script><style id="three-by-three-v1">
-.zoneRuleHint{display:none}.ballDirections{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:min(450px,100%);margin:8px auto}.ballDirections button{min-height:38px;border:1px solid #cbd7e4;background:#f7fbff;color:#284968;font-weight:900;cursor:pointer}.ballDirections button.on{background:#183b62;color:#fff;box-shadow:inset 0 -3px #e33b31}@media(max-width:760px){.ballDirections{width:min(70vw,31dvh,250px);gap:3px;margin:3px auto}.ballDirections button{min-height:28px;padding:3px 1px;font-size:9px}}
-</style><script id="three-by-three-v1">
-const renderBeforeThreeByThree=render;
-render=()=>{
-  renderBeforeThreeByThree();if(!state.mode)return;
-  const zone=document.getElementById('zone');if(zone)zone.classList.remove('pitching3');
-  let tactics=document.getElementById('ballDirections');
-  if(state.net&&state.half==='bottom'){
-    if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections';document.querySelector('.zoneWrap').after(tactics)}
-    tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
-    tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
-  }else if(tactics)tactics.remove();
-};
-const requestMatchBeforeBallTactics=requestMatch;
-requestMatch=body=>{if(body?.action==='choose'&&body.choice?.kind==='pitch'&&state.pitchBallDirection)body={...body,choice:{...body.choice,ball:state.pitchBallDirection}};return requestMatchBeforeBallTactics(body)};
 </script><script id="online-roster-order-v1">
 const applyMatchBeforeRosterOrder=applyMatch;
 applyMatch=function(data){
@@ -519,39 +503,6 @@ applyMatch=function(data){
     if(play.execution==='mistake'||play.execution==='wild')state.lastPitchInfo=`${play.pitchName||'패스트볼'} · ${play.speed||'-'} km/h · ${play.execution==='mistake'?'실투':'제구 이탈'}`;
   }
   render();
-  return value;
-};
-const renderBeforeBallExecutionDisplay=render;
-render=()=>{
-  renderBeforeBallExecutionDisplay();
-  if(!state.mode||state.half!=='bottom')return;
-  let tactics=document.getElementById('ballDirections');
-  if(!tactics){tactics=document.createElement('div');tactics.id='ballDirections';tactics.className='ballDirections';document.querySelector('.zoneWrap').after(tactics)}
-  tactics.innerHTML=['high:상단 유인','low:하단 유인','in:몸쪽 유인','out:바깥 유인'].map(item=>{const [value,label]=item.split(':');return `<button data-ball="${value}" class="${state.pitchBallDirection===value?'on':''}">${label}</button>`}).join('');
-  tactics.querySelectorAll('[data-ball]').forEach(button=>button.onclick=()=>{state.pitchBallDirection=button.dataset.ball;render()});
-};
-const pitchBeforeBallExecutionDisplay=pitch;
-pitch=()=>{
-  // Local modes use the same four-direction bait decision as online matches.
-  if(!state.net&&state.pitchBallDirection){
-    const direction=state.pitchBallDirection,row=Math.floor(state.pick/5),column=state.pick%5;
-    const actual=direction==='high'?column:direction==='low'?20+column:direction==='in'?row*5:row*5+4;
-    const hitter=state.awayBatter||state.batter,target=Math.floor(Math.random()*25),targetRow=Math.floor(target/5),targetColumn=target%5;
-    const predicted=direction==='high'?targetRow<=1:direction==='low'?targetRow>=3:direction==='in'?targetColumn<=1:targetColumn>=3;
-    const pitcher=state.pitchers?.[state.activePitcher]||{c:50,m:50};
-    const execution=Math.random()<Math.min(.93,.48+pitcher.c/150+pitcher.m/320);
-    if(execution){
-      state.ball=actual;state.opponentLastCell=target;state.opponentLastIcon='◎';state.opponentLastLabel='상대 직전 타격 노림';
-      const chase=Math.random()<Math.min(.9,(predicted?.64:.13)+(64-(hitter.e||50))/260+.07);
-      let text='',kind='ball',end=false;
-      if(chase){state.s++;text='유인구 · 상대가 속아 헛스윙 스트라이크';kind='strike';if(state.s>=3){state.o++;text='유인구 · 삼진 아웃!';kind='out';end=true}}
-      else{state.b++;text='유인구 · 상대가 골라낸 볼';if(state.b>=4){scoreWalk('away');text='유인구 · 볼넷으로 출루';end=true}}
-      if(end)text=finishAtBat(text,'away');
-      state.pitchBallDirection=null;setResult(text,kind);return;
-    }
-  }
-  const value=pitchBeforeBallExecutionDisplay();
-  state.pitchBallDirection=null;
   return value;
 };
 </script><script id="shared-engine-solo-v1">

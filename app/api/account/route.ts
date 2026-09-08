@@ -21,6 +21,7 @@ const nickname = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, 
 const normalizedNickname = (value: string) => value.toLocaleLowerCase("ko-KR");
 
 async function signedIn() {
+  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || !process.env.CLERK_SECRET_KEY) return null;
   const { userId } = await auth();
   return userId;
 }

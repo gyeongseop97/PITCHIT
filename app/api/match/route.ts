@@ -20,7 +20,8 @@ async function respond(request: Request) {
   // Guests keep their device profile id.  A signed-in player cannot spoof a
   // different profile id: rankings and rooms are bound to the Clerk account.
   if (body) {
-    const { userId } = await auth();
+    const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+    const { userId } = clerkEnabled ? await auth() : { userId: null };
     try {
       const input = JSON.parse(body);
       // Never trust a browser-provided "member" flag.  The Clerk session is
