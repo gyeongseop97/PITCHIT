@@ -71,6 +71,7 @@ async function main() {
   // Intro cannot consume decision time. After it ends, only the defender may swap.
   await wait(5_200);
   const initial = await state(host);
+  assert.ok(initial.game.deadline - Date.now() > 18_000, "the opening turn must retain its full 20-second choice window");
   const attacker = initial.attacker === "p1" ? host : guest;
   const defender = initial.attacker === "p1" ? guest : host;
   await request({ action: "swap", code: host.code, token: attacker.token, index: 0 }, 409);

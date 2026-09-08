@@ -601,7 +601,12 @@ export default async function handler(req: any, res: any) {
       } else {
         room.game.introUntil = undefined;
         room.game.event = "경기 시작! 20초 안에 작전을 선택하세요.";
-        nextPitch(room.game);
+        // The opening turn was reserved when the match started. Recreating it
+        // here created a small race: a client could finish its five-second
+        // intro card and send the very first pitch while the server was still
+        // moving the deadline. Keep the reserved deadline so that first
+        // selection is accepted immediately after the intro expires.
+        if (room.game.deadline <= Date.now()) nextPitch(room.game);
       }
     }
     if (!room.game.introUntil && room.game.status === "playing" && Date.now() >= room.game.deadline) await resolve(room);
