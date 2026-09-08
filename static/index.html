@@ -170,12 +170,12 @@ render=()=>{
 </script><style id="mobile-layout-v1">
 .types{grid-template-columns:repeat(3,minmax(0,1fr))}.types.two{grid-template-columns:repeat(2,minmax(0,1fr))}.types button{text-align:center}
 .mobileDuelInfo{display:none}
-@media(max-width:760px){
-  body{background:#fff}.game{padding:7px;min-height:100dvh}.top{gap:8px;padding-bottom:6px}.top h2{font-size:16px}.back{padding:6px 8px;font-size:12px}
-  .board{display:block;margin-top:7px}.board>aside.panel{display:none}.score{grid-template-columns:39px 64px 1fr 78px;gap:4px;padding:7px 8px;min-height:76px}.score small{font-size:8px}.score b{font-size:20px}.bases{width:64px;height:60px;transform:scale(.58);transform-origin:center}.counts{gap:3px}.counts span{width:29px;height:29px;font-size:9px}.counts b{font-size:13px}
-  .mobileDuelInfo{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0}.mobileDuelInfo article{min-width:0;padding:7px 8px;border:1px solid #d6e1ec;background:#f8fbff}.mobileDuelInfo article:last-child{background:#fff7f5;border-color:#f1c9c2}.mobileDuelInfo small{display:block;color:#64748b;font-size:9px;font-weight:900;letter-spacing:.08em}.mobileDuelInfo b{display:block;margin:2px 0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mobileDuelInfo span{display:block;color:#526b84;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .panel{padding:8px}.panel h3{margin-bottom:2px;font-size:18px}.panel>.hint{display:none}.types{gap:4px;margin:5px 0}.types button{min-width:0;padding:9px 3px;font-size:12px;white-space:nowrap}.zoneWrap{width:min(70vw,31dvh,250px);padding:0;margin:5px auto;background-size:100% 100%}.zone{left:14%;top:14%;width:72%;height:72%}.zone button{font-size:17px}.zoneOutcome{top:1%;padding:5px 10px;font-size:16px}.hint#reveal{display:none}.action{padding:11px;font-size:15px;box-shadow:0 3px 0 #95241e}.result{display:none}.art{display:none!important}
-}
+/* One compact composition is used on desktop and mobile alike. */
+.app{width:min(560px,100%);min-height:100dvh;margin:0 auto;border:0;box-shadow:none}.home{min-height:100dvh;padding:54px 28px}.home h1{font-size:clamp(42px,12vw,60px)}.lead{white-space:normal}.modes{grid-template-columns:1fr;gap:12px;width:100%;margin-top:38px}.mode{min-height:90px;padding:18px;font-size:20px}
+body{background:#fff}.game{padding:7px;min-height:100dvh}.top{gap:8px;padding-bottom:6px}.top h2{font-size:16px}.back{padding:6px 8px;font-size:12px}
+.board{display:block;margin-top:7px}.board>aside.panel{display:none}.score{grid-template-columns:39px 64px 1fr 78px;gap:4px;padding:7px 8px;min-height:76px}.score small{font-size:8px}.score b{font-size:20px}.bases{width:64px;height:60px;transform:scale(.58);transform-origin:center}.counts{gap:3px}.counts span{width:29px;height:29px;font-size:9px}.counts b{font-size:13px}
+.mobileDuelInfo{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:6px 0}.mobileDuelInfo article{min-width:0;padding:7px 8px;border:1px solid #d6e1ec;background:#f8fbff}.mobileDuelInfo article:last-child{background:#fff7f5;border-color:#f1c9c2}.mobileDuelInfo small{display:block;color:#64748b;font-size:9px;font-weight:900;letter-spacing:.08em}.mobileDuelInfo b{display:block;margin:2px 0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mobileDuelInfo span{display:block;color:#526b84;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel{padding:8px}.panel h3{margin-bottom:2px;font-size:18px}.panel>.hint{display:none}.types{gap:4px;margin:5px 0}.types button{min-width:0;padding:9px 3px;font-size:12px;white-space:nowrap}.zoneWrap{width:min(70vw,31dvh,250px);padding:0;margin:5px auto;background-size:100% 100%}.zone{left:14%;top:14%;width:72%;height:72%}.zone button{font-size:17px}.zoneOutcome{top:1%;padding:5px 10px;font-size:16px}.hint#reveal{display:none}.action{padding:11px;font-size:15px;box-shadow:0 3px 0 #95241e}.result{display:none}.art{display:none!important}
 </style>
 <script id="mobile-layout-v1">
 const renderBeforeMobileLayout=render;
@@ -195,9 +195,7 @@ render=()=>{
 };
 </script><style id="mobile-game-fixes-v2">
 .counts{gap:10px}.countGroup{display:flex;align-items:center;gap:3px}.countGroup small{font-size:9px;color:#dce8f4;font-weight:900}.countGroup i{display:block;width:8px;height:8px;border-radius:50%;border:1px solid #7890a8;background:transparent}.countGroup.ball i.on{background:#39b86b;border-color:#8ff2b2;box-shadow:0 0 7px #39b86b}.countGroup.strike i.on{background:#f1c640;border-color:#fff0a1;box-shadow:0 0 7px #f1c640}.countGroup.out i.on{background:#ea4b43;border-color:#ffc1bc;box-shadow:0 0 7px #ea4b43}.countGroup b{display:none}.opponentReadout{margin:4px auto 0;max-width:250px;padding:5px 8px;text-align:center;color:#1d4e89;background:#e9f2ff;border:1px solid #aac8ed;font-size:11px;font-weight:900}.mobileLineup{display:none}
-@media(max-width:760px){
- .bases{width:58px;height:54px;transform:none}.bases i{width:19px;height:19px}.bases #b2{left:19px;top:0}.bases #b3{left:1px;top:32px}.bases #b1{right:1px;top:32px}.bases i.on:after{font-size:11px}.counts{gap:4px;justify-content:center}.countGroup{gap:2px}.countGroup small{font-size:8px}.countGroup i{width:6px;height:6px}.mobilePitchSwap{margin-top:4px;width:100%;border:1px solid #d38b80;background:#fff;color:#a42f26;padding:4px;font-size:10px;font-weight:900}.mobileBullpen{grid-column:1/-1;padding:6px;background:#fff7f5;border:1px solid #f1c9c2}.mobileBullpen button{margin:2px;border:1px solid #d8a49b;background:#fff;padding:4px;font-size:10px;font-weight:800}.mobileLineup{display:block;margin:8px 0 0;padding:9px;border:1px solid #d8e2ed;background:#fff}.mobileLineup summary{cursor:pointer;font-size:13px;font-weight:900}.mobileLineup ol{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:8px 0 0;padding-left:20px;font-size:11px}.mobileLineup li.now{color:#e33b31;font-weight:900}
-}
+.bases{width:58px;height:54px;transform:none}.bases i{width:19px;height:19px}.bases #b2{left:19px;top:0}.bases #b3{left:1px;top:32px}.bases #b1{right:1px;top:32px}.bases i.on:after{font-size:11px}.counts{gap:4px;justify-content:center}.countGroup{gap:2px}.countGroup small{font-size:8px}.countGroup i{width:6px;height:6px}.mobilePitchSwap{margin-top:4px;width:100%;border:1px solid #d38b80;background:#fff;color:#a42f26;padding:4px;font-size:10px;font-weight:900}.mobileBullpen{grid-column:1/-1;padding:6px;background:#fff7f5;border:1px solid #f1c9c2}.mobileBullpen button{margin:2px;border:1px solid #d8a49b;background:#fff;padding:4px;font-size:10px;font-weight:800}.mobileLineup{display:block;margin:8px 0 0;padding:9px;border:1px solid #d8e2ed;background:#fff}.mobileLineup summary{cursor:pointer;font-size:13px;font-weight:900}.mobileLineup ol{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:8px 0 0;padding-left:20px;font-size:11px}.mobileLineup li.now{color:#e33b31;font-weight:900}
 </style>
 <script id="mobile-game-fixes-v2">
 const startBeforeNetReset=start;
@@ -221,12 +219,10 @@ render=()=>{
   if(state.net&&state.opponentLastCell!==null&&state.opponentLastCell!==undefined){const row=Math.floor(state.opponentLastCell/5)+1,col=state.opponentLastCell%5+1;readout.textContent=`${state.opponentLastLabel} · ${row}행 ${col}열`;readout.style.display='block'}else readout.style.display='none';
 };
 </script><style id="scoreboard-counts-v3">
-@media(max-width:760px){
-  .score{grid-template-columns:38px 60px 64px minmax(100px,1fr);align-items:center}
-  .counts{flex-direction:column;align-items:flex-start;justify-content:center;gap:3px}
-  .countGroup{min-height:10px;gap:3px}.countGroup small{width:8px;font-size:8px}.countGroup i{width:7px;height:7px}
-  .score>div:last-child{min-width:100px}.score>div:last-child small{white-space:nowrap;font-size:8px}.score>div:last-child b{font-size:21px}
-}
+.score{grid-template-columns:38px 60px 64px minmax(100px,1fr);align-items:center}
+.counts{flex-direction:column;align-items:flex-start;justify-content:center;gap:3px}
+.countGroup{min-height:10px;gap:3px}.countGroup small{width:8px;font-size:8px}.countGroup i{width:7px;height:7px}
+.score>div:last-child{min-width:100px}.score>div:last-child small{white-space:nowrap;font-size:8px}.score>div:last-child b{font-size:21px}
 </style><script id="result-overlay-fix-v4">
 const renderBeforeResultOverlayFix=render;
 render=()=>{
@@ -1191,15 +1187,13 @@ function contactZoneWeight(target, actual){const tr=Math.floor(target/5),tc=targ
 const renderBeforeWeightedContactZone=render;
 render=function(){renderBeforeWeightedContactZone();if(!state.mode||state.half==='bottom')return;const zone=document.getElementById('zone');if(!zone)return;zone.querySelectorAll('[data-z]').forEach(button=>{const cell=+button.dataset.z;button.classList.remove('range','contact-strong','contact-medium','contact-soft','power-range');if(cell===state.pick)return;const row=Math.floor(cell/5),col=cell%5,pickRow=Math.floor(state.pick/5),pickCol=state.pick%5;if(state.swing==='contact'){if(Math.abs(row-pickRow)>2||Math.abs(col-pickCol)>2)return;const pickCenterDistance=Math.abs(pickRow-2)+Math.abs(pickCol-2);if(cell===12&&pickCenterDistance>=3)return;const weight=contactZoneWeight(state.pick,cell);button.classList.add('range',weight>=.62?'contact-strong':weight>=.40?'contact-medium':'contact-soft');button.title=`컨택 가능 범위 · ${Math.round(weight*100)}%`}else if(state.swing==='power'){if(Math.abs(row-pickRow)<=1&&Math.abs(col-pickCol)<=1){button.classList.add('range','power-range');button.title='파워 스윙 3×3 범위'}}});};
 </script><style id="scoreboard-mobile-flow-v1">
-/* 모바일 전광판은 절대 위치를 쓰지 않고, 경기 정보·라인스코어·투타 정보를 독립 행으로 둔다. */
-@media(max-width:760px){
+/* 모든 화면에서 전광판은 독립 행으로 흐른다. */
   .score{display:grid!important;grid-template-columns:39px 56px minmax(66px,1fr) minmax(76px,1fr)!important;grid-template-rows:auto auto auto;align-items:stretch!important;gap:4px!important;padding:22px 5px 7px!important}
   .score>div:first-child{grid-column:1;grid-row:1}.score>.bases{grid-column:2;grid-row:1}.score>.counts{grid-column:3;grid-row:1}.score>div:nth-child(4){grid-column:4;grid-row:1}
   .stadiumStats{position:static!important;grid-column:1/-1!important;grid-row:2!important;left:auto!important;right:auto!important;bottom:auto!important;margin:5px 0 0!important}
   .scoreMatchup{position:static!important;grid-column:1/-1!important;grid-row:3!important;left:auto!important;right:auto!important;bottom:auto!important;margin:5px 0 0!important;display:grid!important;grid-template-columns:1fr 1fr;gap:4px!important}
   .scoreMatchup article{min-height:47px;padding:5px 6px!important}.scoreMatchup small{font-size:7px!important}.scoreMatchup b{font-size:10px!important}.scoreMatchup span{font-size:8px!important}
   .scoreMatchup .scorePitch{grid-column:1/-1!important;margin:0!important;padding:4px 5px!important;font-size:8px!important;line-height:11px!important}
-}
 </style><script id="finished-match-summary-v1">
 // A finished room is no longer `ready`, so it must still be applied once;
 // otherwise the losing player would remain on the board without a summary.
@@ -1341,7 +1335,12 @@ const archetypeTip={
   '구속형':'장타를 억제하는 빠른 공입니다.', '제구형':'코너 승부에 안정적입니다.', '구위형':'안타를 억제하지만 제구가 흔들릴 수 있습니다.', '변화형':'헛스윙을 유도합니다.'
 };
 const applyMatchBeforeImmersion=applyMatch;
-applyMatch=function(data){applyMatchBeforeImmersion(data);state.pitchSequence=data?.game?.history||[];return data};
+applyMatch=function(data){
+  // This is read by render(). Set it before delegating, otherwise the recent
+  // pitch strip lags one turn behind (and appears blank while defending).
+  state.pitchSequence=data?.game?.history||[];
+  return applyMatchBeforeImmersion(data);
+};
 const renderBeforeImmersion=render;
 render=function(){
   renderBeforeImmersion();
@@ -1583,4 +1582,16 @@ render=function(){
   zone.classList.toggle('choiceLocked',locked);
   zone.querySelectorAll('[data-z]').forEach(button=>{button.disabled=locked;button.setAttribute('aria-disabled',locked?'true':'false')});
 };
+</script><script id="match-poll-render-dedupe-v1">
+/* A poll is frequent, but most responses are identical. Avoid rebuilding the
+   whole iframe until the game state has actually changed. Samsung Internet
+   visibly reflows the board when that unnecessary rebuild happens. */
+let lastAppliedMatchSignature='';
+function matchSignature(data){const g=data?.game||{};return JSON.stringify({ready:data?.ready,players:data?.players,choiceReady:data?.choiceReady,status:g.status,inning:g.inning,half:g.half,balls:g.balls,strikes:g.strikes,outs:g.outs,bases:g.bases,scores:g.scores,hits:g.hits,walks:g.walks,batter:g.batter,deadline:g.deadline,introUntil:g.introUntil,event:g.event,lastPlay:g.lastPlay,history:g.history,teams:g.teams,inningScores:g.inningScores,baitUsed:g.baitUsed})}
+function refreshMatchCountdown(){if(!state.net||!state.mode||state.finished)return;const action=$('swing');if(!action)return;const seconds=state.deadline>Date.now()?Math.ceil((state.deadline-Date.now())/1000):0;if(matchSubmitted){action.textContent=`선택 완료 · 상대방의 선택을 기다리는 중 · ${seconds}초`;return}if(state.opponentSubmitted){action.textContent=`상대 선택 완료 · 내 선택을 확정하세요 · ${seconds}초`;return}action.textContent=(state.half==='top'?'이 칸을 노리고 스윙':'이 칸으로 투구')+` · ${seconds}초`}
+const applyMatchBeforePollDedupe=applyMatch;
+applyMatch=function(data){const signature=matchSignature(data);if(signature===lastAppliedMatchSignature){refreshMatchCountdown();return data}lastAppliedMatchSignature=signature;return applyMatchBeforePollDedupe(data)};
+const beginMatchBeforePollDedupe=beginMatch;
+beginMatch=function(data){lastAppliedMatchSignature='';return beginMatchBeforePollDedupe(data)};
+watchMatch=function(){clearInterval(matchPoll);matchPoll=setInterval(async()=>{if(!matchSession)return;try{const data=await requestMatch({action:'state',code:matchSession.code,token:matchSession.token});if(data.game?.status==='finished'){clearInterval(matchPoll);applyMatch(data);return}if(data.ready)applyMatch(data);else{const status=document.getElementById('friendStatus');if(status)status.textContent=`초대 코드: ${matchSession.code} · 친구의 입장을 기다리는 중`}}catch(_){/* retry next poll */}},500)};
 </script></body></html>
