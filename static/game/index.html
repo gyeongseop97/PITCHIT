@@ -892,6 +892,7 @@ function accountPanel() {
       if (action === '기록 합치기') {
         if (!confirm('현재 기기의 온라인 대전 기록을 Google 계정에 합칠까요? 같은 기기의 기록은 한 번만 합쳐집니다.')) return;
         accountState = await accountRequest({ action: 'merge', name: local.nickname, career: local }); cloudCareerReady = true;
+        await globalThis.pitchitMigrateGuestProfile?.();
       } else {
         if (!confirm('계정 기록으로 현재 기기의 기록을 바꿀까요?')) return;
         saveCareer({ ...emptyCareer(), ...accountState.career }); cloudCareerReady = true;
@@ -1682,4 +1683,39 @@ const showInningBreakBeforeResultHold=showInningBreak;
 showInningBreak=function(inning,half,kind){return deferResultTransition('inning',`${inning}:${half}:${kind}`,()=>showInningBreakBeforeResultHold(inning,half,kind))};
 const showGameSummaryBeforeResultHold=showGameSummary;
 showGameSummary=function(game){const key=`${state.net?'net':'local'}:${state.r}:${state.away}:${state.inning}:${game?.event||''}`;return deferResultTransition('summary',key,()=>showGameSummaryBeforeResultHold(game))};
+</script><script id="guest-account-migration-v1">
+// A guest profile is only a device identity. On first Google login, move its
+// device career and ranking to the account, then retire the guest identity so
+// the same person cannot occupy the ranking twice.
+let guestMigrationRunning=false;
+async function migrateGuestProfileIntoAccount(){
+  if(guestMigrationRunning||!accountState?.signedIn||matchSession)return;
+  const guestId=rankingProfileId();
+  if(!guestId)return;
+  guestMigrationRunning=true;
+  try{
+    const local=loadCareer();
+    if(!accountState.mergedLocal&&Number(local.games||0)>0){
+      accountState=await accountRequest({action:'merge',name:local.nickname,career:local});
+      cloudCareerReady=true;
+    }
+    const moved=await requestMatch({action:'migrate-guest',guestProfileId:guestId});
+    // From now on, a later sign-out starts a new guest identity rather than
+    // silently reviving the ranking row that was just merged and removed.
+    if(moved?.migrated||moved?.alreadyMigrated){
+      localStorage.removeItem(rankingProfileStorageKey);
+      localStorage.removeItem(guestNicknameStorageKey);
+    }
+    accountState=await accountRequest();
+    cloudCareerReady=Boolean(accountState.signedIn&&accountState.mergedLocal);
+    if(accountState.career)localStorage.setItem(careerStorageKey,JSON.stringify({...emptyCareer(),...accountState.career,nickname:accountState.name}));
+    accountPanel();
+  }catch(error){
+    // Keep the guest identity intact if a network retry is needed. The next
+    // home-page load will safely retry the one-time server migration.
+    console.warn('Guest profile migration will retry later.',error);
+  }finally{guestMigrationRunning=false;}
+}
+globalThis.pitchitMigrateGuestProfile=migrateGuestProfileIntoAccount;
+setTimeout(migrateGuestProfileIntoAccount,0);
 </script></body></html>

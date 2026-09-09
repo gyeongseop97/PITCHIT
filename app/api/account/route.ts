@@ -17,6 +17,18 @@ const boundedCareer = (value: unknown) => {
   const codes = Array.isArray(career.recordedGames) ? career.recordedGames.slice(-100) : [];
   return { ...career, matchHistory: history, recordedGames: codes };
 };
+const careerNumber = (value: unknown) => Math.max(0, Number(value) || 0);
+const mergeCareer = (saved: unknown, imported: unknown) => {
+  const current: Record<string, unknown> = boundedCareer(saved), incoming: Record<string, unknown> = boundedCareer(imported);
+  const totals = ["games", "wins", "losses", "draws", "atBats", "hits", "rbi", "homeRuns", "walks", "strikeouts", "outsRecorded", "earnedRuns"];
+  const next: Record<string, unknown> = { ...current };
+  for (const field of totals) next[field] = careerNumber(current[field]) + careerNumber(incoming[field]);
+  next.recordedGames = [...new Set([...(Array.isArray(current.recordedGames) ? current.recordedGames.map(String) : []), ...(Array.isArray(incoming.recordedGames) ? incoming.recordedGames.map(String) : [])])].slice(-100);
+  const history = [...(Array.isArray(incoming.matchHistory) ? incoming.matchHistory : []), ...(Array.isArray(current.matchHistory) ? current.matchHistory : [])];
+  const seen = new Set<string>();
+  next.matchHistory = history.filter((entry) => { const code = String(asObject(entry).code || ""); if (!code || seen.has(code)) return false; seen.add(code); return true; }).slice(0, 30);
+  return next;
+};
 const nickname = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 16);
 const normalizedNickname = (value: string) => value.toLocaleLowerCase("ko-KR");
 
@@ -50,7 +62,7 @@ export async function POST(request: Request) {
     // The explicit first-login import is intentionally one-time.  It prevents
     // a browser refresh from adding the same device career twice.
     if (saved.mergedLocal) return Response.json({ signedIn: true, name, career: saved.career || null, mergedLocal: true });
-    const next = { ...saved, career: boundedCareer(input.career), mergedLocal: true, updatedAt: Date.now() };
+    const next = { ...saved, career: mergeCareer(saved.career, input.career), mergedLocal: true, updatedAt: Date.now() };
     await redis.set(careerKey(userId), next);
     return Response.json({ signedIn: true, ...next });
   }

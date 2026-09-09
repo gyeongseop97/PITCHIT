@@ -28,7 +28,11 @@ async function respond(request: Request) {
       // the only authority that marks a player as an account holder.
       if (userId) {
         const profile = await redis.get<{ name?: string }>(`pitchit:account-career:v1:${userId}`);
-        body = JSON.stringify({ ...input, profileId: userId, name: profile?.name || "플레이어", authenticated: true });
+        // Keep a separately supplied guest profile only for the one-time
+        // migration request. The active room/ranking identity always stays
+        // bound to the Clerk user id below.
+        const guestProfileId = input.action === "migrate-guest" ? input.guestProfileId : undefined;
+        body = JSON.stringify({ ...input, guestProfileId, profileId: userId, name: profile?.name || "플레이어", authenticated: true });
       } else {
         body = JSON.stringify({ ...input, authenticated: false });
       }

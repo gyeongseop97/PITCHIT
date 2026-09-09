@@ -60,6 +60,7 @@ const presenceKey = "pitchit:presence";
 const presenceLifetimeMs = 75_000;
 const rankingBoardKey = "pitchit:ranking:v1";
 const rankingPlayerKey = (profileId: string) => `pitchit:ranking:v1:${profileId}`;
+const guestMigrationKey = (profileId: string) => `pitchit:guest-migration:v1:${profileId}`;
 const accountCareerKey = (profileId: string) => `pitchit:account-career:v1:${profileId}`;
 const guestNicknameKey = (profileId: string) => `pitchit:guest-nickname:v1:${profileId}`;
 const guestNicknameIndexKey = (name: string) => `pitchit:guest-nickname:index:v1:${name}`;
@@ -99,6 +100,13 @@ const profileId = (value: unknown) => {
   return /^[A-Za-z0-9_-]{12,96}$/.test(candidate) ? candidate : token();
 };
 const rankingName = (value: unknown) => String(value ?? "플레이어").trim().slice(0, 16) || "플레이어";
+const validStoredProfileId = (value: unknown) => /^[A-Za-z0-9_-]{12,96}$/.test(String(value ?? ""));
+const rankingRecord = (saved?: RankingPlayer | null) => {
+  const games = Math.max(0, Number(saved?.games ?? 0));
+  const wins = Math.max(0, Number(saved?.wins ?? 0));
+  const draws = Math.max(0, Number(saved?.draws ?? 0));
+  return { points: Math.max(0, Number(saved?.points ?? 1000)), games, wins, draws, losses: Math.max(0, Number(saved?.losses ?? games - wins - draws)) };
+};
 const ratingChange = (points: number, opponentPoints: number, result: "win" | "loss" | "draw") => {
   const expected = 1 / (1 + Math.pow(10, (opponentPoints - points) / 400));
   if (result === "draw") return 6;
@@ -115,7 +123,7 @@ async function applyRankings(room: Room) {
     redis.get<RankingPlayer>(rankingPlayerKey(p1.profileId)),
     redis.get<RankingPlayer>(rankingPlayerKey(p2.profileId)),
   ]);
-  const restoreRecord = (saved?: RankingPlayer) => {
+  const restoreRecord = (saved?: RankingPlayer | null) => {
     const games = Number(saved?.games ?? 0), wins = Number(saved?.wins ?? 0), draws = Number(saved?.draws ?? 0);
     // Rankings created before losses/draws existed only have games and wins.
     // Those records did not support draws, so the remaining games are losses.
@@ -491,6 +499,32 @@ export default async function handler(req: any, res: any) {
         .map(({ player }) => { const games = Math.max(0, player.games), wins = Math.max(0, player.wins), draws = Math.max(0, player.draws ?? 0); return { name: rankingName(player.name), points: Math.max(0, Math.round(player.points)), wins, losses: Math.max(0, player.losses ?? games - wins - draws), draws, games }; })
         .sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name, "ko"));
       return res.status(200).json({ ranking });
+    }
+    if (input.action === "migrate-guest") {
+      if (input.authenticated !== true) return res.status(401).json({ error: "로그인 후에만 비회원 기록을 이전할 수 있습니다." });
+      const memberId = String(input.profileId ?? ""), guestId = String(input.guestProfileId ?? "");
+      if (!validStoredProfileId(memberId) || !validStoredProfileId(guestId) || memberId === guestId) return res.status(400).json({ error: "이전할 비회원 기록을 확인하지 못했습니다." });
+      const migrationLockKey = `${guestMigrationKey(guestId)}:lock`;
+      const migrationLock = await acquire(migrationLockKey, 3);
+      if (!migrationLock) return res.status(409).json({ error: "기록 이전을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
+      try {
+        const alreadyMigratedTo = await redis.get<string>(guestMigrationKey(guestId));
+        if (alreadyMigratedTo && alreadyMigratedTo !== memberId) return res.status(409).json({ error: "이 비회원 기록은 이미 다른 계정에 이전되었습니다." });
+        if (alreadyMigratedTo === memberId) return res.status(200).json({ migrated: false, alreadyMigrated: true });
+        const [guest, member] = await Promise.all([redis.get<RankingPlayer>(rankingPlayerKey(guestId)), redis.get<RankingPlayer>(rankingPlayerKey(memberId))]);
+        if (guest) {
+          const source = rankingRecord(guest), target = rankingRecord(member);
+          // Rankings start at 1,000. Carry the guest's gain/loss over rather
+          // than granting an accidental second free 1,000-point baseline.
+          const points = member ? Math.max(0, target.points + (source.points - 1000)) : source.points;
+          const merged: RankingPlayer = { name: rankingName(input.name), points, games: target.games + source.games, wins: target.wins + source.wins, losses: target.losses + source.losses, draws: target.draws + source.draws, updatedAt: Date.now() };
+          await Promise.all([redis.set(rankingPlayerKey(memberId), merged), redis.zadd(rankingBoardKey, { score: merged.points, member: memberId }), redis.del(rankingPlayerKey(guestId)), redis.zrem(rankingBoardKey, guestId)]);
+        }
+        const guestName = await redis.get<string>(guestNicknameKey(guestId));
+        if (guestName && await redis.get<string>(guestNicknameIndexKey(guestName)) === guestId) await redis.del(guestNicknameIndexKey(guestName));
+        await Promise.all([redis.del(guestNicknameKey(guestId)), redis.set(guestMigrationKey(guestId), memberId)]);
+        return res.status(200).json({ migrated: Boolean(guest), alreadyMigrated: false });
+      } finally { await release(migrationLockKey, migrationLock); }
     }
     if (input.action === "stats") {
       const stats = await redis.hgetall<Record<string, number>>(balanceKey);
