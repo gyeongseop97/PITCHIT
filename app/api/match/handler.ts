@@ -2,7 +2,7 @@ import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
 import { resolvePlateAppearance, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
 import { batterArchetypes, individualizeBatter, individualizePitcher, pitcherArchetypes } from "../../../lib/roster";
-import { defaultShop, readShop } from "../../../lib/shop";
+import { readShop } from "../../../lib/shop";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };

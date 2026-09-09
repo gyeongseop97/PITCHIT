@@ -1,6 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { Redis } from "@upstash/redis";
-import { SHOP_ITEMS, readShop, type ShopTheme } from "../../../lib/shop";
+import { SHOP_ITEMS, readShop } from "../../../lib/shop";
 
 export const runtime = "nodejs";
 
@@ -32,6 +32,8 @@ const mergeCareer = (saved: unknown, imported: unknown) => {
 };
 const nickname = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 16);
 const normalizedNickname = (value: string) => value.toLocaleLowerCase("ko-KR");
+const operatorEmail = "mgs15158@gmail.com";
+const isOperator = (user: Awaited<ReturnType<typeof currentUser>>) => Boolean(user?.emailAddresses.some((email) => email.emailAddress.toLowerCase() === operatorEmail));
 
 async function signedIn() {
   if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || !process.env.CLERK_SECRET_KEY) return null;
@@ -48,6 +50,7 @@ export async function GET() {
     name: saved?.name || user?.firstName || user?.username || "플레이어",
     career: saved?.career || null,
     shop: readShop(saved?.shop),
+    operator: isOperator(user),
     mergedLocal: Boolean(saved?.mergedLocal),
   });
 }
@@ -98,13 +101,22 @@ export async function POST(request: Request) {
     return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
   }
   if (action === "shop-equip") {
-    const theme = String(input.theme || "") as ShopTheme;
-    const itemId = `theme-${theme}`;
+    const item = SHOP_ITEMS.find((candidate) => candidate.id === String(input.itemId || ""));
     const shop = readShop(saved.shop);
-    if (!(theme === "classic" || theme === "night" || theme === "retro" || theme === "neon") || !shop.owned.includes(itemId)) return Response.json({ error: "보유하지 않은 테마입니다." }, { status: 409 });
-    const next = { ...saved, shop: { ...shop, equippedTheme: theme }, updatedAt: Date.now() };
+    if (!item || !shop.owned.includes(item.id)) return Response.json({ error: "보유하지 않은 아이템입니다." }, { status: 409 });
+    const equipped = item.type === "theme" ? { equippedTheme: item.theme } : { equippedBall: item.ball };
+    const next = { ...saved, shop: { ...shop, ...equipped }, updatedAt: Date.now() };
     await redis.set(careerKey(userId), next);
     return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
+  }
+  if (action === "operator-grant") {
+    const user = await currentUser();
+    if (!isOperator(user)) return Response.json({ error: "운영자 권한이 필요합니다." }, { status: 403 });
+    const shop = readShop(saved.shop);
+    const nextShop = { ...shop, coins: Math.max(shop.coins, 100000), operatorGrantApplied: true };
+    const next = { ...saved, shop: nextShop, updatedAt: Date.now() };
+    await redis.set(careerKey(userId), next);
+    return Response.json({ signedIn: true, name, career: saved.career || null, shop: nextShop, operator: true });
   }
   return Response.json({ error: "지원하지 않는 요청입니다." }, { status: 400 });
 }
