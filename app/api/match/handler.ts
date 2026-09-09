@@ -2,6 +2,7 @@ import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
 import { resolvePlateAppearance, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
 import { batterArchetypes, individualizeBatter, individualizePitcher, pitcherArchetypes } from "../../../lib/roster";
+import { defaultShop, readShop } from "../../../lib/shop";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
@@ -20,6 +21,8 @@ type Game = {
   rankingApplied?: boolean;
   careerApplied?: boolean;
   balanceApplied?: boolean;
+  shopApplied?: boolean;
+  shopRewards?: Partial<Record<PlayerId, { total: number; breakdown: Record<string, number> }>>;
   ranking?: Partial<Record<PlayerId, RankingResult>>;
   rematch?: Partial<Record<PlayerId, boolean>>;
   inning: number;
@@ -210,6 +213,35 @@ async function applyCareerRecords(room: Room) {
     career.matchHistory = [{ code: room.code, date: koreaDate(), opponent: opponent.name, mine: game.scores[side], theirs: game.scores[otherSide], result }, ...history].slice(0, 30);
     await redis.set(accountCareerKey(player.profileId!), { ...saved, career, updatedAt: Date.now() });
   }));
+}
+function rewardFor(game: Game, playerId: PlayerId, mode: Room["mode"]) {
+  const mine = (game.playLog || []).filter((play) => play.attacker === playerId);
+  const pitching = (game.playLog || []).filter((play) => play.attacker !== playerId);
+  const side = playerId === "p1" ? 0 : 1, other = side ? 0 : 1;
+  const won = game.forfeitWinner === playerId || (!game.forfeitWinner && game.scores[side] > game.scores[other]);
+  const forfeited = Boolean(game.forfeitWinner && game.forfeitWinner !== playerId);
+  if (forfeited) return { total: 0, breakdown: {} };
+  const hits = mine.filter((play) => ["single", "double", "triple", "homerun"].includes(play.outcome)).length;
+  const homers = mine.filter((play) => play.outcome === "homerun").length;
+  const strikeouts = pitching.filter((play) => /삼진/.test(play.event)).length;
+  const walks = mine.filter((play) => /볼넷/.test(play.event)).length;
+  const base = mode === "solo" ? 10 : 30, win = won ? (mode === "solo" ? 8 : 20) : 0;
+  const breakdown = { "경기 완료": base, ...(win ? { "승리 보너스": win } : {}), ...(hits ? { "안타": hits * 3 } : {}), ...(homers ? { "홈런": homers * 15 } : {}), ...(strikeouts ? { "삼진": strikeouts * 4 } : {}), ...(walks ? { "볼넷": walks * 2 } : {}) };
+  return { total: Object.values(breakdown).reduce((sum, value) => sum + value, 0), breakdown };
+}
+async function applyShopRewards(room: Room) {
+  const game = room.game;
+  if (game.status !== "finished" || game.shopApplied) return;
+  game.shopApplied = true; game.shopRewards = {};
+  for (const playerId of ["p1", "p2"] as PlayerId[]) {
+    const player = room.players[playerId]; if (!player) continue;
+    const reward = rewardFor(game, playerId, room.mode); game.shopRewards[playerId] = reward;
+    if (!player.authenticated || !player.profileId || reward.total <= 0) continue;
+    const saved = (await redis.get<Record<string, unknown>>(accountCareerKey(player.profileId))) || {};
+    const shop = readShop(saved.shop);
+    if (shop.rewardedGames.includes(room.code)) continue;
+    await redis.set(accountCareerKey(player.profileId), { ...saved, shop: { ...shop, coins: shop.coins + reward.total, rewardedGames: [...shop.rewardedGames, room.code].slice(-150) }, updatedAt: Date.now() });
+  }
 }
 const publicRoom = (room: Room) => ({
   code: room.code,
@@ -435,7 +467,7 @@ async function resolve(room: Room) {
     strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
   await trackBalance(plate.outcome, batting.swing ?? "contact", pitching.pitch ?? "fast", plate.execution, batter.t, pitcher.t, contactZone);
-  if (room.game.status === "finished") { await applyRankings(room); await applyCareerRecords(room); await applyBalanceGame(room); }
+  if (room.game.status === "finished") { await applyRankings(room); await applyCareerRecords(room); await applyShopRewards(room); await applyBalanceGame(room); }
   if (game.status === "playing") nextPitch(game);
 }
 
@@ -692,6 +724,7 @@ export default async function handler(req: any, res: any) {
       room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
       await applyRankings(room);
       await applyCareerRecords(room);
+      await applyShopRewards(room);
       await applyBalanceGame(room);
       await save(room);
       return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });

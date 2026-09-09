@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { Redis } from "@upstash/redis";
+import { SHOP_ITEMS, readShop, type ShopTheme } from "../../../lib/shop";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,7 @@ export async function GET() {
     signedIn: true,
     name: saved?.name || user?.firstName || user?.username || "플레이어",
     career: saved?.career || null,
+    shop: readShop(saved?.shop),
     mergedLocal: Boolean(saved?.mergedLocal),
   });
 }
@@ -84,6 +86,25 @@ export async function POST(request: Request) {
     const next = { ...saved, name, nicknameKey: key, updatedAt: Date.now() };
     await redis.set(careerKey(userId), next);
     return Response.json({ signedIn: true, ...next });
+  }
+  if (action === "shop-buy") {
+    const item = SHOP_ITEMS.find((candidate) => candidate.id === String(input.itemId || ""));
+    if (!item) return Response.json({ error: "상점 아이템을 찾을 수 없습니다." }, { status: 404 });
+    const shop = readShop(saved.shop);
+    if (shop.owned.includes(item.id)) return Response.json({ signedIn: true, name, career: saved.career || null, shop });
+    if (shop.coins < item.cost) return Response.json({ error: "P 코인이 부족합니다." }, { status: 409 });
+    const next = { ...saved, shop: { ...shop, coins: shop.coins - item.cost, owned: [...shop.owned, item.id] }, updatedAt: Date.now() };
+    await redis.set(careerKey(userId), next);
+    return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
+  }
+  if (action === "shop-equip") {
+    const theme = String(input.theme || "") as ShopTheme;
+    const itemId = `theme-${theme}`;
+    const shop = readShop(saved.shop);
+    if (!(theme === "classic" || theme === "night" || theme === "retro" || theme === "neon") || !shop.owned.includes(itemId)) return Response.json({ error: "보유하지 않은 테마입니다." }, { status: 409 });
+    const next = { ...saved, shop: { ...shop, equippedTheme: theme }, updatedAt: Date.now() };
+    await redis.set(careerKey(userId), next);
+    return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
   }
   return Response.json({ error: "지원하지 않는 요청입니다." }, { status: 400 });
 }
