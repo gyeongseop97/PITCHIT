@@ -721,6 +721,9 @@ export default async function handler(req: any, res: any) {
     if (input.action === "choose") {
       if (room.game.status === "finished") return res.status(409).json({ error: "이미 종료된 경기입니다." });
       if (room.game.status !== "playing") return res.status(409).json({ error: "상대가 입장한 뒤 경기가 시작되면 작전을 선택할 수 있습니다." });
+      // New clients include the deadline they saw.  Reject an old network
+      // retry rather than letting it become a choice for the next pitch.
+      if (input.deadline !== undefined && Number(input.deadline) !== room.game.deadline) return res.status(409).json({ error: "새 턴이 시작되었습니다. 현재 턴의 칸을 다시 선택해 주세요." });
       const expected = player === actor(room.game) ? "bat" : "pitch";
       if (input.choice?.kind !== expected) return res.status(409).json({ error: "현재 차례의 작전이 아닙니다." });
       if (!validChoice(input.choice, expected)) return res.status(400).json({ error: "작전 선택값이 올바르지 않습니다." });
