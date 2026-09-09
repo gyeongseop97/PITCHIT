@@ -17,8 +17,8 @@ const tagScenarios: Scenario[] = [
   { situation: "외야 뜬공 · 3루→홈", chance: clamp(tagBases[2] + (runnerSpeed - 50) / 145 + (batterPower - 50) / 260, .68, .98), detail: "주자 주력 55 · 타자 파워 55" },
 ];
 const groundScenarios: Scenario[] = [
-  { situation: "내야 땅볼 · 2루→3루", chance: clamp(.18 + (runnerSpeed - 50) / 135, .10, .42), detail: "주자 주력 55 · 2아웃 전" },
-  { situation: "내야 땅볼 · 3루→홈", chance: clamp(.22 + (runnerSpeed - 50) / 115, .12, .48), detail: "주자 주력 55 · 2아웃 전" },
+  { situation: "내야 땅볼 · 2루→3루", chance: clamp(.50 + (runnerSpeed - 55) / 140, .36, .72), detail: "주자 주력 55 · 2아웃 전" },
+  { situation: "내야 땅볼 · 3루→홈", chance: clamp(.70 + (runnerSpeed - 55) / 125, .56, .90), detail: "주자 주력 55 · 2아웃 전" },
 ];
 const doublePlayScenarios: Scenario[] = [
   { situation: "땅볼 · 1루 주자 병살", chance: clamp(.20 + 0 + (55 - 50) / 260 + (50 - runnerSpeed) / 150, .08, .38), detail: "무사/1사 · 중단 코스 · 패스트볼 · 투수 구위 55 · 타자 주력 55" },

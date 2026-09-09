@@ -275,7 +275,10 @@ function advanceGroundRunners(game: Game) {
   // second can take third. Speed determines both decisions.
   for (let index = 2; index >= 1; index--) {
     const speed = next[index]; if (!speed) continue;
-    const chance = index === 2 ? Math.min(.48, Math.max(.12, .22 + (speed - 50) / 115)) : Math.min(.42, Math.max(.10, .18 + (speed - 50) / 135));
+    // A runner with average speed (55) should advance about half the time
+    // from second and score about 70% of the time from third on a grounder.
+    // Speed still creates meaningful separation at both ends.
+    const chance = index === 2 ? Math.min(.90, Math.max(.56, .70 + (speed - 55) / 125)) : Math.min(.72, Math.max(.36, .50 + (speed - 55) / 140));
     if (Math.random() >= chance) continue;
     if (index === 2) { next[2] = 0; addRun(game); notes.push("3루 주자 홈 쇄도"); }
     else if (!next[2]) { next[1] = 0; next[2] = speed; notes.push("2루 주자 3루 진루"); }

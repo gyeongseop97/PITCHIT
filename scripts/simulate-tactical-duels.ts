@@ -86,7 +86,7 @@ function advanceGroundRunners(bases: number[]): number {
   let runs = 0;
   for (let index = 2; index >= 1; index--) {
     const speed = bases[index]; if (!speed) continue;
-    const chance = index === 2 ? Math.min(.48, Math.max(.12, .22 + (speed - 50) / 115)) : Math.min(.42, Math.max(.10, .18 + (speed - 50) / 135));
+    const chance = index === 2 ? Math.min(.90, Math.max(.56, .70 + (speed - 55) / 125)) : Math.min(.72, Math.max(.36, .50 + (speed - 55) / 140));
     if (Math.random() >= chance) continue;
     if (index === 2) { bases[2] = 0; runs++; }
     else if (!bases[2]) { bases[1] = 0; bases[2] = speed; }
