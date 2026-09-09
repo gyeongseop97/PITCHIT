@@ -8,7 +8,7 @@ type Batter = { n: string; t: string; p: number; a: number; e: number; v: number
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
-type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
+type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; batterType: string; pitcherType: string; contactZone: "exact" | "near" | "outer"; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
 type RankingResult = { before: number; points: number; change: number; wins: number; losses: number; draws: number; games: number };
 type Game = {
   status: "waiting" | "playing" | "finished";
@@ -18,6 +18,7 @@ type Game = {
   forfeitWinner?: PlayerId;
   rankingApplied?: boolean;
   careerApplied?: boolean;
+  balanceApplied?: boolean;
   ranking?: Partial<Record<PlayerId, RankingResult>>;
   rematch?: Partial<Record<PlayerId, boolean>>;
   inning: number;
@@ -372,6 +373,8 @@ async function resolve(room: Room) {
     const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
     game.hits[game.half]++; const extraAdvance = advance(game, bases, batter.v); game.event = `${plate.message}${extraAdvance}`; if (!finishWalkoff(game)) endPlate(game);
   }
+  const gridDistance = Math.abs(Math.floor(batting.cell / 5) - Math.floor(plate.actualCell / 5)) + Math.abs(batting.cell % 5 - plate.actualCell % 5);
+  const contactZone: PlayLog["contactZone"] = gridDistance === 0 ? "exact" : gridDistance === 1 ? "near" : "outer";
   game.playLog = [{
     inning: game.inning,
     half: game.half,
@@ -381,6 +384,9 @@ async function resolve(room: Room) {
     attacker: battingPlayer,
     swing: batting.swing ?? "contact",
     pitch: pitching.pitch ?? "fast",
+    batterType: batter.t,
+    pitcherType: pitcher.t,
+    contactZone,
     pitchName: plate.pitchName,
     speed: plate.speed,
     outcome: plate.outcome,
@@ -390,21 +396,59 @@ async function resolve(room: Room) {
     execution: plate.execution,
     strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
-  trackBalance(plate.outcome, batting.swing ?? "contact", pitching.pitch ?? "fast");
-  if (room.game.status === "finished") { await applyRankings(room); await applyCareerRecords(room); }
+  await trackBalance(plate.outcome, batting.swing ?? "contact", pitching.pitch ?? "fast", plate.execution, batter.t, pitcher.t, contactZone);
+  if (room.game.status === "finished") { await applyRankings(room); await applyCareerRecords(room); await applyBalanceGame(room); }
   if (game.status === "playing") nextPitch(game);
 }
 
 const balanceKey = "pitchit:balance:v1";
-function trackBalance(outcome: string, swing: string, pitch: string) {
-  // Aggregate only anonymous game events. These counters are used to check
-  // live balance trends without storing player names, rooms, or choices.
-  void Promise.all([
+const balanceGameKey = (code: string) => `pitchit:balance:game:v1:${code}`;
+async function trackBalance(outcome: string, swing: string, pitch: string, execution: string | undefined, batterType: string, pitcherType: string, contactZone: string) {
+  // Aggregate anonymous events live. The per-game audit row below keeps no
+  // player names or profile ids, only game mechanics for balance checks.
+  await Promise.all([
     redis.hincrby(balanceKey, "plateAppearances", 1),
     redis.hincrby(balanceKey, `outcome:${outcome}`, 1),
     redis.hincrby(balanceKey, `swing:${swing}`, 1),
     redis.hincrby(balanceKey, `pitch:${pitch}`, 1),
-  ]).catch(() => undefined);
+    redis.hincrby(balanceKey, `batter:${batterType}`, 1),
+    redis.hincrby(balanceKey, `pitcher:${pitcherType}`, 1),
+    redis.hincrby(balanceKey, `contact:${contactZone}`, 1),
+    ...(execution ? [redis.hincrby(balanceKey, `execution:${execution}`, 1)] : []),
+  ]);
+}
+function countBy(values: string[]) { return values.reduce<Record<string, number>>((counts, value) => { counts[value] = (counts[value] || 0) + 1; return counts; }, {}); }
+async function applyBalanceGame(room: Room) {
+  const game = room.game;
+  if (game.status !== "finished" || game.balanceApplied) return;
+  const plays = game.playLog || [];
+  const outcomes = countBy(plays.map(play => play.outcome));
+  const hits = (outcomes.single || 0) + (outcomes.double || 0) + (outcomes.triple || 0) + (outcomes.homerun || 0);
+  const strikeouts = plays.filter(play => /삼진/.test(play.event)).length;
+  const walks = plays.filter(play => /볼넷/.test(play.event)).length;
+  const atBats = hits + (outcomes.groundout || 0) + (outcomes.flyout || 0) + strikeouts;
+  const execution = countBy(plays.map(play => play.execution || "command"));
+  const summary = {
+    version: 1, mode: room.mode, completedAt: Date.now(), innings: game.inning,
+    halfInnings: new Set(plays.map(play => `${play.inning}:${play.half}`)).size, pitches: plays.length,
+    totalRuns: game.scores[0] + game.scores[1], scoreP1: game.scores[0], scoreP2: game.scores[1],
+    hits, atBats, walks, strikeouts, rbi: plays.reduce((sum, play) => sum + numberOf(play.runsBattedIn), 0),
+    outs: plays.reduce((sum, play) => sum + numberOf(play.outsRecorded), 0), singles: outcomes.single || 0,
+    doubles: outcomes.double || 0, triples: outcomes.triple || 0, homeRuns: outcomes.homerun || 0,
+    groundouts: outcomes.groundout || 0, flyouts: outcomes.flyout || 0, balls: outcomes.ball || 0,
+    fouls: outcomes.foul || 0, swingingStrikes: outcomes.swinging_strike || 0, mistakes: execution.mistake || 0,
+    wildPitches: execution.wild || 0, extraInningGame: game.inning > 3 ? 1 : 0, forfeit: game.forfeitWinner ? 1 : 0,
+    outcomeCounts: outcomes, executionCounts: execution,
+    // All mechanics needed for later simulations: type, swing/pitch choice,
+    // aimed cell, actual cell, and exact/near/outer contact classification.
+    plays: plays.map(({ inning, half, batCell, pitchCell, actualCell, swing, pitch, batterType, pitcherType, contactZone, outcome, execution, runsBattedIn, outsRecorded }) => ({ inning, half, batCell, pitchCell, actualCell, swing, pitch, batterType, pitcherType, contactZone, outcome, execution: execution || "command", runsBattedIn, outsRecorded })),
+  };
+  await redis.set(balanceGameKey(room.code), summary);
+  await Promise.all([
+    redis.hincrby(balanceKey, "games", 1), redis.hincrby(balanceKey, `mode:${room.mode}`, 1),
+    ...Object.entries(summary).filter(([, value]) => typeof value === "number").map(([field, value]) => redis.hincrby(balanceKey, `game:${field}`, Number(value))),
+  ]);
+  game.balanceApplied = true;
 }
 function aiChoice(game: Game, player: PlayerId): Choice {
   const corners = [0, 4, 20, 24], center = [6, 7, 8, 11, 12, 13, 16, 17, 18], edges = [1, 3, 5, 9, 15, 19, 21, 23];
@@ -607,6 +651,7 @@ export default async function handler(req: any, res: any) {
       room.game.event = `${room.players[player]?.name || "플레이어"} 님이 경기를 포기했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
       await applyRankings(room);
       await applyCareerRecords(room);
+      await applyBalanceGame(room);
       await save(room);
       return res.status(200).json({ ...publicRoom(room), player, token: input.token, forfeited: true });
     }
