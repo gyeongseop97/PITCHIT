@@ -9,10 +9,12 @@ export type PitcherArchetype = { t: string } & PitcherRatings;
 export const batterArchetypes: BatterArchetype[] = [
   { t: "컨택형", p: 45, a: 85, e: 55, v: 45 }, { t: "파워형", p: 85, a: 48, e: 52, v: 45 },
   { t: "주루형", p: 45, a: 57, e: 48, v: 80 }, { t: "선구안형", p: 48, a: 58, e: 82, v: 42 },
+  { t: "밸런스형", p: 58, a: 58, e: 57, v: 57 },
 ];
 export const pitcherArchetypes: PitcherArchetype[] = [
   { t: "구속형", v: 86, c: 52, s: 50, m: 42 }, { t: "제구형", v: 48, c: 88, s: 48, m: 46 },
   { t: "구위형", v: 53, c: 50, s: 87, m: 40 }, { t: "변화형", v: 50, c: 54, s: 45, m: 86 },
+  { t: "밸런스형", v: 58, c: 58, s: 57, m: 57 },
 ];
 
 function spread(values: number[], random: () => number) {

@@ -11,12 +11,14 @@ const batters: BatterProfile[] = [
   { name: "파워형", ratings: { p: 85, a: 48, e: 52, v: 45 }, swing: "power" },
   { name: "주루형", ratings: { p: 45, a: 57, e: 48, v: 80 }, swing: "contact" },
   { name: "선구안형", ratings: { p: 48, a: 58, e: 82, v: 42 }, swing: "spot" },
+  { name: "밸런스형", ratings: { p: 58, a: 58, e: 57, v: 57 }, swing: "contact" },
 ];
 const pitchers: PitcherProfile[] = [
   { name: "구속형", ratings: { v: 86, c: 52, s: 50, m: 42 }, breakingRate: .28 },
   { name: "제구형", ratings: { v: 48, c: 88, s: 48, m: 46 }, breakingRate: .30 },
   { name: "구위형", ratings: { v: 53, c: 50, s: 87, m: 40 }, breakingRate: .30 },
   { name: "변화형", ratings: { v: 50, c: 54, s: 45, m: 86 }, breakingRate: .55 },
+  { name: "밸런스형", ratings: { v: 58, c: 58, s: 57, m: 57 }, breakingRate: .45 },
 ];
 
 const choose = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)];
