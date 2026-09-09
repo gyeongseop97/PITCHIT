@@ -1,4 +1,5 @@
 import { resolvePlateAppearance, type BatterRatings, type PitcherRatings, type PitchType, type SwingType } from "../lib/game-engine";
+import { batterArchetypes, individualizeBatter, individualizePitcher, pitcherArchetypes } from "../lib/roster";
 
 // Two identical agents play the published 3-inning rules.  They retain the
 // last five choices, mix a read of that pattern with a deliberate feint, and
@@ -12,14 +13,6 @@ const READ_RATE = Math.min(.95, Math.max(0, Number(process.env.READ_RATE ?? .35)
 // can be enabled only for a separate bullpen-strategy experiment.
 const AUTO_SWAP = process.env.AUTO_SWAP === "1";
 const CELLS = Array.from({ length: 25 }, (_, index) => index);
-const batterTypes: Array<{ t: string } & BatterRatings> = [
-  { t: "컨택형", p: 45, a: 85, e: 55, v: 45 }, { t: "파워형", p: 85, a: 48, e: 52, v: 45 },
-  { t: "주루형", p: 45, a: 57, e: 48, v: 80 }, { t: "선구안형", p: 48, a: 58, e: 82, v: 42 },
-];
-const pitcherTypes: Array<{ t: string } & PitcherRatings> = [
-  { t: "구속형", v: 86, c: 52, s: 50, m: 42 }, { t: "제구형", v: 48, c: 88, s: 48, m: 46 },
-  { t: "구위형", v: 53, c: 50, s: 87, m: 40 }, { t: "변화형", v: 50, c: 54, s: 45, m: 86 },
-];
 type Batter = { t: string } & BatterRatings;
 type Pitcher = { t: string } & PitcherRatings;
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; active: number; used: number[]; batter: number; runsAllowed: number };
@@ -27,7 +20,7 @@ type Line = { games: number; wins: number; draws: number; runs: number; h: numbe
 type Memory = { bat: number[]; pitch: number[] };
 const blank = (): Line => ({ games: 0, wins: 0, draws: 0, runs: 0, h: 0, ab: 0, bb: 0, so: 0, hr: 0, doubles: 0, triples: 0, groundouts: 0, infieldFlyouts: 0, outfieldFlyouts: 0, doublePlays: 0, tagRuns: 0, groundRuns: 0, outsPitched: 0, runsAllowed: 0, mistakes: 0, wild: 0, pitches: 0 });
 const choose = <T,>(values: readonly T[]) => values[Math.floor(Math.random() * values.length)];
-const makeTeam = (): Team => { const active = Math.floor(Math.random() * 4); return { lineup: Array.from({ length: 9 }, () => ({ ...choose(batterTypes) })), pitchers: [...pitcherTypes].sort(() => Math.random() - .5), active, used: [active], batter: 0, runsAllowed: 0 }; };
+const makeTeam = (): Team => { const active = Math.floor(Math.random() * 4); return { lineup: Array.from({ length: 9 }, () => individualizeBatter(choose(batterArchetypes))), pitchers: [...pitcherArchetypes].sort(() => Math.random() - .5).map((pitcher) => individualizePitcher(pitcher)), active, used: [active], batter: 0, runsAllowed: 0 }; };
 const distance = (a: number, b: number) => Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs(a % 5 - b % 5);
 const nearby = (cell: number) => CELLS.filter(candidate => distance(candidate, cell) <= 1);
 const weightedRead = (history: number[]) => {

@@ -1,6 +1,7 @@
 import { Redis } from "@upstash/redis";
 import { randomBytes } from "node:crypto";
 import { resolvePlateAppearance, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
+import { batterArchetypes, individualizeBatter, individualizePitcher, pitcherArchetypes } from "../../../lib/roster";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
@@ -76,17 +77,9 @@ const validChoice = (choice: unknown, expected: Choice["kind"]): choice is Choic
   if (expected === "bat") return value.swing === "contact" || value.swing === "power" || value.swing === "spot";
   return value.pitch === "fast" || value.pitch === "breaking";
 };
-const batterTypes = [
-  { t: "컨택형", p: 45, a: 85, e: 55, v: 45 }, { t: "파워형", p: 85, a: 48, e: 52, v: 45 },
-  { t: "주루형", p: 45, a: 57, e: 48, v: 80 }, { t: "선구안형", p: 48, a: 58, e: 82, v: 42 },
-];
-const pitcherTypes = [
-  { t: "구속형", v: 86, c: 52, s: 50, m: 42 }, { t: "제구형", v: 48, c: 88, s: 48, m: 46 },
-  { t: "구위형", v: 53, c: 50, s: 87, m: 40 }, { t: "변화형", v: 50, c: 54, s: 45, m: 86 },
-];
 const makeTeam = (): Team => {
-  const lineup = Array.from({ length: 9 }, (_, index) => ({ ...batterTypes[Math.floor(Math.random() * batterTypes.length)], n: `${index + 1}번 타자` }));
-  const pitchers = [...pitcherTypes].sort(() => Math.random() - 0.5).map((pitcher) => ({ ...pitcher, n: `${pitcher.t} 투수` }));
+  const lineup = Array.from({ length: 9 }, (_, index) => ({ ...individualizeBatter(batterArchetypes[Math.floor(Math.random() * batterArchetypes.length)]), n: `${index + 1}번 타자` }));
+  const pitchers = [...pitcherArchetypes].sort(() => Math.random() - 0.5).map((pitcher) => ({ ...individualizePitcher(pitcher), n: `${pitcher.t} 투수` }));
   const activePitcher = Math.floor(Math.random() * pitchers.length);
   return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
 };
