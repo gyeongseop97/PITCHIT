@@ -23,9 +23,9 @@ const pitcherTypes: Array<{ t: string } & PitcherRatings> = [
 type Batter = { t: string } & BatterRatings;
 type Pitcher = { t: string } & PitcherRatings;
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; active: number; used: number[]; batter: number; runsAllowed: number };
-type Line = { games: number; wins: number; draws: number; runs: number; h: number; ab: number; bb: number; so: number; hr: number; doubles: number; triples: number; outsPitched: number; runsAllowed: number; mistakes: number; wild: number; pitches: number };
+type Line = { games: number; wins: number; draws: number; runs: number; h: number; ab: number; bb: number; so: number; hr: number; doubles: number; triples: number; groundouts: number; infieldFlyouts: number; outfieldFlyouts: number; doublePlays: number; tagRuns: number; groundRuns: number; outsPitched: number; runsAllowed: number; mistakes: number; wild: number; pitches: number };
 type Memory = { bat: number[]; pitch: number[] };
-const blank = (): Line => ({ games: 0, wins: 0, draws: 0, runs: 0, h: 0, ab: 0, bb: 0, so: 0, hr: 0, doubles: 0, triples: 0, outsPitched: 0, runsAllowed: 0, mistakes: 0, wild: 0, pitches: 0 });
+const blank = (): Line => ({ games: 0, wins: 0, draws: 0, runs: 0, h: 0, ab: 0, bb: 0, so: 0, hr: 0, doubles: 0, triples: 0, groundouts: 0, infieldFlyouts: 0, outfieldFlyouts: 0, doublePlays: 0, tagRuns: 0, groundRuns: 0, outsPitched: 0, runsAllowed: 0, mistakes: 0, wild: 0, pitches: 0 });
 const choose = <T,>(values: readonly T[]) => values[Math.floor(Math.random() * values.length)];
 const makeTeam = (): Team => { const active = Math.floor(Math.random() * 4); return { lineup: Array.from({ length: 9 }, () => ({ ...choose(batterTypes) })), pitchers: [...pitcherTypes].sort(() => Math.random() - .5), active, used: [active], batter: 0, runsAllowed: 0 }; };
 const distance = (a: number, b: number) => Math.abs(Math.floor(a / 5) - Math.floor(b / 5)) + Math.abs(a % 5 - b % 5);
@@ -82,6 +82,31 @@ function advance(bases: number[], basesTaken: number, speed: number): number {
 function forceWalk(bases: number[], speed: number): number {
   const run = bases.every(Boolean) ? 1 : 0; if (bases[1]) bases[2] = bases[1]; if (bases[0]) bases[1] = bases[0]; bases[0] = speed; return run;
 }
+function advanceGroundRunners(bases: number[]): number {
+  let runs = 0;
+  for (let index = 2; index >= 1; index--) {
+    const speed = bases[index]; if (!speed) continue;
+    const chance = index === 2 ? Math.min(.48, Math.max(.12, .22 + (speed - 50) / 115)) : Math.min(.42, Math.max(.10, .18 + (speed - 50) / 135));
+    if (Math.random() >= chance) continue;
+    if (index === 2) { bases[2] = 0; runs++; }
+    else if (!bases[2]) { bases[1] = 0; bases[2] = speed; }
+  }
+  return runs;
+}
+function tagUpOutfield(bases: number[], batterPower: number): number {
+  let runs = 0;
+  const chances = [.14, .54, .76];
+  for (let index = 2; index >= 0; index--) {
+    const speed = bases[index]; if (!speed) continue;
+    const floor = index === 2 ? .68 : index === 1 ? .38 : .06;
+    const ceiling = index === 2 ? .98 : index === 1 ? .88 : .54;
+    const chance = Math.min(ceiling, Math.max(floor, chances[index] + (speed - 50) / 145 + (batterPower - 50) / 260));
+    if (Math.random() >= chance) continue;
+    if (index === 2) { bases[2] = 0; runs++; }
+    else if (!bases[index + 1]) { bases[index] = 0; bases[index + 1] = speed; }
+  }
+  return runs;
+}
 function playHalf(offense: Team, defense: Team, hitting: Line, pitching: Line, battingMemory: Memory, pitchingMemory: Memory, inning: number, extraRunner: boolean) {
   let outs = 0, balls = 0, strikes = 0, runs = 0;
   const bases = extraRunner ? [0, 55, 0] : [0, 0, 0];
@@ -101,8 +126,25 @@ function playHalf(offense: Team, defense: Team, hitting: Line, pitching: Line, b
     if (result.outcome === "foul") { strikes = Math.min(2, strikes + 1); continue; }
     if (result.outcome === "swinging_strike") { if (++strikes < 3) continue; hitting.ab++; hitting.so++; outs++; pitching.outsPitched++; offense.batter = (offense.batter + 1) % 9; balls = 0; strikes = 0; continue; }
     hitting.ab++;
-    if (result.outcome === "groundout" || result.outcome === "flyout") {
-      if (result.outcome === "flyout" && outs < 2 && bases[2] && Math.random() < Math.min(.42, Math.max(.10, .12 + (bases[2] - 40) / 145))) { bases[2] = 0; runs++; }
+    if (result.outcome === "groundout") {
+      hitting.groundouts++;
+      const hasFirstRunner = Boolean(bases[0]);
+      const lowPitchBonus = Math.max(0, Math.floor(result.actualCell / 5) - 2) * .04;
+      const doublePlayChance = Math.min(.38, Math.max(.08, .20 + lowPitchBonus + (pitcher.s - 50) / 260 + (50 - batter.v) / 150 + (pitch.pitch === "breaking" ? .02 : 0)));
+      if (hasFirstRunner && outs < 2 && Math.random() < doublePlayChance) {
+        bases[0] = 0; outs += 2; pitching.outsPitched += 2; hitting.doublePlays++;
+      } else {
+        if (hasFirstRunner) bases[0] = 0;
+        const scored = outs < 2 ? advanceGroundRunners(bases) : 0;
+        if (hasFirstRunner) bases[0] = batter.v;
+        runs += scored; hitting.groundRuns += scored; outs++; pitching.outsPitched++;
+      }
+      offense.batter = (offense.batter + 1) % 9; balls = 0; strikes = 0; continue;
+    }
+    if (result.outcome === "infield_flyout" || result.outcome === "outfield_flyout") {
+      if (result.outcome === "infield_flyout") hitting.infieldFlyouts++; else hitting.outfieldFlyouts++;
+      const scored = result.outcome === "outfield_flyout" && outs < 2 ? tagUpOutfield(bases, batter.p) : 0;
+      runs += scored; hitting.tagRuns += scored;
       outs++; pitching.outsPitched++; offense.batter = (offense.batter + 1) % 9; balls = 0; strikes = 0; continue;
     }
     const taken = result.outcome === "homerun" ? 4 : result.outcome === "triple" ? 3 : result.outcome === "double" ? 2 : 1;
@@ -137,6 +179,7 @@ const stat = (name: string, line: Line) => ({
   전략: name, 경기: line.games, 승: line.wins, 무: line.draws, 승률: +((line.wins + line.draws * .5) / line.games).toFixed(3), 경기당득점: +(line.runs / line.games).toFixed(2),
   타율: +(line.h / line.ab).toFixed(3), 안타: line.h, 경기당안타: +(line.h / line.games).toFixed(2), 홈런: line.hr, '2루타': line.doubles, '3루타': line.triples,
   볼넷: line.bb, 삼진: line.so, 경기당볼넷: +(line.bb / line.games).toFixed(2), 경기당삼진: +(line.so / line.games).toFixed(2),
+  땅볼아웃: line.groundouts, 내야뜬공: line.infieldFlyouts, 외야뜬공: line.outfieldFlyouts, 병살: line.doublePlays, 태그업득점: line.tagRuns, 땅볼진루득점: line.groundRuns,
   실투: line.mistakes, 제구이탈볼: line.wild,
   방어율: +(line.runsAllowed * 27 / line.outsPitched).toFixed(2), 투구수: line.pitches,
 });

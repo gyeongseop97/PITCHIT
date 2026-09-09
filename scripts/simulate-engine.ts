@@ -55,7 +55,7 @@ function plateAppearance(batter: BatterProfile, pitcher: PitcherProfile, readRat
       continue;
     }
     stat.ab++;
-    if (result.outcome === "groundout" || result.outcome === "flyout") { stat.out++; return stat; }
+    if (result.outcome === "groundout" || result.outcome === "infield_flyout" || result.outcome === "outfield_flyout") { stat.out++; return stat; }
     stat.h++;
     if (result.outcome === "single") stat.single++;
     if (result.outcome === "double") stat.double++;

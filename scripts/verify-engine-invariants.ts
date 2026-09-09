@@ -4,7 +4,7 @@ import { resolvePlateAppearance, type PitchType, type SwingType } from "../lib/g
 
 const swings: SwingType[] = ["contact", "power", "spot"];
 const pitches: PitchType[] = ["fast", "breaking"];
-const outcomes = new Set(["ball", "foul", "swinging_strike", "groundout", "flyout", "single", "double", "triple", "homerun"]);
+const outcomes = new Set(["ball", "foul", "swinging_strike", "groundout", "infield_flyout", "outfield_flyout", "single", "double", "triple", "homerun"]);
 const batters = [
   { p: 45, a: 85, e: 55, v: 45 }, { p: 85, a: 48, e: 52, v: 45 },
   { p: 45, a: 57, e: 48, v: 80 }, { p: 48, a: 58, e: 82, v: 42 },

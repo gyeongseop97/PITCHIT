@@ -3,7 +3,7 @@ export type PitchType = "fast" | "breaking";
 export type BatterRatings = { p: number; a: number; e: number; v: number };
 export type PitcherRatings = { v: number; c: number; s: number; m: number };
 export type Count = { balls: number; strikes: number };
-export type PlayOutcome = "ball" | "strike" | "foul" | "swinging_strike" | "groundout" | "flyout" | "single" | "double" | "triple" | "homerun";
+export type PlayOutcome = "ball" | "strike" | "foul" | "swinging_strike" | "groundout" | "infield_flyout" | "outfield_flyout" | "single" | "double" | "triple" | "homerun";
 
 export type PlateAppearance = {
   outcome: PlayOutcome;
@@ -189,7 +189,13 @@ export function resolvePlateAppearance(input: {
   if (roll < extraChance * 0.56) return { outcome: "double", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 외야를 가르는 2루타!` };
   if (roll < extraChance * (0.56 + clamp((input.batter.v - 48) / 150, 0, 0.28) + speedTripleConversion)) return { outcome: "triple", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 2루타성 타구를 빠른 발로 3루타!` };
   if (roll < hitChance) return { outcome: "single", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 노린 코스를 공략한 안타!` };
-  const grounder = random() < 0.58;
+  // Low pitches and movement produce more ground balls. Power, a clean read,
+  // and a power swing lift the ball more often; upper pitches also create a
+  // few more infield popups rather than every fly ball reaching the outfield.
+  const verticalGroundBonus = (actualRow - 2) * 0.075;
+  const grounder = random() < clamp(0.54 + verticalGroundBonus + (breaking ? 0.035 : -0.02) - (input.batter.p - 50) / 330 - (input.swing === "power" ? 0.055 : input.swing === "spot" ? 0.025 : 0) - (perfectTarget ? 0.035 : 0), 0.30, 0.74);
   if (grounder && random() < clamp((input.batter.v - 48) / 130)) return { outcome: "single", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 빠른 발로 내야안타!` };
-  return { outcome: grounder ? "groundout" : "flyout", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · ${grounder ? "땅볼 아웃." : "뜬공 아웃."}` };
+  if (grounder) return { outcome: "groundout", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · 땅볼 아웃.` };
+  const outfieldFly = random() < clamp(0.31 + (input.batter.p - 45) / 105 + (input.swing === "power" ? 0.10 : input.swing === "spot" ? 0.04 : 0) + (perfectTarget ? 0.06 : nearTarget ? 0.02 : 0) - (actualRow === 0 ? 0.06 : 0), 0.18, 0.78);
+  return { outcome: outfieldFly ? "outfield_flyout" : "infield_flyout", actualCell, isBall: false, pitchName, speed, execution: mistake ? "mistake" : "command", message: `${pitchName} ${speed}km/h · ${outfieldFly ? "외야 뜬공 아웃." : "내야 뜬공 아웃."}` };
 }

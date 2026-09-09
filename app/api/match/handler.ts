@@ -195,7 +195,7 @@ async function applyCareerRecords(room: Room) {
     if (recorded.includes(room.code)) return;
     const mine = (game.playLog || []).filter(play => play.attacker === playerId);
     const pitching = (game.playLog || []).filter(play => play.attacker !== playerId);
-    const plateEnds = mine.filter(play => ["single", "double", "triple", "homerun", "groundout", "flyout"].includes(play.outcome) || /삼진|볼넷/.test(play.event));
+    const plateEnds = mine.filter(play => ["single", "double", "triple", "homerun", "groundout", "infield_flyout", "outfield_flyout"].includes(play.outcome) || /삼진|볼넷/.test(play.event));
     const side = playerId === "p1" ? 0 : 1, otherSide = side === 0 ? 1 : 0;
     const won = game.forfeitWinner === playerId || (!game.forfeitWinner && game.scores[side] > game.scores[otherSide]);
     const lost = Boolean(game.forfeitWinner && game.forfeitWinner !== playerId) || (!game.forfeitWinner && game.scores[side] < game.scores[otherSide]);
@@ -267,6 +267,39 @@ function walk(game: Game, batterSpeed: number) {
   if (game.bases[0]) game.bases[1] = game.bases[0];
   game.bases[0] = batterSpeed;
 }
+function advanceGroundRunners(game: Game) {
+  if (game.outs >= 2) return "";
+  const next: [number, number, number] = [...game.bases] as [number, number, number];
+  const notes: string[] = [];
+  // A runner on third can score on a slow infield grounder, while a runner on
+  // second can take third. Speed determines both decisions.
+  for (let index = 2; index >= 1; index--) {
+    const speed = next[index]; if (!speed) continue;
+    const chance = index === 2 ? Math.min(.48, Math.max(.12, .22 + (speed - 50) / 115)) : Math.min(.42, Math.max(.10, .18 + (speed - 50) / 135));
+    if (Math.random() >= chance) continue;
+    if (index === 2) { next[2] = 0; addRun(game); notes.push("3루 주자 홈 쇄도"); }
+    else if (!next[2]) { next[1] = 0; next[2] = speed; notes.push("2루 주자 3루 진루"); }
+  }
+  game.bases = next;
+  return notes.length ? ` · ${notes.join(" · ")}` : "";
+}
+function tagUpOutfield(game: Game, batterPower: number) {
+  if (game.outs >= 2) return "";
+  const next: [number, number, number] = [...game.bases] as [number, number, number];
+  const notes: string[] = [];
+  // 3루→홈은 가장 쉽고, 1루→2루는 가장 어렵다. A deep fly from a
+  // powerful hitter and a fast runner both raise the chance to tag.
+  const bases = [.14, .54, .76];
+  for (let index = 2; index >= 0; index--) {
+    const speed = next[index]; if (!speed) continue;
+    const chance = Math.min(index === 2 ? .98 : index === 1 ? .88 : .54, Math.max(index === 2 ? .68 : index === 1 ? .38 : .06, bases[index] + (speed - 50) / 145 + (batterPower - 50) / 260));
+    if (Math.random() >= chance) continue;
+    if (index === 2) { next[2] = 0; addRun(game); notes.push("3루 주자 태그업 득점"); }
+    else if (!next[index + 1]) { next[index] = 0; next[index + 1] = speed; notes.push(`${index + 1}루 주자 태그업 ${index + 2}루`); }
+  }
+  game.bases = next;
+  return notes.length ? ` · ${notes.join(" · ")}` : "";
+}
 function nextPitch(game: Game) {
   game.choices = {};
   game.drafts = {};
@@ -332,6 +365,7 @@ async function resolve(room: Room) {
   const battingSide = battingPlayer === "p1" ? 0 : 1;
   const scoreBefore = game.scores[battingSide];
   const strikesBefore = game.strikes;
+  let outsOnPlay = 0;
   const plate = resolvePlateAppearance({
     batter,
     pitcher,
@@ -354,19 +388,27 @@ async function resolve(room: Room) {
     game.strikes = Math.min(2, game.strikes + 1);
   } else if (plate.outcome === "swinging_strike") {
     game.strikes++;
-    if (game.strikes >= 3) { game.outs++; game.event = `${plate.message} · ${plate.strikeStyle === "looking" ? "루킹 삼진 아웃" : "헛스윙 스트라이크 삼진 아웃"}`; endPlate(game); }
-  } else if (plate.outcome === "groundout" || plate.outcome === "flyout") {
-    let tagUp = "";
-    if (plate.outcome === "flyout" && game.outs < 2 && game.bases[2]) {
-      const runnerSpeed = game.bases[2];
-      const tagUpChance = Math.min(0.42, Math.max(0.10, 0.12 + (runnerSpeed - 40) / 145));
-      if (Math.random() < tagUpChance) {
-        game.bases[2] = 0;
-        addRun(game);
-        tagUp = " · 3루 주자가 태그업 득점!";
-      }
+    if (game.strikes >= 3) { game.outs++; outsOnPlay = 1; game.event = `${plate.message} · ${plate.strikeStyle === "looking" ? "루킹 삼진 아웃" : "헛스윙 스트라이크 삼진 아웃"}`; endPlate(game); }
+  } else if (plate.outcome === "groundout") {
+    const hasFirstRunner = Boolean(game.bases[0]);
+    const lowPitchBonus = Math.max(0, Math.floor(plate.actualCell / 5) - 2) * .04;
+    const doublePlayChance = Math.min(.38, Math.max(.08, .20 + lowPitchBonus + (pitcher.s - 50) / 260 + (50 - batter.v) / 150 + ((pitching.pitch ?? "fast") === "breaking" ? .02 : 0)));
+    if (hasFirstRunner && game.outs < 2 && Math.random() < doublePlayChance) {
+      game.bases[0] = 0; game.outs += 2; outsOnPlay = 2;
+      game.event = `${plate.message} · 병살타! 1루 주자와 타자 주자가 모두 아웃됩니다.`;
+    } else {
+      // On a non-double-play force at second, the runner is out but the
+      // batter reaches first. Other runners can still advance on the grounder.
+      if (hasFirstRunner) game.bases[0] = 0;
+      const advanceNote = advanceGroundRunners(game);
+      if (hasFirstRunner) game.bases[0] = batter.v;
+      game.outs++; outsOnPlay = 1;
+      game.event = `${plate.message}${hasFirstRunner ? " · 1루 주자 아웃, 타자 주자 1루 생존" : ""}${advanceNote}`;
     }
-    game.outs++;
+    if (!finishWalkoff(game)) endPlate(game);
+  } else if (plate.outcome === "infield_flyout" || plate.outcome === "outfield_flyout") {
+    const tagUp = plate.outcome === "outfield_flyout" ? tagUpOutfield(game, batter.p) : "";
+    game.outs++; outsOnPlay = 1;
     game.event = `${plate.message}${tagUp}`;
     if (!finishWalkoff(game)) endPlate(game);
   } else {
@@ -392,7 +434,7 @@ async function resolve(room: Room) {
     outcome: plate.outcome,
     event: game.event,
     runsBattedIn: game.scores[battingSide] - scoreBefore,
-    outsRecorded: plate.outcome === "groundout" || plate.outcome === "flyout" || (plate.outcome === "swinging_strike" && strikesBefore >= 2) ? 1 : 0,
+    outsRecorded: outsOnPlay,
     execution: plate.execution,
     strikeStyle: plate.strikeStyle,
   }, ...(game.playLog ?? [])].slice(0, 120);
@@ -426,7 +468,7 @@ async function applyBalanceGame(room: Room) {
   const hits = (outcomes.single || 0) + (outcomes.double || 0) + (outcomes.triple || 0) + (outcomes.homerun || 0);
   const strikeouts = plays.filter(play => /삼진/.test(play.event)).length;
   const walks = plays.filter(play => /볼넷/.test(play.event)).length;
-  const atBats = hits + (outcomes.groundout || 0) + (outcomes.flyout || 0) + strikeouts;
+  const atBats = hits + (outcomes.groundout || 0) + (outcomes.infield_flyout || 0) + (outcomes.outfield_flyout || 0) + strikeouts;
   const execution = countBy(plays.map(play => play.execution || "command"));
   const summary = {
     version: 1, mode: room.mode, completedAt: Date.now(), innings: game.inning,
@@ -435,7 +477,10 @@ async function applyBalanceGame(room: Room) {
     hits, atBats, walks, strikeouts, rbi: plays.reduce((sum, play) => sum + numberOf(play.runsBattedIn), 0),
     outs: plays.reduce((sum, play) => sum + numberOf(play.outsRecorded), 0), singles: outcomes.single || 0,
     doubles: outcomes.double || 0, triples: outcomes.triple || 0, homeRuns: outcomes.homerun || 0,
-    groundouts: outcomes.groundout || 0, flyouts: outcomes.flyout || 0, balls: outcomes.ball || 0,
+    groundouts: outcomes.groundout || 0, infieldFlyouts: outcomes.infield_flyout || 0, outfieldFlyouts: outcomes.outfield_flyout || 0, flyouts: (outcomes.infield_flyout || 0) + (outcomes.outfield_flyout || 0), balls: outcomes.ball || 0,
+    doublePlays: plays.filter(play => /병살타/.test(play.event)).length,
+    tagUpRuns: plays.filter(play => /태그업 득점/.test(play.event)).length,
+    groundAdvanceRuns: plays.filter(play => /홈 쇄도/.test(play.event)).length,
     fouls: outcomes.foul || 0, swingingStrikes: outcomes.swinging_strike || 0, mistakes: execution.mistake || 0,
     wildPitches: execution.wild || 0, extraInningGame: game.inning > 3 ? 1 : 0, forfeit: game.forfeitWinner ? 1 : 0,
     outcomeCounts: outcomes, executionCounts: execution,

@@ -851,7 +851,7 @@ function recordFinishedGame(game) {
   if (!code || !me || !plays.length || matchSession?.mode === 'solo') return;
   const career = loadCareer(); if (career.recordedGames.includes(code)) return;
   const mine = plays.filter(play => play.attacker === me), pitching = plays.filter(play => play.attacker !== me);
-  const plateEnds = mine.filter(play => ['single', 'double', 'triple', 'homerun', 'groundout', 'flyout'].includes(play.outcome) || /삼진|볼넷/.test(play.event));
+  const plateEnds = mine.filter(play => ['single', 'double', 'triple', 'homerun', 'groundout', 'infield_flyout', 'outfield_flyout'].includes(play.outcome) || /삼진|볼넷/.test(play.event));
   const walks = plateEnds.filter(play => /볼넷/.test(play.event)).length;
   const atBats = plateEnds.filter(play => !/볼넷/.test(play.event)).length;
   const hits = plateEnds.filter(play => ['single', 'double', 'triple', 'homerun'].includes(play.outcome)).length;
@@ -981,7 +981,7 @@ function broadcastText(game) {
   const resolved = play.outcome || game?.playLog?.[0]?.outcome;
   const strikeStyle = play.strikeStyle || game?.playLog?.[0]?.strikeStyle;
   const strikeout = /삼진/.test(outcome);
-  const calls = { ball:'볼입니다. 타자는 배트를 내지 않았습니다.', foul:'파울! 끈질기게 승부를 이어갑니다.', swinging_strike:'헛스윙 스트라이크!', groundout:'낮게 깔린 타구, 땅볼 처리!', flyout:'높이 뜬 타구, 뜬공 처리!', single:'깔끔하게 공략했습니다, 안타!', double:'강한 타구, 외야를 가릅니다!', triple:'외야 깊숙이 빠집니다! 3루까지 갑니다!', homerun:'쭉쭉 뻗습니다! 담장을 넘겼습니다!' };
+  const calls = { ball:'볼입니다. 타자는 배트를 내지 않았습니다.', foul:'파울! 끈질기게 승부를 이어갑니다.', swinging_strike:'헛스윙 스트라이크!', groundout:'낮게 깔린 타구, 땅볼 처리!', infield_flyout:'높이 뜬 타구, 내야 뜬공 처리!', outfield_flyout:'외야 깊숙한 뜬공, 태그업을 노립니다!', single:'깔끔하게 공략했습니다, 안타!', double:'강한 타구, 외야를 가릅니다!', triple:'외야 깊숙이 빠집니다! 3루까지 갑니다!', homerun:'쭉쭉 뻗습니다! 담장을 넘겼습니다!' };
   const call = strikeout ? `${strikeStyle === 'looking' ? '루킹 스트라이크' : '헛스윙 스트라이크'} · ${strikeStyle === 'looking' ? '루킹 삼진 아웃!' : '삼진 아웃!'}` : /볼넷/.test(outcome) ? '침착하게 골라냅니다, 볼넷!' : resolved === 'swinging_strike' && strikeStyle === 'looking' ? '루킹 스트라이크!' : calls[resolved] || (/스트라이크|파울/.test(outcome) ? '스트라이크!' : /볼/.test(outcome) ? '유인에 넘어가지 않았습니다, 볼!' : '스트라이크!');
   return { title: `${play.pitchName} ${play.speed}km/h`, call, reason, actual };
 }
@@ -990,7 +990,7 @@ function showBroadcast(game) {
   const data = broadcastText(game); if (!data) return;
   const key = `${game.deadline}:${game.event}:${data.actual}`; if (key === broadcastKey) return; broadcastKey = key;
   let call = document.getElementById('broadcastCall'); if (!call) { call = document.createElement('section'); call.id = 'broadcastCall'; call.className = 'broadcastCall'; document.querySelector('.zoneWrap').before(call); }
-  const resultTone = { ball:'ball', foul:'strike', swinging_strike:'strike', groundout:'out', flyout:'out', single:'single', double:'double', triple:'triple', homerun:'homerun' };
+  const resultTone = { ball:'ball', foul:'strike', swinging_strike:'strike', groundout:'out', infield_flyout:'out', outfield_flyout:'out', single:'single', double:'double', triple:'triple', homerun:'homerun' };
   const isStrikeout = /삼진/.test(game.event || '');
   call.className = `broadcastCall tone-${isStrikeout ? 'out' : (/볼넷/.test(game.event || '') ? 'walk' : (resultTone[game.lastPlay?.outcome || game.playLog?.[0]?.outcome] || 'strike'))}`;
   call.hidden = false; call.style.display = 'block';
@@ -1438,7 +1438,7 @@ showBroadcast=function(game){
   const key=`${game?.deadline||0}:${outcome}:${game?.event||''}`;
   if(key===impactFeedbackKey)return;
   impactFeedbackKey=key;
-  const kind=outcome==='homerun'?'homerun':outcome==='single'||outcome==='double'||outcome==='triple'?'hit':outcome==='swinging_strike'&&game?.playLog?.[0]?.outsRecorded?'strikeout':outcome==='groundout'||outcome==='flyout'?'out':'';
+  const kind=outcome==='homerun'?'homerun':outcome==='single'||outcome==='double'||outcome==='triple'?'hit':outcome==='swinging_strike'&&game?.playLog?.[0]?.outsRecorded?'strikeout':outcome==='groundout'||outcome==='infield_flyout'||outcome==='outfield_flyout'?'out':'';
   if(kind)playFeedback(kind);
 };
 </script><style id="inline-pitcher-swap-v1">
@@ -1551,7 +1551,7 @@ render=function(){
 </style><script id="zone-event-images-v1">
 const zoneEventImageSources={hit:'pitchit-event-hit-v1.png',double:'pitchit-event-double-v1.png',triple:'pitchit-event-triple-v1.png',homerun:'pitchit-event-homerun-v1.png',walk:'pitchit-event-walk-v1.png',strikeout:'pitchit-event-strikeout-v1.png',flyout:'pitchit-event-flyout-v1.png',groundout:'pitchit-event-groundout-v1.png'};
 let zoneEventImageTimer=null,zoneEventImageKey='';
-function zoneEventImageKind(value){const text=String(value||'');if(/홈런|homerun/i.test(text))return'homerun';if(/볼넷|walk/i.test(text))return'walk';if(/삼진|strikeout/i.test(text))return'strikeout';if(/2루타|double/i.test(text))return'double';if(/3루타|triple/i.test(text))return'triple';if(/뜬공|flyout/i.test(text))return'flyout';if(/땅볼|groundout/i.test(text))return'groundout';if(/안타|single/i.test(text))return'hit';return''}
+function zoneEventImageKind(value){const text=String(value||'');if(/홈런|homerun/i.test(text))return'homerun';if(/볼넷|walk/i.test(text))return'walk';if(/삼진|strikeout/i.test(text))return'strikeout';if(/2루타|double/i.test(text))return'double';if(/3루타|triple/i.test(text))return'triple';if(/뜬공|flyout/i.test(text))return'flyout';if(/땅볼|groundout|병살/i.test(text))return'groundout';if(/안타|single/i.test(text))return'hit';return''}
 function showZoneEventImage(kind,key){const wrap=document.querySelector('.zoneWrap');if(!wrap||!kind||!zoneEventImageSources[kind])return;if(key&&zoneEventImageKey===key)return;zoneEventImageKey=key||`${kind}:${Date.now()}`;clearTimeout(zoneEventImageTimer);let card=document.getElementById('zoneEventImage');if(!card){card=document.createElement('div');card.id='zoneEventImage';wrap.append(card)}card.className=`zoneEventImage ${kind}`;card.innerHTML=`<img src="${zoneEventImageSources[kind]}" alt="" aria-hidden="true">`;zoneEventImageTimer=setTimeout(()=>{card?.remove()},2000)}
 const revealOutcomeBeforeZoneEventImage=revealOutcome;
 revealOutcome=function(text,local){revealOutcomeBeforeZoneEventImage(text,local);const kind=zoneEventImageKind(text);if(kind)showZoneEventImage(kind,`local:${local?1:0}:${kind}:${Date.now()}`)};
