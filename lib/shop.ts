@@ -1,18 +1,22 @@
-export type ShopTheme = "classic" | "night" | "retro" | "neon";
-export type BallSkin = "classic" | "crimson" | "neon";
-export type ShopState = { coins: number; owned: string[]; equippedTheme: ShopTheme; equippedBall: BallSkin; rewardedGames: string[]; operatorGrantApplied: boolean };
+export type CosmeticSet = "classic" | "night" | "retro" | "neon";
+export type ShopState = { coins: number; owned: string[]; equippedSet: CosmeticSet; equippedTheme: CosmeticSet; equippedBall: "classic" | "crimson" | "retro" | "neon"; rewardedGames: string[]; operatorGrantApplied: boolean };
 export const SHOP_ITEMS = [
-  { id: "theme-classic", type: "theme", theme: "classic", name: "클래식 구장", description: "PITCHIT 기본 전광판 테마", cost: 0 },
-  { id: "theme-night", type: "theme", theme: "night", name: "나이트 게임", description: "깊은 남색의 야간 구장 전광판", cost: 90 },
-  { id: "theme-retro", type: "theme", theme: "retro", name: "레트로 볼파크", description: "빈티지 크림·브라운 경기장", cost: 140 },
-  { id: "theme-neon", type: "theme", theme: "neon", name: "네온 클래식", description: "보랏빛 네온 야구장", cost: 210 },
-  { id: "ball-crimson", type: "ball", ball: "crimson", name: "크림슨 하드볼", description: "붉은 가죽과 선명한 흰 실밥의 시그니처 볼", cost: 120 },
-  { id: "ball-neon", type: "ball", ball: "neon", name: "사이버 블루볼", description: "푸른 빛이 감도는 미래형 야구공", cost: 180 },
-  { id: "ball-classic", type: "ball", ball: "classic", name: "클래식 야구공", description: "PITCHIT 기본 야구공", cost: 0 },
+  { id: "set-classic", type: "set", set: "classic", theme: "classic", ball: "classic", effect: "classic", name: "클래식 스타터 세트", description: "기본 구장 · 클래식 야구공 · 기본 타격감", cost: 0 },
+  { id: "set-night", type: "set", set: "night", theme: "night", ball: "crimson", effect: "night", name: "나이트 파이어 세트", description: "야간 구장 · 크림슨 하드볼 · 불꽃 섬광 이펙트", cost: 210 },
+  { id: "set-retro", type: "set", set: "retro", theme: "retro", ball: "retro", effect: "retro", name: "레트로 볼파크 세트", description: "빈티지 구장 · 레트로 가죽공 · 카드 버스트 이펙트", cost: 270 },
+  { id: "set-neon", type: "set", set: "neon", theme: "neon", ball: "neon", effect: "neon", name: "네온 썬더 세트", description: "네온 구장 · 사이버 블루볼 · 번개 이펙트", cost: 330 },
 ] as const;
-export const defaultShop = (): ShopState => ({ coins: 0, owned: ["theme-classic", "ball-classic"], equippedTheme: "classic", equippedBall: "classic", rewardedGames: [], operatorGrantApplied: false });
+const validSet = (value: unknown): value is CosmeticSet => value === "classic" || value === "night" || value === "retro" || value === "neon";
+const legacySet = (item: string) => item === "theme-night" || item === "ball-crimson" ? "night" : item === "theme-retro" || item === "ball-retro" ? "retro" : item === "theme-neon" || item === "ball-neon" ? "neon" : item === "theme-classic" || item === "ball-classic" ? "classic" : null;
+const itemForSet = (set: CosmeticSet) => `set-${set}`;
+const setData = (set: CosmeticSet) => SHOP_ITEMS.find((item) => item.set === set)!;
+export const defaultShop = (): ShopState => ({ coins: 0, owned: ["set-classic"], equippedSet: "classic", equippedTheme: "classic", equippedBall: "classic", rewardedGames: [], operatorGrantApplied: false });
 export const readShop = (value: unknown): ShopState => {
   const raw = value && typeof value === "object" ? value as Partial<ShopState> : {};
-  const owned = Array.isArray(raw.owned) ? raw.owned.filter((item): item is string => typeof item === "string") : ["theme-classic", "ball-classic"];
-  return { coins: Math.max(0, Math.floor(Number(raw.coins) || 0)), owned: [...new Set(["theme-classic", "ball-classic", ...owned])], equippedTheme: raw.equippedTheme === "night" || raw.equippedTheme === "retro" || raw.equippedTheme === "neon" ? raw.equippedTheme : "classic", equippedBall: raw.equippedBall === "crimson" || raw.equippedBall === "neon" ? raw.equippedBall : "classic", rewardedGames: Array.isArray(raw.rewardedGames) ? raw.rewardedGames.filter((code): code is string => typeof code === "string").slice(-150) : [], operatorGrantApplied: raw.operatorGrantApplied === true };
+  const source = Array.isArray(raw.owned) ? raw.owned.filter((item): item is string => typeof item === "string") : [];
+  const owned = [...new Set(["set-classic", ...source.filter((item) => /^set-(classic|night|retro|neon)$/.test(item)), ...source.map(legacySet).filter((item): item is CosmeticSet => Boolean(item)).map(itemForSet)])];
+  const prior = validSet(raw.equippedTheme) ? raw.equippedTheme : raw.equippedBall === "crimson" ? "night" : raw.equippedBall === "retro" ? "retro" : raw.equippedBall === "neon" ? "neon" : "classic";
+  const equippedSet = validSet(raw.equippedSet) && owned.includes(itemForSet(raw.equippedSet)) ? raw.equippedSet : owned.includes(itemForSet(prior)) ? prior : "classic";
+  const equipped = setData(equippedSet);
+  return { coins: Math.max(0, Math.floor(Number(raw.coins) || 0)), owned, equippedSet, equippedTheme: equipped.theme, equippedBall: equipped.ball, rewardedGames: Array.isArray(raw.rewardedGames) ? raw.rewardedGames.filter((code): code is string => typeof code === "string").slice(-150) : [], operatorGrantApplied: raw.operatorGrantApplied === true };
 };

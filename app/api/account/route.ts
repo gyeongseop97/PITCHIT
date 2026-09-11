@@ -104,8 +104,7 @@ export async function POST(request: Request) {
     const item = SHOP_ITEMS.find((candidate) => candidate.id === String(input.itemId || ""));
     const shop = readShop(saved.shop);
     if (!item || !shop.owned.includes(item.id)) return Response.json({ error: "보유하지 않은 아이템입니다." }, { status: 409 });
-    const equipped = item.type === "theme" ? { equippedTheme: item.theme } : { equippedBall: item.ball };
-    const next = { ...saved, shop: { ...shop, ...equipped }, updatedAt: Date.now() };
+    const next = { ...saved, shop: { ...shop, equippedSet: item.set, equippedTheme: item.theme, equippedBall: item.ball }, updatedAt: Date.now() };
     await redis.set(careerKey(userId), next);
     return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
   }
