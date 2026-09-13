@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import {planPlay} from '../public/3d/play-plan.js';
+import {planPlay,normalizeOutcome} from '../public/3d/play-plan.js';
+for(const [text,category,outcome] of [['안타!','hit','single'],['내야안타!','hit','single'],['2루타!','hit','double'],['3루타!','hit','triple'],['홈런!','homerun','homerun'],['땅볼 아웃','out','groundout'],['뜬공 아웃','out','outfield_flyout'],['내야 뜬공','out','infield_flyout'],['병살타','out','double_play'],['파울','strike','foul'],['삼진 아웃','out','swinging_strike']]){assert.equal(normalizeOutcome({text,outcome:category}),outcome);assert.equal(planPlay({text,outcome:category}).out,outcome);}
+assert.equal(planPlay({outcome:'hit',text:'판정 정보 없음'}).contact,false);
+assert.equal(normalizeOutcome({outcome:'double',text:'3이닝 종료'}),'double');
 const plans=[];for(const outcome of ['single','double','triple','homerun','foul','groundout','infield_flyout','outfield_flyout','ball','swinging_strike'])for(let cell=0;cell<25;cell++)for(let variant=0;variant<6;variant++){
  const input={key:`${variant}`,outcome,actualCell:cell,batCell:12,basesBefore:[60,70,80]};const p=planPlay(input);assert.deepEqual(p,planPlay(input));assert.ok(p.end.every(Number.isFinite));assert.ok(p.catchAt>0);if(outcome==='foul')assert.equal(p.runs.some(r=>r.to>r.from),false);if(outcome==='homerun')assert.equal(p.runs.filter(r=>r.to===4).length,4);if(outcome==='double')assert.equal(p.runs[0].to,2);if(outcome==='triple')assert.equal(p.runs[0].to,3);plans.push(p);
 }

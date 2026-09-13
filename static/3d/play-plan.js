@@ -1,8 +1,26 @@
 // Deterministic presentation from the resolved play. Never rolls a new result.
 export const BASES=[[0,0,0],[19.4,0,-19.4],[0,0,-38.8],[-19.4,0,-19.4],[0,0,0]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+export function normalizeOutcome(play={}){
+ const out=play.outcome||'',text=String(play.playText||play.text||'');
+ if(['single','double','triple','homerun','groundout','double_play','infield_flyout','outfield_flyout','foul','ball','walk','swinging_strike'].includes(out))return out;
+ // Local games pass CSS feedback categories (hit/out/strike), not outcomes.
+ if(/홈런/.test(text))return 'homerun';
+ if(/3루타/.test(text))return 'triple';
+ if(/2루타/.test(text))return 'double';
+ if(/안타/.test(text))return 'single';
+ if(/병살/.test(text))return 'double_play';
+ if(/땅볼/.test(text))return 'groundout';
+ if(/내야.*뜬공|내야.*플라이/.test(text))return 'infield_flyout';
+ if(/뜬공|플라이/.test(text))return 'outfield_flyout';
+ if(/파울/.test(text))return 'foul';
+ if(/볼넷/.test(text))return 'walk';
+ if(/삼진|스트라이크|헛스윙|루킹/.test(text))return 'swinging_strike';
+ if(/^볼(?:[ ·!]|$)/.test(text))return 'ball';
+ return 'unknown';
+}
 export function planPlay(play={}){
- const text=play.playText||play.text||'',out=play.outcome||'';
+ const text=play.playText||play.text||'',out=normalizeOutcome(play);
  let hash=2166136261;for(const c of String(play.key||out))hash=Math.imul(hash^c.charCodeAt(0),16777619);const variation=(hash>>>0)%997/997;
  const variant=(hash>>>0)%3;
  const col=Number.isInteger(play.actualCell)?play.actualCell%5:2,row=Number.isInteger(play.actualCell)?Math.floor(play.actualCell/5):2;

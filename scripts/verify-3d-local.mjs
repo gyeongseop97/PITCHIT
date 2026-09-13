@@ -1,0 +1,17 @@
+/** Local-only regression for PITCHIT's optional 3D presentation layer.
+ * Install Playwright or set PLAYWRIGHT_MODULE; BROWSER_CHANNEL is optional. */
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const root=fileURLToPath(new URL('../',import.meta.url));
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png'};
+const server=createServer(async(req,res)=>{try{const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname),file=path.resolve(root,'.'+pathname);if(!file.startsWith(root)){res.writeHead(403).end();return}res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream'});res.end(await readFile(file))}catch{res.end()}});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const base=`http://127.0.0.1:${server.address().port}`;
+(async()=>{const b=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});try{const p=await b.newPage({viewport:{width:1100,height:850}});const errors=[];p.on('pageerror',e=>errors.push(e.message));await p.addInitScript(()=>{const raf=requestAnimationFrame;window.frames3D=[];window.clock3D=performance.now();requestAnimationFrame=fn=>{if(fn.name==='frame'){frames3D.push(fn);return 0;}return raf(fn)};window.step3D=n=>{for(let i=0;i<n;i++){clock3D+=50;frames3D.splice(0).forEach(fn=>fn(clock3D))}return window.pitchit3D.snapshot().scene;};});await p.route('https://**/*',r=>r.fulfill({contentType:'application/json',body:'{"signedIn":false}'}));await p.goto(base+'/public/game/index.html');await p.evaluate(()=>{requestMatch=async()=>{throw Error('offline')};start('solo')});await p.waitForFunction(()=>state.mode==='solo'&&!state.net);await p.locator('.game .demo3DEntry').click();await p.waitForFunction(()=>window.pitchit3D.snapshot().scene);
+ const cases=[['안타! 노린 코스','hit','single',45],['내야안타!','hit','single',15],['2루타! 장타 코스','hit','double',70],['3루타! 주력','hit','triple',78],['홈런! 담장','homerun','homerun',100],['땅볼 아웃','out','groundout',20],['뜬공 아웃','out','outfield_flyout',58],['파울 · 계속','strike','foul',20],['삼진 아웃','out','swinging_strike',0]];
+ for(const [text,kind,outcome,minDistance] of cases){const data=await p.evaluate(({text,kind})=>{state.pick=12;state.ball=12;setResult(text,kind);let s=step3D(1),steps=0;while(s.phase!=='result'&&steps++<70)s=step3D(1);const atContact=s;let far=0;while(s.phase==='result'&&steps++<400){s=step3D(1);if(s.contact)far=Math.max(far,Math.hypot(s.ball[0],s.ball[2]));}return{atContact,far,phase:s.phase};},{text,kind});assert.equal(data.atContact.outcome,outcome);assert.equal(data.phase,'ready');assert.ok(data.far>=minDistance,`${text}: travelled ${data.far}m`);if(!minDistance)assert.equal(data.atContact.contact,false);console.log('PASS local setResult',text,'=>',data.atContact.trajectory.kind,Math.round(data.far)+'m');}
+ assert.deepEqual(errors,[]);console.log('PASS: actual local feedback bridge maps every hit/out/strike category to the right trajectory and measured field destination.');}finally{await b.close();await new Promise(resolve=>server.close(resolve))}})().catch(e=>{console.error(e);process.exitCode=1});
