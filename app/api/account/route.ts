@@ -1,6 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { Redis } from "@upstash/redis";
-import { SHOP_ITEMS, readShop } from "../../../lib/shop";
+import { SHOP_ITEMS, readShop, buyShopItem, equipShopItem } from "../../../lib/shop";
 
 export const runtime = "nodejs";
 
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const shop = readShop(saved.shop);
     if (shop.owned.includes(item.id)) return Response.json({ signedIn: true, name, career: saved.career || null, shop });
     if (shop.coins < item.cost) return Response.json({ error: "P 코인이 부족합니다." }, { status: 409 });
-    const next = { ...saved, shop: { ...shop, coins: shop.coins - item.cost, owned: [...shop.owned, item.id] }, updatedAt: Date.now() };
+    const next = { ...saved, shop: buyShopItem(shop, item), updatedAt: Date.now() };
     await redis.set(careerKey(userId), next);
     return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
   }
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const item = SHOP_ITEMS.find((candidate) => candidate.id === String(input.itemId || ""));
     const shop = readShop(saved.shop);
     if (!item || !shop.owned.includes(item.id)) return Response.json({ error: "보유하지 않은 아이템입니다." }, { status: 409 });
-    const next = { ...saved, shop: { ...shop, equippedSet: item.set, equippedTheme: item.theme, equippedBall: item.ball }, updatedAt: Date.now() };
+    const next = { ...saved, shop: equipShopItem(shop, item), updatedAt: Date.now() };
     await redis.set(careerKey(userId), next);
     return Response.json({ signedIn: true, name, career: saved.career || null, shop: next.shop });
   }

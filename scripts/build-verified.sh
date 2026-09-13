@@ -18,6 +18,9 @@ if [[ ! -x "${vinext}" ]]; then
   exit 69
 fi
 
+node "${SITES_PROJECT_ROOT}/scripts/sync-shop.mjs"
+node "${SITES_PROJECT_ROOT}/scripts/sync-3d-entry.mjs"
+
 echo "Running bounded vinext build..."
 timeout \
   --signal=TERM \

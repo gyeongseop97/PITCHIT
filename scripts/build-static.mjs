@@ -1,3 +1,5 @@
+import "./sync-shop.mjs";
+import "./sync-3d-entry.mjs";
 import { cp, mkdir } from "node:fs/promises";
 
 await mkdir("static", { recursive: true });

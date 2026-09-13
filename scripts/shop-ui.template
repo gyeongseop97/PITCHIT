@@ -1,0 +1,37 @@
+const shopCatalog = SHOP_ITEMS;
+const defaultShopState = defaultShop;
+function localShop(){try{return readShop(JSON.parse(localStorage.getItem(shopStorageKey)||'{}'))}catch(_){return defaultShopState()}}
+function saveLocalShop(shop){try{localStorage.setItem(shopStorageKey,JSON.stringify(shop))}catch(_){}}
+function activeShop(){return accountState?.signedIn&&accountState.shop?readShop(accountState.shop):localShop()}
+function paintPitchMarker(){const cell=Number.isInteger(state.ball)?document.querySelector(`#zone [data-z="${state.ball}"]`):null;if(!cell)return;cell.classList.add('ball','pitchit-skinned-ball');cell.textContent='';cell.style.setProperty('background-image','var(--pitchit-ball-image)','important');cell.style.setProperty('background-position','center','important');cell.style.setProperty('background-size','70%','important');cell.style.setProperty('background-repeat','no-repeat','important')}
+function equippedShopItem(type,shop=activeShop()){return shopCatalog.find(item=>item.type===type&&item.value===shop[equippedField[type]])}
+function applyShopTheme(){const shop=activeShop(),ball=equippedShopItem('ball',shop),effect=equippedShopItem('effect',shop);document.body.dataset.pitchitTheme=shop.equippedTheme==='classic'?'':shop.equippedTheme;document.documentElement.style.setProperty('--pitchit-ball-image',`url("${ball.image}")`);document.documentElement.style.setProperty('--pitchit-effect-image',effect.image?`url("${effect.image}")`:'none');paintPitchMarker()}
+async function updateShop(action,payload={}){
+ if(accountState?.signedIn){const data=await accountRequest({action,...payload});accountState={...accountState,shop:data.shop};applyShopTheme();return data.shop}
+ const shop=localShop(),item=shopCatalog.find(v=>v.id===payload.itemId);
+ if(!item)throw new Error('아이템을 찾을 수 없습니다.');
+ const next=action==='shop-buy'?buyShopItem(shop,item):equipShopItem(shop,item);
+ saveLocalShop(next);applyShopTheme();return next;
+}
+const shopCategories={ball:'공',theme:'배경',effect:'효과'};
+let shopCategory='ball',shopOwnedOnly=false,shopPending=false;
+function openShop(category=shopCategory,ownedOnly=false){
+ shopCategory=typeof category==='string'&&shopCategories[category]?category:shopCategory;shopOwnedOnly=ownedOnly;
+ let overlay=document.getElementById('shopOverlay');if(!overlay){overlay=document.createElement('div');overlay.id='shopOverlay';overlay.className='guideOverlay';document.body.append(overlay)}
+ const shop=activeShop(),items=shopCatalog.filter(item=>item.type===shopCategory&&(!shopOwnedOnly||shop.owned.includes(item.id)));
+ overlay.innerHTML=`<section class="guideDialog shopDialog" role="dialog" aria-modal="true" aria-label="아이템 상점"><header><h2>PITCHIT 아이템 상점</h2><button class="guideClose">닫기</button></header><section class="shopWallet"><small>보유 P 코인</small><b>${shop.coins.toLocaleString()} P</b><small>공 · 배경 · 효과를 각각 구매하고 자유롭게 조합하세요.</small></section><nav class="shopCategories" aria-label="아이템 카테고리">${Object.entries(shopCategories).map(([type,label])=>`<button type="button" data-shop-category="${type}" aria-pressed="${type===shopCategory}">${label}</button>`).join('')}<button type="button" data-shop-owned aria-pressed="${shopOwnedOnly}">보유 아이템</button></nav><div class="shopGrid">${items.map(item=>{
+ const owned=shop.owned.includes(item.id),equipped=shop[equippedField[item.type]]===item.value;
+ const preview=item.image?`<img class="shopBallPreview" src="${item.image}" alt="${item.name}">`:`<span>${item.type==='theme'?'⚾ '+item.name:'기본 효과'}</span>`;
+ return `<article class="shopItem"><div class="shopPreview ${item.type==='theme'?item.value:'classic'}">${preview}</div><h3>${item.name}</h3><p>${item.description}</p><b>${owned?'보유 중':item.cost+' P'}</b><button type="button" data-shop-item="${item.id}" ${equipped||shopPending||(!owned&&shop.coins<item.cost)?'disabled':''}>${equipped?'장착 중':owned?'장착':shop.coins<item.cost?'코인 부족':'구매'}</button></article>`;
+ }).join('')}</div><p class="shopStatus" role="status"></p></section>`;
+ overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};overlay.querySelector('.guideClose').onclick=()=>overlay.remove();
+ overlay.querySelectorAll('[data-shop-category]').forEach(button=>button.onclick=()=>openShop(button.dataset.shopCategory,shopOwnedOnly));
+ overlay.querySelector('[data-shop-owned]').onclick=()=>openShop(shopCategory,!shopOwnedOnly);
+ overlay.querySelectorAll('[data-shop-item]').forEach(button=>button.onclick=async()=>{
+  if(shopPending)return;shopPending=true;overlay.querySelectorAll('[data-shop-item]').forEach(b=>b.disabled=true);
+  const item=shopCatalog.find(v=>v.id===button.dataset.shopItem),owned=activeShop().owned.includes(item.id);
+  let message='';try{await updateShop(owned?'shop-equip':'shop-buy',{itemId:item.id});message=owned?`${item.name} 장착 완료`:`${item.name} 구매 완료. 장착 버튼을 눌러 적용하세요.`}catch(error){message=error.message||'상점 처리에 실패했습니다.'}finally{shopPending=false}
+  if(overlay.isConnected){openShop(shopCategory,shopOwnedOnly);overlay.querySelector('.shopStatus').textContent=message}
+ });
+}
+function openItems(){openShop(shopCategory,true)}

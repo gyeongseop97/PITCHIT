@@ -48,7 +48,7 @@ type Game = {
   aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
   event: string;
 };
-type Player = { token: string; name: string; profileId?: string; authenticated?: boolean };
+type Player = { token: string; name: string; profileId?: string; authenticated?: boolean; prefer3D?: boolean };
 type Room = { code: string; mode: "solo" | "friend" | "quick"; players: Record<PlayerId, Player | null>; game: Game };
 
 const redis = new Redis({
@@ -246,6 +246,7 @@ async function applyShopRewards(room: Room) {
 const publicRoom = (room: Room) => ({
   code: room.code,
   mode: room.mode,
+  graphics3D: Boolean(room.players.p1?.prefer3D || room.players.p2?.prefer3D),
   ready: room.game.status === "playing",
   players: { p1: room.players.p1?.name ?? null, p2: room.players.p2?.name ?? null },
   // Reveal only that a player has locked a choice.  Their target, swing and
@@ -662,7 +663,7 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: "비회원 닉네임을 발급하지 못했습니다. 잠시 후 다시 시도해 주세요." });
     }
     if (input.action === "solo") {
-      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어", profileId: profileId(input.profileId), authenticated: input.authenticated === true }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
+      const room: Room = { code: code(), mode: "solo", players: { p1: { token: token(), name: input.name || "플레이어", profileId: profileId(input.profileId), authenticated: input.authenticated === true, prefer3D: input.graphics3D === true }, p2: { token: "AI", name: "PITCHIT AI" } }, game: freshGame() };
       room.game.status = "playing";
       room.game.event = "PITCHIT AI와 경기 시작! 20초 안에 작전을 선택하세요.";
       nextPitch(room.game);
@@ -677,7 +678,7 @@ export default async function handler(req: any, res: any) {
         if (waitingCode) {
           const waitingRoom = await load(waitingCode);
           if (waitingRoom?.mode === "quick" && waitingRoom.game.status === "waiting") {
-            const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId), authenticated: input.authenticated === true };
+            const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId), authenticated: input.authenticated === true, prefer3D: input.graphics3D === true };
             const player = startRoom(waitingRoom, joining);
             await save(waitingRoom);
             await redis.del(quickQueueKey);
@@ -685,7 +686,7 @@ export default async function handler(req: any, res: any) {
           }
           await redis.del(quickQueueKey);
         }
-        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId), authenticated: input.authenticated === true }, p2: null }, game: freshGame() };
+        const room: Room = { code: code(), mode: "quick", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId), authenticated: input.authenticated === true, prefer3D: input.graphics3D === true }, p2: null }, game: freshGame() };
         room.game.event = "상대를 찾는 중입니다…";
         await save(room);
         await redis.set(quickQueueKey, room.code, { ex: 45 });
@@ -693,7 +694,7 @@ export default async function handler(req: any, res: any) {
       } finally { await release(quickQueueLockKey, queueLock); }
     }
     if (input.action === "create") {
-      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId), authenticated: input.authenticated === true }, p2: null }, game: freshGame() };
+      const room: Room = { code: code(), mode: "friend", players: { p1: { token: token(), name: input.name || "플레이어 1", profileId: profileId(input.profileId), authenticated: input.authenticated === true, prefer3D: input.graphics3D === true }, p2: null }, game: freshGame() };
       await save(room);
       return res.status(201).json({ ...publicRoom(room), player: "p1", token: room.players.p1!.token });
     }
@@ -757,7 +758,7 @@ export default async function handler(req: any, res: any) {
     }
     if (input.action === "join") {
       if (room.players.p2) return res.status(409).json({ error: "이미 두 명이 입장한 방입니다." });
-      const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId), authenticated: input.authenticated === true };
+      const joining = { token: token(), name: input.name || "플레이어 2", profileId: profileId(input.profileId), authenticated: input.authenticated === true, prefer3D: input.graphics3D === true };
       const player = startRoom(room, joining);
       await save(room);
       return res.json({ ...publicRoom(room), player, token: joining.token });
