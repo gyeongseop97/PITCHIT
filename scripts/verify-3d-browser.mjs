@@ -29,6 +29,7 @@ try{
   await page.goto(base+entry);await page.evaluate(()=>{requestMatch=async()=>{throw Error('Offline fixture')};start('solo')});await page.waitForFunction(()=>state.mode==='solo'&&!state.net);
   const before=await page.evaluate(()=>JSON.stringify(state));assert.equal(await page.locator('.demo3DEntry').count(),2);
   await page.locator('.game .demo3DEntry').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene!==null);assert.equal(await page.evaluate(()=>JSON.stringify(state)),before);
+  assert.equal(await page.locator('.pitch3dConfirm').isDisabled(),true);const noPick=await page.evaluate(()=>JSON.stringify(state));await page.evaluate(()=>{bat();document.getElementById('swing').click()});assert.equal(await page.evaluate(()=>JSON.stringify(state)),noPick);
   for(const cell of [0,4,20,24,12]){await select(cell);assert.equal(await page.evaluate(()=>state.pick),cell)}
   await page.locator('.pitch3dConfirm').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.plays>0);await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='result');
   const after=await page.evaluate(()=>JSON.stringify(state));await page.locator('.game .demo3DEntry').click();assert.equal(await page.evaluate(()=>JSON.stringify(state)),after);assert.equal(await page.locator('.pitch3dViewport > .zoneWrap').count(),0);
