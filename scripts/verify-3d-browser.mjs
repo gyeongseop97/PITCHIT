@@ -76,6 +76,8 @@ try{
   await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.defense.stage==='throw');await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.defense.stage==='receive');
   await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:12000});await select(4,true);assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.location.cell),20);assert.ok(await page.evaluate(()=>window.pitchit3D.snapshot().scene.historyMarkerCount>0));
  }
+ // Non-hit broadcast tones must never pass an empty class token.
+ for(const [outcome,event] of [['ball','볼'],['foul','파울'],['swinging_strike','헛스윙 스트라이크']]){await page.evaluate(({outcome,event})=>{window.fixture.game.deadline+=1000;window.fixture.game.event=event;window.fixture.game.lastPlay={...window.fixture.game.lastPlay,outcome};applyMatch(window.fixture)},{outcome,event});}
  // Room adoption runs through the real request wrapper, before match rendering.
  await page.goto(base+'/public/game/index.html');const sent=[];
  await page.route('**/api/match',async route=>{const body=route.request().postDataJSON();sent.push(body);await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:'3DROOM',graphics3D:true,ready:false})})});

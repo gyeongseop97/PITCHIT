@@ -995,7 +995,7 @@ function showBroadcast(game) {
   call.className = `broadcastCall tone-${isStrikeout ? 'out' : (/볼넷/.test(game.event || '') ? 'walk' : (resultTone[game.lastPlay?.outcome || game.playLog?.[0]?.outcome] || 'strike'))}`;
   call.hidden = false; call.style.display = 'block';
   call.innerHTML = `<small>LIVE PLAY-BY-PLAY</small>${data.call}<br><small>${data.reason}</small>`;
-  const wrap = document.querySelector('.zoneWrap'); const flight = document.createElement('i'); flight.className = 'pitchFlight'; flight.style.setProperty('--pitch-x', data.actual % 5); flight.style.setProperty('--pitch-y', Math.floor(data.actual / 5)); wrap.append(flight); wrap.classList.remove('resultFlash','hit','out'); wrap.classList.add('resultFlash', /안타|루타|홈런/.test(game.event) ? 'hit' : /아웃|삼진/.test(game.event) ? 'out' : ''); setTimeout(() => { flight.remove(); wrap.classList.remove('resultFlash','hit','out'); }, 700);
+  const wrap = document.querySelector('.zoneWrap'); const flight = document.createElement('i'); flight.className = 'pitchFlight'; flight.style.setProperty('--pitch-x', data.actual % 5); flight.style.setProperty('--pitch-y', Math.floor(data.actual / 5)); wrap.append(flight); wrap.classList.remove('resultFlash','hit','out'); wrap.classList.add(...['resultFlash', /안타|루타|홈런/.test(game.event) ? 'hit' : /아웃|삼진/.test(game.event) ? 'out' : ''].filter(Boolean)); setTimeout(() => { flight.remove(); wrap.classList.remove('resultFlash','hit','out'); }, 700);
 }
 const applyMatchBeforeBroadcast = applyMatch;
 applyMatch = function(data) {
