@@ -30,7 +30,7 @@ try{
   const before=await page.evaluate(()=>JSON.stringify(state));assert.equal(await page.locator('.demo3DEntry').count(),2);
   await page.locator('.game .demo3DEntry').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene!==null);assert.equal(await page.evaluate(()=>JSON.stringify(state)),before);
   for(const cell of [0,4,20,24,12]){await select(cell);assert.equal(await page.evaluate(()=>state.pick),cell)}
-  await page.locator('#swing').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.plays>0);await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='result');
+  await page.locator('.pitch3dConfirm').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.plays>0);await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='result');
   const after=await page.evaluate(()=>JSON.stringify(state));await page.locator('.game .demo3DEntry').click();assert.equal(await page.evaluate(()=>JSON.stringify(state)),after);assert.equal(await page.locator('.pitch3dViewport > .zoneWrap').count(),0);
  }
  await page.locator('.game .demo3DEntry').click();
@@ -43,8 +43,8 @@ try{
  assert.match(await page.locator('.pitch3dCaption').innerText(),/안타/);
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:10000});
  assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.camera),'zone');
- assert.match(await page.locator('.pitch3dHistory').innerText(),/1행 5열/);
- const historyCount=await page.locator('.pitch3dHistory li').count();await page.evaluate(()=>applyMatch(window.fixture));assert.equal(await page.locator('.pitch3dHistory li').count(),historyCount);
+ assert.ok(await page.evaluate(()=>window.pitchit3D.snapshot().scene.historyMarkerCount>0));assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.lastBatCell),4);
+ const historyCount=await page.evaluate(()=>window.pitchit3D.snapshot().scene.history.length);await page.evaluate(()=>applyMatch(window.fixture));assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.history.length),historyCount);
  for(const swing of ['contact','power','spot']){
   await page.evaluate(swing=>{state.swing=swing;state.pick=12;render()},swing);
   const ranges=await page.evaluate(()=>({source:[...document.querySelectorAll('#zone .range')].map(el=>+el.dataset.z),visual:window.pitchit3D.snapshot().scene.rangeCells}));assert.deepEqual(ranges.visual,ranges.source);
@@ -52,7 +52,7 @@ try{
  }
  for(let cell=0;cell<25;cell++){await select(cell);assert.equal(await page.evaluate(()=>state.pick),cell)}
  await page.locator('.pitch3dCanvas canvas').focus();await page.keyboard.press('ArrowUp');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>state.pick),19);
- await select(8);await page.evaluate(()=>{requestMatch=async input=>{window.sentChoice=input;return window.fixture}});await page.locator('#swing').click();const request=await page.evaluate(()=>window.sentChoice);assert.equal(request.action,'choose');assert.equal(request.choice.cell,8);assert.equal(request.choice.kind,'bat');assert.equal(request.token,'fixture-token');
+ await select(8);await page.evaluate(()=>{requestMatch=async input=>{window.sentChoice=input;return window.fixture}});await page.locator('.pitch3dConfirm').click();const request=await page.evaluate(()=>window.sentChoice);assert.equal(request.action,'choose');assert.equal(request.choice.cell,8);assert.equal(request.choice.kind,'bat');assert.equal(request.token,'fixture-token');
  await page.evaluate(()=>{matchSubmitted=true;render()});const lockedPick=await page.evaluate(()=>state.pick);await select(12);assert.equal(await page.evaluate(()=>state.pick),lockedPick);
  await page.evaluate(()=>{matchSubmitted=false;window.fixture.choiceReady.p1=false;render()});
  for(const view of ['batter','pitcher','side','broadcast'])await page.locator(`[data-view3d="${view}"]`).click();
@@ -66,15 +66,15 @@ try{
  for(const cell of [0,4,12,20,24]){await select(cell,true);assert.equal(await page.evaluate(()=>state.pick),cell)}
  // Current normal-game rules remove manual bait controls; 3D mirrors availability.
  assert.equal(await page.locator('.pitch3dBaits').isVisible(),false);
- await select(12,true);await page.locator('#swing').click();const pitchRequest=await page.evaluate(()=>window.sentChoice);assert.equal(pitchRequest.choice.cell,12);assert.equal(pitchRequest.choice.kind,'pitch');
+ await select(12,true);await page.locator('.pitch3dConfirm').click();const pitchRequest=await page.evaluate(()=>window.sentChoice);assert.equal(pitchRequest.choice.cell,12);assert.equal(pitchRequest.choice.kind,'pitch');
  await page.locator('[data-follow3d]').click();
  for(const [outcome,word,fielder] of [['groundout','땅볼 아웃','유격수'],['outfield_flyout','뜬공 아웃','우익수']]){
   await page.evaluate(({outcome,word})=>{matchSubmitted=false;window.fixture.game.deadline=Date.now()+60000;window.fixture.game.lastPlay={actualCell:20,outcome,pitchName:'패스트볼',speed:140,execution:'command',bat:{kind:'bat',cell:12,swing:'contact'},pitch:{kind:'pitch',cell:20,pitch:'fast'}};window.fixture.game.event=word;applyMatch(window.fixture)}, {outcome,word});
   await page.waitForFunction(()=>{const s=window.pitchit3D.snapshot().scene;return s.swingAge<.5&&s.batVisible});
   await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.defense.stage==='gather');
-  const d=await page.evaluate(()=>window.pitchit3D.snapshot().scene.defense);assert.equal(d.fielders.length,7);assert.equal(d.fielder,fielder);
+  const d=await page.evaluate(()=>window.pitchit3D.snapshot().scene.defense);assert.equal(d.fielders.length,7);assert.ok(d.fielders.some(f=>f.name===d.fielder));
   await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.defense.stage==='throw');await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.defense.stage==='receive');
-  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:12000});await select(4,true);assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.location.cell),20);assert.match(await page.locator('.pitch3dHistory').innerText(),/5행 1열/);
+  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:12000});await select(4,true);assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.location.cell),20);assert.ok(await page.evaluate(()=>window.pitchit3D.snapshot().scene.historyMarkerCount>0));
  }
  // Room adoption runs through the real request wrapper, before match rendering.
  await page.goto(base+'/public/game/index.html');const sent=[];

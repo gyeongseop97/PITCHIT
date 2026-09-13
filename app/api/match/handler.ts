@@ -9,7 +9,7 @@ type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: str
 type Batter = { n: string; t: string; p: number; a: number; e: number; v: number };
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
-type PlayMemory = { batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
+type PlayMemory = { execution?: string; isBall?: boolean; batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
 type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; batterType: string; pitcherType: string; contactZone: "exact" | "near" | "outer"; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
 type RankingResult = { before: number; points: number; change: number; wins: number; losses: number; draws: number; games: number };
 type Game = {
@@ -42,7 +42,7 @@ type Game = {
   // A highlighted cell is saved privately so a player who runs out of time
   // can still use the plan they had prepared.  It is never sent to the rival.
   drafts: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
+  lastPlay: { basesBefore?: number[]; basesAfter?: number[]; playText?: string; outsRecorded?: number; bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
   aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
@@ -346,6 +346,7 @@ function finishWalkoff(game: Game) {
   return true;
 }
 function endPlate(game: Game) {
+  if (game.lastPlay) { game.lastPlay.basesAfter = [...game.bases]; game.lastPlay.playText = game.event; }
   game.balls = 0;
   game.strikes = 0;
   game.batter[game.half] = (game.batter[game.half] + 1) % 9;
@@ -404,8 +405,8 @@ async function resolve(room: Room) {
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
   });
-  game.lastPlay = { bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
-  game.history = [{ batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
+  game.lastPlay = { basesBefore: [...game.bases], bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
+  game.history = [{ execution: plate.execution, isBall: plate.isBall, batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
   const executionNotice = plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : "";
   game.event = `${executionNotice}${plate.message}`;
   if (plate.outcome === "ball") {
@@ -444,6 +445,7 @@ async function resolve(room: Room) {
     const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
     game.hits[game.half]++; const extraAdvance = advance(game, bases, batter.v); game.event = `${plate.message}${extraAdvance}`; if (!finishWalkoff(game)) endPlate(game);
   }
+  if (game.lastPlay) { game.lastPlay.basesAfter ??= [...game.bases]; game.lastPlay.playText ??= game.event; game.lastPlay.outsRecorded = outsOnPlay; }
   const gridDistance = Math.abs(Math.floor(batting.cell / 5) - Math.floor(plate.actualCell / 5)) + Math.abs(batting.cell % 5 - plate.actualCell % 5);
   const contactZone: PlayLog["contactZone"] = gridDistance === 0 ? "exact" : gridDistance === 1 ? "near" : "outer";
   game.playLog = [{
