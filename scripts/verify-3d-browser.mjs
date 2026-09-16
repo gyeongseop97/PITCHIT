@@ -35,8 +35,8 @@ try{
   const after=await page.evaluate(()=>JSON.stringify(state));await page.locator('.game .demo3DEntry').click();assert.equal(await page.evaluate(()=>JSON.stringify(state)),after);assert.equal(await page.locator('.pitch3dViewport > .zoneWrap').count(),0);
  }
  await page.locator('.game .demo3DEntry').click();
- await page.evaluate(()=>{window.fixture={ready:true,players:{p1:{name:'A'},p2:{name:'B'}},choiceReady:{p1:false,p2:false},game:{status:'playing',inning:1,half:0,scores:[0,0],balls:0,strikes:0,outs:0,bases:[1,0,0],batter:[0,0],deadline:Date.now()+60000,event:'패스트볼 143km/h · 안타!',lastPlay:{actualCell:4,execution:'command',outcome:'single',pitchName:'패스트볼',speed:143,attacker:'p1',pitch:{kind:'pitch',cell:4,pitch:'fast'},bat:{kind:'bat',cell:4,swing:'spot'}}}};matchSession={code:'FIXTURE',token:'fixture-token',player:'p1',mode:'friend'};applyMatch(window.fixture)});
- const visual=await page.evaluate(()=>window.pitchit3D.snapshot().scene);assert.equal(visual.actualCell,4);assert.equal(visual.outcome,'single');assert.deepEqual(visual.bases,[1,0,0]);
+ await page.evaluate(()=>{window.fixture={ready:true,players:{p1:{name:'A'},p2:{name:'B'}},choiceReady:{p1:false,p2:false},game:{status:'playing',inning:1,half:0,scores:[0,0],balls:0,strikes:0,outs:0,bases:[1,0,0],batter:[0,0],deadline:Date.now()+60000,event:'패스트볼 143km/h · 안타!',lastPlay:{actualCell:4,execution:'command',outcome:'single',basesBefore:[0,0,0],basesAfter:[1,0,0],pitchName:'패스트볼',speed:143,attacker:'p1',pitch:{kind:'pitch',cell:4,pitch:'fast'},bat:{kind:'bat',cell:4,swing:'spot'}}}};matchSession={code:'FIXTURE',token:'fixture-token',player:'p1',mode:'friend'};applyMatch(window.fixture)});
+ const visual=await page.evaluate(()=>window.pitchit3D.snapshot().scene);assert.equal(visual.actualCell,4);assert.equal(visual.outcome,'single');assert.deepEqual(visual.bases,[0,0,0]);
  await page.evaluate(()=>applyMatch(window.fixture));assert.equal((await page.evaluate(()=>window.pitchit3D.snapshot().scene)).plays,visual.plays);
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.following);
  const cameraBefore=await page.evaluate(()=>window.pitchit3D.snapshot().scene.cameraPosition);
@@ -45,7 +45,7 @@ try{
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.revealed);
  assert.match(await page.locator('.pitch3dCaption').innerText(),/안타/);
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:10000});
- assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.camera),'batter');
+ assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.camera),'batter');assert.deepEqual(await page.evaluate(()=>window.pitchit3D.snapshot().scene.bases),[1,0,0]);
  assert.ok(await page.evaluate(()=>window.pitchit3D.snapshot().scene.historyMarkerCount>0));assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.lastBatCell),4);
  const historyCount=await page.evaluate(()=>window.pitchit3D.snapshot().scene.history.length);await page.evaluate(()=>applyMatch(window.fixture));assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.history.length),historyCount);
  for(const swing of ['contact','power','spot']){
