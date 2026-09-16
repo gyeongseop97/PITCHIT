@@ -28,7 +28,8 @@ export function planPlay(play={}){
  const aim=Number.isInteger(play.batCell)?play.batCell%5:col;
  const hand=play.batHand==='L'?-1:1;
  const angle=clamp((col-2)*.23+(col-aim)*.09+(variation-.5)*.95-hand*.06,-.73,.73);
- const dp=out==='double_play'||play.outsRecorded===2||/병살/.test(text),force=/타자 주자 1루 생존/.test(text);
+ const groundPlay=play.groundPlay;
+ const dp=groundPlay?.kind==='double_play'||out==='double_play'||play.outsRecorded===2||/병살/.test(text),force=groundPlay?.kind==='force_out'||/타자 주자 1루 생존/.test(text);
  const walk=out==='walk'||/볼넷/.test(text),foul=out==='foul',home=out==='homerun';
  const fly=/flyout/.test(out),infieldHit=out==='single'&&/내야안타/.test(text);
  const ground=out==='groundout'||dp||infieldHit||(out==='single'&&row>=3);
@@ -58,8 +59,12 @@ export function planPlay(play={}){
   else if(walk){to=(i===0||before.slice(0,i).every(Boolean))?from+1:from;}
   else if(fly)to=text.includes(`${from}루 주자 태그업`)?from+1:from;
   else if(ground)to=text.includes(`${from}루 주자`)?Math.min(4,from+1):from;
-  runs.push({from,to,delay:fly?catchAt+.18:.12,walk,slide:to<4&&to>from&&!walk&&!home,tagUp:fly&&to>from});
+  const returnAfterForce=ground&&!hit&&to===from&&before.slice(0,from).every(Boolean);
+  runs.push({from,to,delay:fly?catchAt+.18:.12,walk,slide:to<4&&to>from&&!walk&&!home,tagUp:fly&&to>from,returnAfterForce,attemptTo:returnAfterForce?from+1:undefined});
  }
- const throws=dp?[2,1]:ground&&!hit?[force?2:1]:infieldHit?[1]:fly?[runs.some(r=>r.to===4&&r.from>0)?4:2]:out==='triple'?[2,3]:out==='double'?[2]:hit?[2]:[];
- return {variant,kind,out,contact,ground,fly,hit,home,foul,walk,infieldHit,angle:a,end,apex,catchAt,throws,runs,distance,flight};
+ // Authoritative runner identities survive force outs, equal speed ratings,
+ // inning changes and empty post-play bases. Never infer a score from absence.
+ if(ground&&!hit&&groundPlay?.runnerMoves){runs.splice(0,runs.length,...groundPlay.runnerMoves.map(r=>({...r,delay:r.from===0?.48:.08,slide:r.from>0&&r.to<4&&r.to>r.from})));}
+ const throws=groundPlay?.throws|| (dp?[2,1]:ground&&!hit?[force?2:1]:infieldHit?[1]:fly?[runs.some(r=>r.to===4&&r.from>0)?4:2]:out==='triple'?[2,3]:out==='double'?[2]:hit?[2]:[]);
+ return {variant,kind,out,contact,ground,fly,hit,home,foul,walk,infieldHit,angle:a,end,apex,catchAt,throws,runs,distance,flight,inningEnded:Boolean(groundPlay?.inningEnded)};
 }

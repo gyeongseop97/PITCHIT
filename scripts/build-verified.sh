@@ -20,6 +20,7 @@ fi
 
 node "${SITES_PROJECT_ROOT}/scripts/sync-shop.mjs"
 node "${SITES_PROJECT_ROOT}/scripts/sync-3d-entry.mjs"
+node "${SITES_PROJECT_ROOT}/scripts/sync-base-running.mjs"
 
 echo "Running bounded vinext build..."
 timeout \

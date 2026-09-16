@@ -31,15 +31,24 @@ function resetCount(){state.b=0;state.s=0}
 function switchHalf(){state.o=0;resetCount();state.bases=[0,0,0];if(state.half==="top"){state.half="bottom";return "공수 교대 · 이제 투구로 상대 타선을 막으세요."}state.half="top";state.inning++;return "공수 교대 · 다시 타격 차례입니다."}
 function nextHitter(){state.turn=(state.turn+1)%9;state.batter=lineup[state.turn]}
 function finishAtBat(text,offense){resetCount();if(offense==="my")nextHitter();if(state.o>=3)return switchHalf();return text}
+function localGroundResult(team,pitcher,batter){
+ const basesBefore=[...state.bases],defending=state.half==='bottom',lowPitchBonus=Math.max(0,Math.floor(state.ball/5)-2)*.04;
+ const doublePlayChance=Math.min(.38,Math.max(.08,.20+lowPitchBonus+(pitcher.s-50)/260+(50-batter.v)/150+(state.pitchType==='breaking'?.02:0)));
+ const groundPlay=window.pitchitBaseRunning.resolveGroundBall({bases:basesBefore,outs:state.o,batterSpeed:batter.v,doublePlayChance});
+ state.bases=[...groundPlay.basesAfter];state.o+=groundPlay.outsRecorded;state[team]+=groundPlay.runsScored;
+ const text='땅볼 아웃'+groundPlay.note;
+ state.localGroundVisual={basesBefore,basesAfter:[...groundPlay.basesAfter],groundPlay,outsRecorded:groundPlay.outsRecorded,playText:text,outcome:'groundout',batCell:defending?state.opponentLastCell:state.pick,defending,attacker:defending?'p2':'p1'};
+ return text;
+}
 function setResult(text,kind){$("result").textContent=text;$("art").className="art show "+kind;render();$("reveal").textContent="⚾ 실제 투구 위치가 표시됩니다."}
-function bat(){const z=Math.floor(Math.random()*25),b=state.batter,good=inRange(z),edge=[0,4,20,24].includes(z),isBall=Math.random()<(edge?.24:.07);state.ball=z;let text="",kind="strike",end=false;
+function bat(){state.localGroundVisual=null;const z=Math.floor(Math.random()*25),b=state.batter,good=inRange(z),edge=[0,4,20,24].includes(z),isBall=Math.random()<(edge?.24:.07);state.ball=z;let text="",kind="strike",end=false;
  if(isBall||(!good&&Math.random()<b.e/220)){state.b++;text=state.b>=4?"볼넷 · 1루로 출루합니다.":"볼 · 유인구를 골랐습니다.";kind="ball";if(state.b>=4){scoreWalk("r");end=true}}
  else if(!good){state.s++;text="헛스윙 스트라이크";if(state.s>=3){state.o++;text="삼진 아웃";kind="out";end=true}}
- else{const contact=Math.min(.82,.30+b.a/130+(state.swing==="contact"?.13:state.swing==="spot"?.05:-.04)),roll=Math.random();if(roll>contact){if(state.s<2&&roll<contact+.18-b.a/500){state.s++;text="파울 · 타석은 계속됩니다."}else{state.s++;text="헛스윙 스트라이크";if(state.s>=3){state.o++;text="삼진 아웃";kind="out";end=true}}}else{const extra=.05+b.p/350+(state.swing==="power"?.09:0);if(roll<extra*.18){scoreRun("r",4);text="홈런! 담장을 넘겼습니다.";kind="homerun";end=true}else if(roll<extra*.55){scoreRun("r",3);text="3루타! 주력까지 살렸습니다.";kind="hit";end=true}else if(roll<extra){scoreRun("r",2);text="2루타! 장타 코스를 만들었습니다.";kind="hit";end=true}else if(roll<contact*.62){scoreRun("r",1);text="안타! 노린 코스를 공략했습니다.";kind="hit";end=true}else if(Math.random()<.52&&Math.random()<b.v/260){scoreRun("r",1);text="내야안타! 주력으로 1루에서 살았습니다.";kind="hit";end=true}else{state.o++;text=Math.random()<.5?"땅볼 아웃":"뜬공 아웃";kind="out";end=true}}}
+ else{const contact=Math.min(.82,.30+b.a/130+(state.swing==="contact"?.13:state.swing==="spot"?.05:-.04)),roll=Math.random();if(roll>contact){if(state.s<2&&roll<contact+.18-b.a/500){state.s++;text="파울 · 타석은 계속됩니다."}else{state.s++;text="헛스윙 스트라이크";if(state.s>=3){state.o++;text="삼진 아웃";kind="out";end=true}}}else{const extra=.05+b.p/350+(state.swing==="power"?.09:0);if(roll<extra*.18){scoreRun("r",4);text="홈런! 담장을 넘겼습니다.";kind="homerun";end=true}else if(roll<extra*.55){scoreRun("r",3);text="3루타! 주력까지 살렸습니다.";kind="hit";end=true}else if(roll<extra){scoreRun("r",2);text="2루타! 장타 코스를 만들었습니다.";kind="hit";end=true}else if(roll<contact*.62){scoreRun("r",1);text="안타! 노린 코스를 공략했습니다.";kind="hit";end=true}else if(Math.random()<.52&&Math.random()<b.v/260){scoreRun("r",1);text="내야안타! 주력으로 1루에서 살았습니다.";kind="hit";end=true}else{if(Math.random()<.5)text=localGroundResult("r",state.awayPitchers?.[state.awayActivePitcher]||state.pitchers[state.activePitcher],b);else{state.o++;text="뜬공 아웃"}kind="out";end=true}}}
  if(end)text=finishAtBat(text,"my");setResult(text,kind)}
-function pitch(){const p=state.pitchers[state.activePitcher],edge=[0,4,20,24].includes(state.pick),breaking=state.pitchType==="breaking",miss=Math.random()<((100-p.c)/260+(edge?.13:.03));state.ball=state.pick;let text="",kind="strike",end=false;
+function pitch(){state.localGroundVisual=null;const p=state.pitchers[state.activePitcher],edge=[0,4,20,24].includes(state.pick),breaking=state.pitchType==="breaking",miss=Math.random()<((100-p.c)/260+(edge?.13:.03));state.ball=state.pick;let text="",kind="strike",end=false;
  if(miss){state.b++;text=state.b>=4?"볼넷 · 상대가 출루했습니다.":"볼 · 제구가 벗어났습니다.";kind="ball";if(state.b>=4){scoreWalk("away");end=true}}
- else{const whiff=(breaking?.13+p.m/260:.08+p.v/300+p.s/520),contact=Math.random();if(contact<whiff){state.s++;text="헛스윙 스트라이크";if(state.s>=3){state.o++;text="삼진 아웃!";kind="out";end=true}}else if(contact<whiff+.19){state.s++;text=state.s>=3?"삼진 아웃!":"파울 · 타석은 계속됩니다.";if(state.s>=3){state.o++;kind="out";end=true}}else{const hard=breaking?.11+p.m/500:.06+p.s/650;if(contact<hard*.18){scoreRun("away",4);text="상대 홈런";kind="homerun";end=true}else if(contact<hard){scoreRun("away",2);text="상대 장타";kind="hit";end=true}else if(contact<.58+p.s/500){state.o++;text="땅볼 아웃";kind="out";end=true}else if(contact<.78){state.o++;text="뜬공 아웃";kind="out";end=true}else{scoreRun("away",1);text="상대 안타";kind="hit";end=true}}}
+ else{const whiff=(breaking?.13+p.m/260:.08+p.v/300+p.s/520),contact=Math.random();if(contact<whiff){state.s++;text="헛스윙 스트라이크";if(state.s>=3){state.o++;text="삼진 아웃!";kind="out";end=true}}else if(contact<whiff+.19){state.s++;text=state.s>=3?"삼진 아웃!":"파울 · 타석은 계속됩니다.";if(state.s>=3){state.o++;kind="out";end=true}}else{const hard=breaking?.11+p.m/500:.06+p.s/650;if(contact<hard*.18){scoreRun("away",4);text="상대 홈런";kind="homerun";end=true}else if(contact<hard){scoreRun("away",2);text="상대 장타";kind="hit";end=true}else if(contact<.58+p.s/500){text=localGroundResult("away",p,state.awayBatter||state.batter);kind="out";end=true}else if(contact<.78){state.o++;text="뜬공 아웃";kind="out";end=true}else{scoreRun("away",1);text="상대 안타";kind="hit";end=true}}}
  if(end)text=finishAtBat(text,"away");setResult(text,kind)}
 function renderPitchers(){const box=$("pitchers");if(!box)return;const p=state.pitchers[state.activePitcher];box.innerHTML=`<hr><h3>우리 투수</h3><b>${p.n} · ${state.usedPitchers.length===1?"선발":"구원"}</b><p class="hint">구속 ${p.v} · 제구 ${p.c}<br>구위 ${p.s} · 변화 ${p.m}</p><button class="swap" id="swap">투수 교체</button><div id="bench"></div>`;$("swap").onclick=()=>{const bench=$("bench");bench.innerHTML=state.pitchers.map((x,i)=>`<button class="swap" data-p="${i}" ${state.usedPitchers.includes(i)?"disabled":""}>${x.t}${state.usedPitchers.includes(i)?" · 사용 완료":""}</button>`).join("");bench.querySelectorAll("[data-p]").forEach(x=>x.onclick=()=>{state.activePitcher=+x.dataset.p;state.usedPitchers.push(state.activePitcher);render()})}}
 const renderBeforePitcher=render;render=()=>{renderBeforePitcher();if(!state.mode)return;const attacking=state.half!=="bottom",heading=document.querySelector(".board .panel h3"),hint=document.querySelector(".board .panel .hint");heading.textContent=attacking?"타격 작전":"투구 작전";hint.textContent=attacking?"스윙 유형과 노릴 칸을 고르세요.":"구종과 투구할 칸을 고르세요.";if(!attacking){$("types").innerHTML='<button class="'+(state.pitchType!=="breaking"?"on":"")+'" data-pitch="fast">패스트볼</button><button class="'+(state.pitchType==="breaking"?"on":"")+'" data-pitch="breaking">변화구</button>';document.querySelectorAll("[data-pitch]").forEach(x=>x.onclick=()=>{state.pitchType=x.dataset.pitch;render()});document.querySelectorAll(".zone .range").forEach(x=>x.classList.remove("range"))}$("swing").textContent=attacking?"이 칸을 노리고 스윙":"이 칸으로 투구";$("reveal").textContent=attacking?"실제 투구 위치는 결과 후 ⚾로 표시됩니다.":"선택한 칸으로 투구합니다.";$("swing").onclick=attacking?bat:pitch;renderPitchers()};
@@ -1836,6 +1845,53 @@ const renderBeforeCosmeticSet=render;render=function(){const result=renderBefore
 let operatorGrantPending=false;const accountPanelBeforeOperatorGrant=accountPanel;accountPanel=function(){accountPanelBeforeOperatorGrant();if(!accountState?.operator||accountState?.shop?.operatorGrantApplied||operatorGrantPending)return;operatorGrantPending=true;accountRequest({action:'operator-grant'}).then(data=>{accountState={...accountState,shop:data.shop,operator:true};applyShopTheme();accountPanelBeforeOperatorGrant()}).catch(()=>{}).finally(()=>{operatorGrantPending=false})};
 setTimeout(()=>accountPanel(),0);
 </script>
+<!-- PITCHIT BASE RUNNING START -->
+<script>
+(()=>{
+/** The force is determined at contact, before removing any retired runner.
+ * Force removal may allow a lead runner to return; this game's defense throws
+ * second-to-first, so those runners keep advancing while the relay is made.
+ * MLB 5.08(a): a third force out / batter out before first cancels every run.
+ */
+function resolveGroundBall({ bases, outs, batterSpeed, doublePlayChance = .20, random = Math.random }
+
+ )                   {
+  const forced = bases.map((runner, index) => Boolean(runner) && bases.slice(0, index + 1).every(Boolean));
+  const forceAtSecond = Boolean(bases[0]);
+  const doublePlay = forceAtSecond && outs < 2 && random() < doublePlayChance;
+  const outsRecorded = doublePlay ? 2 : 1, inningEnded = outs + outsRecorded >= 3;
+  const basesAfter                           = [0, 0, 0];
+  const batterOut = !forceAtSecond || doublePlay;
+  const runnerMoves               = [{ from: 0, to: 1, forced: true, out: batterOut, scored: false, stopped: inningEnded && !batterOut }];
+  const notes           = [];
+  if (doublePlay) notes.push("병살타! 1루 주자와 타자 주자가 모두 아웃됩니다.");
+  else if (forceAtSecond) notes.push(inningEnded ? "1루 주자 2루에서 포스 아웃" : "1루 주자 아웃, 타자 주자 1루 생존");
+  if (!batterOut && !inningEnded) basesAfter[0] = batterSpeed;
+  let runsScored = 0;
+  for (let index = 2; index >= 0; index--) {
+    const runner = bases[index]; if (!runner) continue;
+    const from = index + 1, out = index === 0 && forceAtSecond;
+    let to = from;
+    if (forced[index] || inningEnded) to = from + 1;
+    else {
+      const speed = runner === 1 ? 55 : runner;
+      const chance = index === 2 ? Math.min(.90, Math.max(.56, .70 + (speed - 55) / 125)) : Math.min(.72, Math.max(.36, .50 + (speed - 55) / 140));
+      if ((index === 2 || !basesAfter[index + 1]) && random() < chance) to = from + 1;
+    }
+    const scored = to === 4 && !out && !inningEnded;
+    runnerMoves.push({ from, to, forced: forced[index], out, scored, stopped: inningEnded && !out });
+    if (out || inningEnded) continue;
+    if (scored) runsScored++;
+    else basesAfter[to - 1] = runner;
+    if (to > from) notes.push(`${from}루 주자 ${to === 4 ? "홈 쇄도 득점" : `${to}루 진루`}`);
+  }
+  if (inningEnded) notes.push("세 번째 아웃 · 득점 인정 없음");
+  return { kind: doublePlay ? "double_play" : forceAtSecond ? "force_out" : "groundout", basesAfter, runnerMoves, throws: doublePlay ? [2, 1] : [forceAtSecond ? 2 : 1], outsRecorded, runsScored, runsBattedIn: doublePlay ? 0 : runsScored, inningEnded, note: notes.length ? ` · ${notes.join(" · ")}` : "" };
+}
+window.pitchitBaseRunning={resolveGroundBall};
+})();
+</script>
+<!-- PITCHIT BASE RUNNING END -->
 <!-- PITCHIT 3D ENTRY START -->
 <style id="pitchit-3d-entry-style">
 .demo3DEntry{border:1px solid #375c47!important;background:#183e2b!important;color:#e7f5c5!important;padding:9px 13px;font-size:11px;font-weight:900;cursor:pointer;white-space:nowrap}.demo3DEntry[aria-pressed=true]{background:#d7ef87!important;color:#203826!important}.pitch3dViewport{position:relative;height:560px;border:1px solid #244533;border-radius:10px;margin:15px 0 22px;overflow:hidden;background:#152a22}.pitch3dViewport[hidden]{display:none!important}.pitch3dCanvas{position:absolute;inset:0}.pitch3dCanvas canvas{display:block;width:100%;height:100%;touch-action:pan-y}.pitch3dCanvas canvas:focus-visible{outline:3px solid #e1ef81;outline-offset:-4px}.pitch3dToolbar{position:absolute;top:0;left:0;right:0;display:flex;gap:4px;align-items:center;padding:10px;background:linear-gradient(#10261eef,transparent);color:#f2f4e9;z-index:2}.pitch3dToolbar b{font-size:10px;margin-right:auto}.pitch3dToolbar button{background:#10261edb;color:#d3e1c3;border:1px solid #78916b;padding:6px 8px;font-size:10px;cursor:pointer;border-radius:5px}.pitch3dToolbar button[aria-pressed=true]{background:#d7ef87;color:#183421}.pitch3dHint{position:absolute;left:12px;right:12px;top:50px;color:#f3f6df;font-size:10px;line-height:1.4;text-shadow:0 1px 5px #001d0d;pointer-events:none;z-index:2}.pitch3dCaption{position:absolute;z-index:2;bottom:0;left:0;right:0;padding:12px 14px;background:linear-gradient(#10291fe8,#10291f);color:#eff4df;min-height:108px;pointer-events:none}.pitch3dCaption small{color:#c7dda1;font-size:9px;letter-spacing:.05em}.pitch3dCaption strong{display:block;margin:6px 0;font-size:16px;line-height:1.4}.pitch3dCaption p{font-size:11px;line-height:1.6;margin:0;color:#ccdbca}.pitch3dExtras{position:absolute;right:10px;top:80px;display:flex;gap:5px;z-index:2}.pitch3dExtras button{font-size:9px;color:#d7e4c5;padding:6px 8px;background:#143529db;border:1px solid #78916b;border-radius:5px;cursor:pointer}.pitch3dExtras button[aria-pressed=true]{border-color:#d7ef87;color:#eafaab}.pitch3dBaits{position:absolute;bottom:117px;left:10px;right:10px;z-index:2;display:flex;justify-content:center;gap:5px}.pitch3dBaits[hidden]{display:none}.pitch3dBaits button{background:#163c2ceb;color:#e4efcd;border:1px solid #adc48e;border-radius:5px;font-size:10px;padding:7px 8px;cursor:pointer}.pitch3dBaits button:disabled{opacity:.4;cursor:default}.pitch3dBaits button[aria-pressed=true]{background:#d7ef87;color:#183421}.pitch3dNotice{font-size:12px;color:#335642;padding:10px;margin:10px 0}.pitch3dNotice:empty{display:none}
@@ -1898,7 +1954,7 @@ body.pitchit3DEnabled #reveal,body.pitchit3DEnabled #types,body.pitchit3DEnabled
  const originalStart=start;start=function(...args){lastNetworkKey='';latestRoomHistory=null;pendingPanels=[];endHold(false);scene?.reset();return originalStart.apply(this,args)};
  const originalRender=render;render=function(...args){const value=originalRender.apply(this,args);const action=document.getElementById('swing');if(action&&state.mode&&!state.net&&state.mode!=='tutorial'){action.disabled=!hasPick()||state.finished;action.classList.toggle('waiting',action.disabled);if(!hasPick())action.textContent='먼저 코스를 선택하세요';}sync();return value};
  const originalApply=applyMatch;applyMatch=function(data){const incoming=data?.game,ip=incoming?.lastPlay,ik=ip?JSON.stringify([matchSession?.code,incoming.deadline,incoming.event,ip]):'';if(ik&&ik!==lastNetworkKey&&!state.suppressLastPlayDisplay)beginHold();state.visualAttackTeam=incoming?.half||0;const value=originalApply.apply(this,arguments);const g=data?.game,play=g?.lastPlay;if(play&&!state.suppressLastPlayDisplay){const key=JSON.stringify([matchSession?.code,g.deadline,g.event,play]);if(key!==lastNetworkKey){lastNetworkKey=key;if(enabled&&scene)scene.play({...play,key,variationKey:JSON.stringify([matchSession?.code,g.deadline,play]),actualCell:play.actualCell,batCell:play.bat?.cell,swing:play.bat?.swing,pitchName:play.pitchName,speed:play.speed,outcome:play.outcome||g.playLog?.[0]?.outcome,strikeStyle:play.strikeStyle,isBall:play.isBall,execution:play.execution,direction:play.pitch?.ball,text:g.event})}}return value};
- const originalSetResult=setResult;setResult=function(text,kind){const visual={basesBefore:scene?.snapshot().bases,basesAfter:[...(state.bases||[])],actualCell:state.ball,batCell:state.half==='top'?state.pick:state.opponentLastCell,pitchName:state.pitchType==='breaking'?'변화구':'패스트볼',text,outcome:kind};if(!state.net&&state.mode)beginHold();const value=originalSetResult.apply(this,arguments);if(enabled&&scene&&!state.net&&state.mode)scene.play({...visual,speed:Number(String(state.lastPitchInfo||'').match(/(\d+)\s*km/)?.[1])||140,key:`local:${++localSequence}`});return value};
+ const originalSetResult=setResult;setResult=function(text,kind){const visual={basesBefore:scene?.snapshot().bases,basesAfter:[...(state.bases||[])],actualCell:state.ball,batCell:state.half==='top'?state.pick:state.opponentLastCell,pitchName:state.pitchType==='breaking'?'변화구':'패스트볼',text,outcome:kind,...(state.localGroundVisual||{})};state.localGroundVisual=null;if(!state.net&&state.mode)beginHold();const value=originalSetResult.apply(this,arguments);if(enabled&&scene&&!state.net&&state.mode)scene.play({...visual,speed:Number(String(state.lastPitchInfo||'').match(/(\d+)\s*km/)?.[1])||140,key:`local:${++localSequence}`});return value};
  window.pitchit3D={snapshot:()=>({enabled,scene:scene?.snapshot()||null})};
  const adoptedRooms=new Set();
  const originalRequest=requestMatch;requestMatch=async function(input){

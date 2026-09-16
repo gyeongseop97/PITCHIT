@@ -4,7 +4,7 @@ export function pitchLocation(play={}) {
  return Number.isInteger(play.actualCell)&&play.actualCell>=0&&play.actualCell<25?`${Math.floor(play.actualCell/5)+1}행 ${play.actualCell%5+1}열`:'위치 미제공';
 }
 export function describePlay(play={}) {
- const text=String(play.text||''),out=play.outcome||'';
+ const text=String(play.playText||play.text||''),out=play.outcome||'';
  let title;
  if(/홈런/.test(text)||out==='homerun')title='담장을 넘깁니다! 홈런!';
  else if(/볼넷/.test(text))title='볼넷. 타자가 1루로 걸어갑니다.';
@@ -13,7 +13,7 @@ export function describePlay(play={}) {
  else if(/2루타/.test(text)||out==='double')title='2루타! 장타로 2루까지 진루합니다.';
  else if(/안타/.test(text)||out==='single')title='안타! 타자가 출루합니다.';
  else if(/파울/.test(text)||out==='foul')title='파울! 승부가 계속됩니다.';
- else if(/땅볼|병살/.test(text)||out==='groundout')title=/병살/.test(text)?'병살타! 두 개의 아웃을 잡습니다.':'땅볼 아웃! 수비가 타자를 잡아냅니다.';
+ else if(/땅볼|병살/.test(text)||out==='groundout')title=/병살/.test(text)?'병살타! 두 개의 아웃을 잡습니다.':play.groundPlay?.kind==='force_out'||/타자 주자 1루 생존/.test(text)?play.groundPlay?.inningEnded?'2루에서 포스 아웃! 세 번째 아웃으로 이닝이 끝납니다.':'2루에서 포스 아웃! 타자 주자는 1루로 갑니다.':'땅볼 아웃! 수비가 타자를 잡아냅니다.';
  else if(out==='infield_flyout')title='내야에 뜬 공, 잡았습니다. 아웃!';
  else if(/뜬공/.test(text)||out==='outfield_flyout')title='높이 뜬 타구, 수비가 잡아냅니다. 아웃!';
  else if(out==='ball'||/^볼(?:[ ·!]|$)/.test(text))title='볼. 타자가 공을 골라냅니다.';
