@@ -43,7 +43,7 @@ try{
  await page.waitForTimeout(250);assert.notDeepEqual(await page.evaluate(()=>window.pitchit3D.snapshot().scene.cameraPosition),cameraBefore);
  assert.match(await page.locator('.pitch3dCaption').innerText(),/안타/);
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:10000});
- assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.camera),'zone');
+ assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.camera),'batter');
  assert.ok(await page.evaluate(()=>window.pitchit3D.snapshot().scene.historyMarkerCount>0));assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.lastBatCell),4);
  const historyCount=await page.evaluate(()=>window.pitchit3D.snapshot().scene.history.length);await page.evaluate(()=>applyMatch(window.fixture));assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.history.length),historyCount);
  for(const swing of ['contact','power','spot']){
