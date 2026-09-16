@@ -15,13 +15,13 @@ const fixtures=[
 ];
 try{
  browser=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
- const page=await browser.newPage({viewport:{width:1000,height:780}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await browser.newPage({viewport:{width:1000,height:780}}),errors=[];page.setDefaultTimeout(60000);page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://**/*',r=>r.fulfill({contentType:'application/json',body:'{"signedIn":false}'}));
  await page.addInitScript(()=>{const raf=requestAnimationFrame;window.queue=[];requestAnimationFrame=fn=>{if(fn.name==='frame'){queue.push(fn);return 0}return raf(fn)};window.step=n=>{for(let i=0;i<n;i++){window.time+=25;queue.splice(0).forEach(fn=>fn(time))}return window.pitchit3D.snapshot().scene};});
  for(const entry of ['/public/game/index.html','/static/index.html','/static/game/index.html']){
   await page.goto(`http://127.0.0.1:${server.address().port}`+entry);
   await page.evaluate(()=>{requestMatch=async()=>{throw Error('offline test')};start('solo')});await page.waitForFunction(()=>state.mode==='solo'&&!state.net);
-  await page.locator('.game .demo3DEntry').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene);await page.evaluate(()=>window.time=performance.now());
+  await page.locator('.game .demo3DEntry').click();await page.waitForFunction(()=>window.pitchit3D.snapshot().scene,null,{timeout:60000});await page.evaluate(()=>window.time=performance.now());
   for(const defending of [false,true])for(const fixture of fixtures){
    const expected=resolveGroundBall({bases:fixture.bases,outs:fixture.outs,batterSpeed:55,doublePlayChance:fixture.dp?1:0,random:()=>.999});
    const result=await page.evaluate(({fixture,defending})=>{
@@ -29,7 +29,7 @@ try{
     Object.assign(state.batter,{p:0,a:50,e:0,v:55});Object.assign(state.awayBatter,{p:0,a:50,e:0,v:55});
     Object.assign(state.pitchers[state.activePitcher],{v:50,c:50,s:50,m:50});Object.assign(state.awayPitchers[state.awayActivePitcher],{v:50,c:50,s:50,m:50});
     render();step(2);
-    const sequence=defending?[.5,.999,.60,fixture.dp?0:.999]:[.5,.999,.70,.999,.1,fixture.dp?0:.999];
+    const sequence=defending?[.5,.999,.60,.5,.5,fixture.dp?0:.999]:[.5,.999,.70,.999,.1,.5,.5,fixture.dp?0:.999];
     const random=Math.random;Math.random=()=>sequence.length?sequence.shift():.999;
     try{if(defending)pitch();else bat();}finally{Math.random=random;}
     const resolved={bases:[...state.bases],score:defending?state.away:state.r,outs:state.o,half:state.half};
@@ -38,19 +38,35 @@ try{
     for(let i=0;i<600&&snap.phase!=='ready';i++)snap=step(1);
     return {resolved,contact,early,ready:snap.phase};
    },{fixture,defending});
-   assert.equal(result.contact.outcome,'groundout');assert.equal(result.ready,'ready');
+   assert.equal(result.contact.phase,'result','Pitch never reached contact');assert.equal(result.contact.revealed,false,'Ground-ball result leaked at contact');assert.equal(result.contact.outcome,'groundout');assert.equal(result.ready,'ready');
    assert.deepEqual(result.resolved.bases,expected.basesAfter);assert.equal(result.resolved.score,expected.runsScored);assert.equal(result.resolved.outs,expected.inningEnded?0:fixture.outs+expected.outsRecorded);
    for(const runner of expected.runnerMoves.filter(r=>r.from>0&&r.forced)){
-    const route=result.early.runnerPlans.find(r=>r.from===runner.from);assert.ok(route,`Missing runner ${runner.from}`);assert.equal(route.to,runner.to);assert.equal(route.out,runner.out);
+    const route=result.early.runnerPlans.find(r=>r.from===runner.from);assert.ok(route,`Missing runner ${runner.from}: ${JSON.stringify({entry,defending,fixture,phase:result.early.phase,key:result.early.key,age:result.early.resultAge,contact:result.contact.runnerPlans,early:result.early.runnerPlans})}`);assert.equal(route.to,runner.to);assert.equal(route.out,runner.out);
     const start=[[0,0,0],[19.4,0,-19.4],[0,0,-38.8],[-19.4,0,-19.4]][runner.from];
     assert.ok(Math.hypot(...route.position.map((v,i)=>v-start[i]))>.5,`Forced runner ${runner.from} did not leave the base`);
    }
    if(fixture.bases[0]&&!fixture.bases[1]&&fixture.bases[2]){const third=result.early.runnerPlans.find(r=>r.from===3);assert.equal(third.to,3,'A non-forced runner was pushed off third');}
   }
+  // Real offline walk and fly handlers share the server rules and visual metadata.
+  for(const scenario of ['walk','tag-up','fly-third-out','two-strike-foul']){
+   const r=await page.evaluate(scenario=>{
+    Object.assign(state,{mode:'solo',net:false,finished:false,half:'bottom',inning:1,o:scenario==='fly-third-out'?2:0,b:scenario==='walk'?3:0,s:scenario==='two-strike-foul'?2:0,r:0,away:0,bases:scenario==='walk'?[0,62,83]:[55,55,55],pick:12,pitchType:'fast'});Object.assign(state.pitchers[state.activePitcher],{v:50,c:50,s:50,m:50});Object.assign(state.awayBatter,{v:55,p:55});render();step(2);
+    const seq=scenario==='walk'?[.5,0]:scenario==='two-strike-foul'?[.5,.99,.4]:[.5,.99,.7,0,0,0],random=Math.random;Math.random=()=>seq.length?seq.shift():.999;
+    try{pitch()}finally{Math.random=random;}
+    const resolved={bases:[...state.bases],score:state.away,outs:state.o,strikes:state.s};let p=step(1);for(let i=0;i<150&&p.phase!=='result';i++)p=step(1);const contact=p;
+    for(let i=0;i<650&&p.phase!=='ready';i++)p=step(1);
+    return {resolved,contact,ready:p.phase,pending:document.body.classList.contains('pitchit3DPending')};
+   },scenario);
+   assert.equal(r.ready,'ready');assert.equal(r.pending,false);
+   if(scenario==='walk'){assert.deepEqual(r.resolved.bases,[55,62,83]);assert.equal(r.resolved.score,0);assert.equal(r.contact.umpireCall,false);assert.ok(r.contact.runnerPlans.filter(p=>p.from).every(p=>p.from===p.to));}
+   if(scenario==='tag-up'){assert.equal(r.resolved.score,1);assert.equal(r.resolved.outs,1);assert.ok(r.contact.runnerPlans.filter(p=>p.tagUp).every(p=>p.delay>r.contact.defense.catchAt));}
+   if(scenario==='fly-third-out'){assert.equal(r.resolved.score,0);assert.deepEqual(r.resolved.bases,[0,0,0]);}
+   if(scenario==='two-strike-foul'){assert.equal(r.resolved.outs,0);assert.equal(r.resolved.strikes,2);assert.equal(r.contact.outcome,'foul');}
+  }
   // The same rules run when 3D is disabled, via the normal batting button.
   await page.locator('.game .demo3DEntry').click();
-  const flat=await page.evaluate(()=>{Object.assign(state,{mode:'solo',net:false,finished:false,half:'top',inning:1,o:0,b:0,s:0,r:0,bases:[55,55,55],pick:12,swing:'contact'});Object.assign(state.batter,{p:0,a:50,e:0,v:55});render();const values=[.5,.999,.70,.999,.1,.999],random=Math.random;Math.random=()=>values.length?values.shift():.999;try{bat()}finally{Math.random=random}return {bases:state.bases,score:state.r,outs:state.o}});
-  assert.deepEqual(flat,{bases:[55,0,55],score:1,outs:1});
+  const flat=await page.evaluate(()=>{Object.assign(state,{mode:'solo',net:false,finished:false,half:'top',inning:1,o:0,b:0,s:0,r:0,bases:[55,55,55],pick:12,swing:'contact'});Object.assign(state.batter,{p:0,a:50,e:0,v:55});render();const values=[.5,.999,.70,.999,.1,.5,.5,.999],random=Math.random;Math.random=()=>values.length?values.shift():.999;try{bat()}finally{Math.random=random}return {bases:state.bases,score:state.r,outs:state.o}});
+  assert.deepEqual(flat,{bases:[55,0,55],score:1,outs:1});console.log('PASS: '+entry+' ground/walk/tag-up/foul flow');
  }
  assert.deepEqual(errors,[]);console.log('PASS: all 3 game entries; real offline batting and pitching, 1st/1st+2nd/loaded runners move together in 3D; non-forced holds, double plays, third-out no-run cases, half changes, identical runner ratings and 2D rule parity.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve))}

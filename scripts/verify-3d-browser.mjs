@@ -41,6 +41,8 @@ try{
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.following);
  const cameraBefore=await page.evaluate(()=>window.pitchit3D.snapshot().scene.cameraPosition);
  await page.waitForTimeout(250);assert.notDeepEqual(await page.evaluate(()=>window.pitchit3D.snapshot().scene.cameraPosition),cameraBefore);
+ assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.revealed),false,'Hit result leaked at contact');
+ await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.revealed);
  assert.match(await page.locator('.pitch3dCaption').innerText(),/안타/);
  await page.waitForFunction(()=>window.pitchit3D.snapshot().scene.phase==='ready',null,{timeout:10000});
  assert.equal(await page.evaluate(()=>window.pitchit3D.snapshot().scene.camera),'batter');

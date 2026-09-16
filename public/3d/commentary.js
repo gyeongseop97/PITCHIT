@@ -6,16 +6,17 @@ export function pitchLocation(play={}) {
 export function describePlay(play={}) {
  const text=String(play.playText||play.text||''),out=play.outcome||'';
  let title;
+ const forceBase=play.groundPlay?.throws?.[0]===4?'홈':(play.groundPlay?.throws?.[0]||2)+'루';
  if(/홈런/.test(text)||out==='homerun')title='담장을 넘깁니다! 홈런!';
- else if(/볼넷/.test(text))title='볼넷. 타자가 1루로 걸어갑니다.';
+ else if(/볼넷/.test(text)||out==='walk')title='볼넷. 타자가 1루로 걸어갑니다.';
  else if(/삼진/.test(text))title=play.strikeStyle==='looking'||/루킹/.test(text)?'루킹 삼진! 배트를 내지 못했습니다.':'헛스윙 삼진! 투수가 타자를 잡아냅니다.';
  else if(/3루타/.test(text)||out==='triple')title='3루타! 타자가 3루까지 진루합니다.';
  else if(/2루타/.test(text)||out==='double')title='2루타! 장타로 2루까지 진루합니다.';
  else if(/안타/.test(text)||out==='single')title='안타! 타자가 출루합니다.';
  else if(/파울/.test(text)||out==='foul')title='파울! 승부가 계속됩니다.';
- else if(/땅볼|병살/.test(text)||out==='groundout')title=/병살/.test(text)?'병살타! 두 개의 아웃을 잡습니다.':play.groundPlay?.kind==='force_out'||/타자 주자 1루 생존/.test(text)?play.groundPlay?.inningEnded?'2루에서 포스 아웃! 세 번째 아웃으로 이닝이 끝납니다.':'2루에서 포스 아웃! 타자 주자는 1루로 갑니다.':'땅볼 아웃! 수비가 타자를 잡아냅니다.';
+ else if(/땅볼|병살/.test(text)||out==='groundout')title=/병살/.test(text)?'병살타! 두 개의 아웃을 잡습니다.':play.groundPlay?.kind==='force_out'||/타자 주자 1루 생존/.test(text)?play.groundPlay?.inningEnded?forceBase+'에서 포스 아웃! 세 번째 아웃으로 이닝이 끝납니다.':forceBase+'에서 포스 아웃! 타자 주자는 1루로 갑니다.':'땅볼 아웃! 수비가 타자를 잡아냅니다.';
  else if(out==='infield_flyout')title='내야에 뜬 공, 잡았습니다. 아웃!';
- else if(/뜬공/.test(text)||out==='outfield_flyout')title='높이 뜬 타구, 수비가 잡아냅니다. 아웃!';
+ else if(/뜬공/.test(text)||out==='outfield_flyout')title=play.runningPlay?.runsScored?'희생플라이! 주자가 홈을 밟습니다.':play.runningPlay?.inningEnded?'뜬공 아웃! 세 번째 아웃으로 이닝이 끝납니다.':play.runningPlay?.runnerMoves?.some(r=>r.tagUp)?'뜬공 아웃! 주자는 태그업으로 진루합니다.':'높이 뜬 타구, 수비가 잡아냅니다. 아웃!';
  else if(out==='ball'||/^볼(?:[ ·!]|$)/.test(text))title='볼. 타자가 공을 골라냅니다.';
  else if(play.strikeStyle==='looking'||/루킹/.test(text))title='루킹 스트라이크! 타자가 지켜봤습니다.';
  else if(out==='swinging_strike'||/헛스윙|스트라이크/.test(text))title='헛스윙 스트라이크! 배트가 공을 빗나갑니다.';

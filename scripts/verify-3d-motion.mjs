@@ -47,8 +47,7 @@ try{
    s.reset();s.setRoomSeed('form'+seed);s.sync({defending:false,pick:12});step();
    const initial=s.snapshot(),sign=initial.handedness.bat==='L'?-1:1;
    // A first baseman fields the ball; the pitcher covers first, then pitches again.
-   let play;for(let i=0;i<1000;i++){const candidate={key:'cover'+i,outcome:'groundout',actualCell:4,batCell:4,batHand:initial.handedness.bat,speed:145},p=planPlay(candidate);if(p.angle>.66){play=candidate;break}}
-   if(!play)throw Error('No cover-first fixture');s.play(play);
+   const play={key:'cover-first',outcome:'groundout',actualCell:4,batCell:4,batHand:initial.handedness.bat,speed:145,groundPlay:{kind:'groundout',throws:[1],field:{position:[10,0,-20],fielder:0,strategy:'sure-out'}}};s.play(play);
    let beforeTakeoff=0,takeoff=false,covered=false,maximum=0,previous=null;
    for(let i=0;i<600;i++){
     const snap=step();

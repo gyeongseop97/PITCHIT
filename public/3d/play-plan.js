@@ -28,21 +28,22 @@ export function planPlay(play={}){
  const aim=Number.isInteger(play.batCell)?play.batCell%5:col;
  const hand=play.batHand==='L'?-1:1;
  const angle=clamp((col-2)*.23+(col-aim)*.09+(variation-.5)*.95-hand*.06,-.73,.73);
- const groundPlay=play.groundPlay;
+ const groundPlay=play.groundPlay,runningPlay=groundPlay||play.runningPlay;
  const dp=groundPlay?.kind==='double_play'||out==='double_play'||play.outsRecorded===2||/병살/.test(text),force=groundPlay?.kind==='force_out'||/타자 주자 1루 생존/.test(text);
  const walk=out==='walk'||/볼넷/.test(text),foul=out==='foul',home=out==='homerun';
  const fly=/flyout/.test(out),infieldHit=out==='single'&&/내야안타/.test(text);
  const ground=out==='groundout'||dp||infieldHit||(out==='single'&&row>=3);
  const hit=['single','double','triple'].includes(out),contact=hit||home||foul||ground||fly;
  const kind=dp?'double_play':force?'force_out':infieldHit?'infield_single':walk?'walk':out;
- const distance=home?109+variation*14:out==='triple'?84+variation*13:out==='double'?75+variation*16:infieldHit?17+variation*5:ground&&!hit?23+variation*9:out==='infield_flyout'?21+variation*10:out==='outfield_flyout'?61+variation*22:ground?48+variation*12:out==='single'?51+variation*14:24+variation*10;
- const a=foul?(variation>.5?1:-1)*(1.0+variation*.4):angle;
- const end=[Math.sin(a)*distance,0,-Math.cos(a)*distance];
+ let distance=home?109+variation*14:out==='triple'?84+variation*13:out==='double'?75+variation*16:infieldHit?17+variation*5:ground&&!hit?23+variation*9:out==='infield_flyout'?21+variation*10:out==='outfield_flyout'?61+variation*22:ground?48+variation*12:out==='single'?51+variation*14:24+variation*10;
+ let a=foul?(variation>.5?1:-1)*(1.0+variation*.4):angle;
+ if(groundPlay?.field){distance=Math.hypot(groundPlay.field.position[0],groundPlay.field.position[2]);a=Math.atan2(groundPlay.field.position[0],-groundPlay.field.position[2]);}
+ const end=groundPlay?.field?[...groundPlay.field.position]:[Math.sin(a)*distance,0,-Math.cos(a)*distance];
  const flight=flightProfile({distance,ground,infieldHit,home,foul,fly,out,variant,variation,angle:a,batHand:play.batHand});
  const catchAt=flight.duration,apex=flight.apex;
  const before=play.basesBefore||[0,0,0],after=play.basesAfter;
  const runs=[],count=home?4:out==='triple'?3:out==='double'?2:1;
- if(contact&&!foul){runs.push({from:0,to:fly?0:count,delay:.48,out:fly||(ground&&!hit&&!force),retreat:fly});}
+ if(contact&&!foul){runs.push({from:0,to:fly?1:count,delay:.48,out:fly||(ground&&!hit&&!force)});}
  if(walk)runs.push({from:0,to:1,delay:.3,walk:true});
  // Match runners from front to back; no overtaking. Server destinations win.
  let destinations=after?after.map((v,i)=>v?i+1:0).filter(Boolean):[];
@@ -64,7 +65,7 @@ export function planPlay(play={}){
  }
  // Authoritative runner identities survive force outs, equal speed ratings,
  // inning changes and empty post-play bases. Never infer a score from absence.
- if(ground&&!hit&&groundPlay?.runnerMoves){runs.splice(0,runs.length,...groundPlay.runnerMoves.map(r=>({...r,delay:r.from===0?.48:.08,slide:r.from>0&&r.to<4&&r.to>r.from})));}
- const throws=groundPlay?.throws|| (dp?[2,1]:ground&&!hit?[force?2:1]:infieldHit?[1]:fly?[runs.some(r=>r.to===4&&r.from>0)?4:2]:out==='triple'?[2,3]:out==='double'?[2]:hit?[2]:[]);
- return {variant,kind,out,contact,ground,fly,hit,home,foul,walk,infieldHit,angle:a,end,apex,catchAt,throws,runs,distance,flight,inningEnded:Boolean(groundPlay?.inningEnded)};
+ if(runningPlay?.runnerMoves){runs.splice(0,runs.length,...runningPlay.runnerMoves.map(r=>({...r,walk,delay:r.from===0?(walk?.3:.48):r.tagUp?catchAt+.18:.08,slide:r.from>0&&r.to>r.from&&!walk&&!home,attemptTo:r.retreat?r.from+1:undefined})));}
+ const throws=runningPlay?.throws|| (dp?[2,1]:ground&&!hit?[force?2:1]:infieldHit?[1]:fly?[runs.some(r=>r.to===4&&r.from>0)?4:2]:out==='triple'?[2,3]:out==='double'?[2]:hit?[2]:[]);
+ return {variant,kind,out,contact,ground,fly,hit,home,foul,walk,infieldHit,angle:a,end,apex,catchAt,throws,runs,distance,flight,field:groundPlay?.field,inningEnded:Boolean(runningPlay?.inningEnded)};
 }

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { resolvePlateAppearance, type PitchType, type PlayOutcome, type SwingType } from "../../../lib/game-engine";
 import { batterArchetypes, individualizeBatter, individualizePitcher, pitcherArchetypes } from "../../../lib/roster";
 import { readShop } from "../../../lib/shop";
-import { resolveGroundBall, type GroundBallResult } from "../../../lib/base-running";
+import { resolveGroundBall, resolveWalk, resolveFlyBall, type GroundBallResult, type RunningResult } from "../../../lib/base-running";
 
 type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
@@ -43,7 +43,7 @@ type Game = {
   // A highlighted cell is saved privately so a player who runs out of time
   // can still use the plan they had prepared.  It is never sent to the rival.
   drafts: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { basesBefore?: number[]; basesAfter?: number[]; groundPlay?: GroundBallResult; playText?: string; outsRecorded?: number; bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
+  lastPlay: { basesBefore?: number[]; basesAfter?: number[]; groundPlay?: GroundBallResult; runningPlay?: RunningResult; batterId?: string; pitcherId?: string; playText?: string; outsRecorded?: number; bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
   aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
@@ -288,28 +288,10 @@ function advance(game: Game, runs: number, batterSpeed: number) {
   return extraAdvance;
 }
 function walk(game: Game, batterSpeed: number) {
-  const side = game.half;
-  if (game.bases[0] && game.bases[1] && game.bases[2]) addRun(game, side);
-  if (game.bases[1]) game.bases[2] = game.bases[1];
-  if (game.bases[0]) game.bases[1] = game.bases[0];
-  game.bases[0] = batterSpeed;
-}
-function tagUpOutfield(game: Game, batterPower: number) {
-  if (game.outs >= 2) return "";
-  const next: [number, number, number] = [...game.bases] as [number, number, number];
-  const notes: string[] = [];
-  // 3루→홈은 가장 쉽고, 1루→2루는 가장 어렵다. A deep fly from a
-  // powerful hitter and a fast runner both raise the chance to tag.
-  const bases = [.14, .54, .76];
-  for (let index = 2; index >= 0; index--) {
-    const speed = next[index]; if (!speed) continue;
-    const chance = Math.min(index === 2 ? .98 : index === 1 ? .88 : .54, Math.max(index === 2 ? .68 : index === 1 ? .38 : .06, bases[index] + (speed - 50) / 145 + (batterPower - 50) / 260));
-    if (Math.random() >= chance) continue;
-    if (index === 2) { next[2] = 0; addRun(game); notes.push("3루 주자 태그업 득점"); }
-    else if (!next[index + 1]) { next[index] = 0; next[index + 1] = speed; notes.push(`${index + 1}루 주자 태그업 ${index + 2}루`); }
-  }
-  game.bases = next;
-  return notes.length ? ` · ${notes.join(" · ")}` : "";
+  const result = resolveWalk({ bases: game.bases, batterSpeed });
+  game.bases = result.basesAfter;
+  if (game.lastPlay) game.lastPlay.runningPlay = result;
+  for (let i = 0; i < result.runsScored; i++) addRun(game);
 }
 function nextPitch(game: Game) {
   game.choices = {};
@@ -387,7 +369,7 @@ async function resolve(room: Room) {
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
   });
-  game.lastPlay = { basesBefore: [...game.bases], bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
+  game.lastPlay = { basesBefore: [...game.bases], batterId: `${battingPlayer}:batter:${game.batter[game.half]}`, pitcherId: `${defender(game)}:pitcher:${game.teams[defender(game)].activePitcher}`, bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
   game.history = [{ execution: plate.execution, isBall: plate.isBall, batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
   const executionNotice = plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : "";
   game.event = `${executionNotice}${plate.message}`;
@@ -404,7 +386,7 @@ async function resolve(room: Room) {
   } else if (plate.outcome === "groundout") {
     const lowPitchBonus = Math.max(0, Math.floor(plate.actualCell / 5) - 2) * .04;
     const doublePlayChance = Math.min(.38, Math.max(.08, .20 + lowPitchBonus + (pitcher.s - 50) / 260 + (50 - batter.v) / 150 + ((pitching.pitch ?? "fast") === "breaking" ? .02 : 0)));
-    const groundPlay = resolveGroundBall({ bases: game.bases, outs: game.outs, batterSpeed: batter.v, doublePlayChance });
+    const groundPlay = resolveGroundBall({ bases: game.bases, outs: game.outs, batterSpeed: batter.v, doublePlayChance, contact: { actualCell: plate.actualCell, batCell: batting.cell, defenseLead: game.scores[battingSide ? 0 : 1] - game.scores[battingSide], inning: game.inning } });
     game.lastPlay.groundPlay = groundPlay;
     game.bases = groundPlay.basesAfter;
     game.outs += groundPlay.outsRecorded; outsOnPlay = groundPlay.outsRecorded;
@@ -412,9 +394,12 @@ async function resolve(room: Room) {
     game.event = `${plate.message}${groundPlay.note}`;
     if (!finishWalkoff(game)) endPlate(game);
   } else if (plate.outcome === "infield_flyout" || plate.outcome === "outfield_flyout") {
-    const tagUp = plate.outcome === "outfield_flyout" ? tagUpOutfield(game, batter.p) : "";
+    const runningPlay = resolveFlyBall({ bases: game.bases, outs: game.outs, batterPower: batter.p, outfield: plate.outcome === "outfield_flyout" });
+    game.lastPlay.runningPlay = runningPlay;
+    game.bases = runningPlay.basesAfter;
+    for (let run = 0; run < runningPlay.runsScored; run++) addRun(game);
     game.outs++; outsOnPlay = 1;
-    game.event = `${plate.message}${tagUp}`;
+    game.event = `${plate.message}${runningPlay.note}`;
     if (!finishWalkoff(game)) endPlate(game);
   } else {
     const bases = plate.outcome === "homerun" ? 4 : plate.outcome === "triple" ? 3 : plate.outcome === "double" ? 2 : 1;
