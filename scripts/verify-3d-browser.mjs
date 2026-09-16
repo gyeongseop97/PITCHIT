@@ -51,6 +51,13 @@ try{
   const ranges=await page.evaluate(()=>({source:[...document.querySelectorAll('#zone .range')].map(el=>+el.dataset.z),visual:window.pitchit3D.snapshot().scene.rangeCells}));assert.deepEqual(ranges.visual,ranges.source);
   assert.equal(ranges.visual.length,swing==='spot'?0:swing==='power'?8:24);
  }
+ // Every contact aim includes the centre, with no special-case visual hole.
+ for(let aim=0;aim<25;aim++){
+  await page.evaluate(aim=>{state.swing='contact';state.pick=aim;render()},aim);
+  const ranges=await page.evaluate(()=>({source:[...document.querySelectorAll('#zone .range')].map(el=>+el.dataset.z),visual:window.pitchit3D.snapshot().scene.rangeCells}));
+  const expected=Array.from({length:25},(_,i)=>i).filter(i=>i!==aim&&Math.abs(i%5-aim%5)<=2&&Math.abs(Math.floor(i/5)-Math.floor(aim/5))<=2);
+  assert.deepEqual(ranges.source,expected);assert.deepEqual(ranges.visual,expected);if(aim!==12)assert.ok(ranges.visual.includes(12));
+ }
  for(let cell=0;cell<25;cell++){await select(cell);assert.equal(await page.evaluate(()=>state.pick),cell)}
  await page.locator('.pitch3dCanvas canvas').focus();await page.keyboard.press('ArrowUp');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>state.pick),19);
  await select(8);await page.evaluate(()=>{requestMatch=async input=>{window.sentChoice=input;return window.fixture}});await page.locator('.pitch3dConfirm').click();const request=await page.evaluate(()=>window.sentChoice);assert.equal(request.action,'choose');assert.equal(request.choice.cell,8);assert.equal(request.choice.kind,'bat');assert.equal(request.token,'fixture-token');

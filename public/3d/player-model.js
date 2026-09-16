@@ -4,7 +4,7 @@ import * as THREE from './vendor/three.module.min.js';
 // to the same joints used by the gameplay choreography, including elbow/knee
 // blend weights. No remote assets, loading step or per-frame mesh rebuilding.
 const skinColors = ['#c99472', '#af7955', '#e0b391', '#966246'];
-const unitSphere = new THREE.SphereGeometry(1, 16, 12);
+const unitSphere = new THREE.SphereGeometry(1, 20, 16);
 const clamp = THREE.MathUtils.clamp;
 
 function combine(parts) {
@@ -22,9 +22,29 @@ function bone(parent,x,y,z,bones) {const b=new THREE.Bone();b.position.set(x,y,z
 
 function bodyGeometry() {
  const positions=[],indices=[],skinIndices=[],skinWeights=[],groups=[];
+ const seams=[];
+ // Monotone cubic sections soften the silhouette without bulging past a
+ // wrist/knee measurement. Shared seam normals avoid a hard vertical stripe.
+ function roundProfile(profile) {
+  const slope=(i,axis)=>{
+   const delta=k=>(profile[k+1][axis]-profile[k][axis])/(profile[k+1][0]-profile[k][0]);
+   if(i===0)return delta(0);if(i===profile.length-1)return delta(i-1);
+   const a=delta(i-1),b=delta(i);return a*b<=0?0:2*a*b/(a+b);
+  };
+  const rounded=[];
+  for(let i=0;i<profile.length-1;i++){
+   const a=profile[i],b=profile[i+1],height=b[0]-a[0],steps=Math.max(2,Math.ceil(height/.025));
+   for(let j=0;j<steps;j++){const t=j/steps,t2=t*t,t3=t2*t;
+    rounded.push([a[0]+height*t,...[1,2].map(axis=>(2*t3-3*t2+1)*a[axis]+(t3-2*t2+t)*height*slope(i,axis)+(-2*t3+3*t2)*b[axis]+(t3-t2)*height*slope(i+1,axis))]);
+   }
+  }
+  rounded.push(profile.at(-1));return rounded;
+ }
  // Profiles are elliptical cross sections [height, half width, half depth].
  function loft(profile,cx,cz,material,weights) {
-  const start=positions.length/3,first=indices.length,n=16;
+  profile=roundProfile(profile);
+  const start=positions.length/3,first=indices.length,n=20;
+  for(let r=0;r<profile.length;r++)seams.push([start+r*(n+1),start+r*(n+1)+n]);
   for(const [y,rx,rz] of profile)for(let j=0;j<=n;j++){
    const angle=j/n*Math.PI*2;positions.push(cx+Math.sin(angle)*rx,y,cz+Math.cos(angle)*rz);
    const [a,b,w]=weights(y);skinIndices.push(a,b,0,0);skinWeights.push(1-w,w,0,0);
@@ -34,17 +54,19 @@ function bodyGeometry() {
  }
  // Bone order: pelvis, chest, neck/head; L shoulder, elbow, hand; R same;
  // L thigh, shin, ankle; R same. Keep the body weighted across the waist.
- loft([[.77,.16,.095],[.82,.20,.125],[.88,.195,.12],[.95,.182,.118]],0,0,1,()=>[0,0,0]);
- loft([[.895,.183,.12],[.94,.185,.127],[1.02,.186,.129],[1.12,.20,.137],[1.24,.224,.148],[1.34,.237,.139],[1.39,.222,.122],[1.43,.175,.095],[1.465,.069,.068]],0,0,0,y=>[0,1,clamp((y-.92)/.22,0,1)]);
+ loft([[.77,.16,.095],[.82,.20,.125],[.88,.19,.12],[.915,.18,.115]],0,0,1,()=>[0,0,0]);
+ loft([[.895,.192,.128],[.94,.19,.13],[1.02,.186,.129],[1.12,.20,.137],[1.24,.224,.148],[1.34,.237,.139],[1.39,.222,.122],[1.43,.175,.095],[1.465,.069,.068]],0,0,0,y=>[0,1,clamp((y-.92)/.22,0,1)]);
  loft([[1.445,.052,.05],[1.49,.057,.052],[1.55,.06,.056]],0,.012,2,()=>[1,2,.25]);
  for(const [x,shoulder,elbow,hand] of [[.245,3,4,5],[-.245,6,7,8]]){
   loft([[1.14,.071,.068],[1.18,.077,.075],[1.25,.086,.082],[1.34,.088,.084],[1.40,.079,.076],[1.445,.041,.042],[1.45,.002,.002]],x,0,0,()=>[shoulder,shoulder,0]);
-  loft([[.735,.043,.037],[.78,.05,.045],[.87,.068,.059],[.95,.076,.065],[1.025,.064,.061],[1.06,.063,.06],[1.13,.073,.067],[1.19,.077,.071]],x,0,2,y=>[shoulder,elbow,clamp((1.125-y)/.12,0,1)]);
+  loft([[.735,.043,.037],[.78,.05,.045],[.87,.068,.059],[.95,.076,.065],[1.025,.064,.061],[1.06,.063,.06],[1.13,.064,.059],[1.19,.064,.058]],x,0,2,y=>[shoulder,elbow,clamp((1.125-y)/.12,0,1)]);
  }
  for(const [x,thigh,shin] of [[.13,9,10],[-.13,12,13]]){
   loft([[.1,.062,.061],[.17,.069,.07],[.24,.079,.077],[.34,.082,.078],[.40,.081,.081],[.44,.087,.087],[.54,.101,.108],[.66,.114,.121],[.77,.119,.12],[.85,.103,.10]],x,0,1,y=>[thigh,shin,clamp((.485-y)/.13,0,1)]);
  }
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));g.setIndex(indices);g.computeVertexNormals();for(const [s,c,m] of groups)g.addGroup(s,c,m);return g;
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));g.setIndex(indices);g.computeVertexNormals();
+ const normal=g.getAttribute('normal');for(const [a,b] of seams){const v=new THREE.Vector3().fromBufferAttribute(normal,a).add(new THREE.Vector3().fromBufferAttribute(normal,b)).normalize();normal.setXYZ(a,v.x,v.y,v.z);normal.setXYZ(b,v.x,v.y,v.z);}
+ for(const [s,c,m] of groups)g.addGroup(s,c,m);return g;
 }
 
 export function createPlayerFactory(scene) {
@@ -79,8 +101,8 @@ export function createPlayerFactory(scene) {
   for(const arm of [left,right])surface(arm.hand,handGeometry,role==='batter'||role==='runner'?pants:skin);
   for(const leg of legs){surface(leg.foot,shoeGeometry,dark);surface(leg.foot,combine([oval([0,.018,.07],[.057,.007,.06])]),trim);}
   // Belt, placket and collar sit on the garment and follow their own bones.
-  const belt=surface(hip,new THREE.CylinderGeometry(.195,.195,.036,24),dark);belt.scale.z=.65;belt.position.y=.04;
-  const buckle=surface(hip,new THREE.BoxGeometry(.047,.03,.015),standard('#b6b4a5',.35));buckle.position.set(0,.04,.133);
+  const belt=surface(hip,new THREE.CylinderGeometry(.204,.204,.036,32),dark);belt.scale.z=.70;belt.position.y=.04;
+  const buckle=surface(hip,new THREE.BoxGeometry(.047,.03,.015),standard('#b6b4a5',.35));buckle.position.set(0,.04,.153);
   const shirtDetails=[];for(let i=0;i<4;i++)shirtDetails.push(oval([0,.13+i*.065,.14],[.006,.006,.004]));
   surface(torso,combine(shirtDetails),trim);
   const collar=surface(torso,new THREE.TorusGeometry(.064,.011,6,24),trim);collar.rotation.x=Math.PI/2;collar.position.y=.507;
