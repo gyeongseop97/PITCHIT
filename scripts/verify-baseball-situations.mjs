@@ -45,7 +45,7 @@ for(let from=0;from<4;from++)for(let to=from+1;to<=4;to++)for(let base=from+1;ba
  const point=runnerPoint(from,to,(base-from)/(to-from)).point,expected=[[0,0,0],[19.4,0,-19.4],[0,0,-38.8],[-19.4,0,-19.4],[0,0,0]][base];
  assert.ok(Math.hypot(...point.map((v,i)=>v-expected[i]))<1e-8,'Runner missed a bag');
 }
-for(const role of ['pitcher','batter']){const forms=new Set(),hands=new Set();for(let slot=0;slot<60;slot++){const p=playerProfile('match','p1:'+role+':'+slot,role);assert.deepEqual(p,playerProfile('match',p.id,role));forms.add(p.form);hands.add(p.hand);}assert.equal(forms.size,4);assert.equal(hands.size,2);}
+for(const role of ['pitcher','batter']){const forms=new Set(),hands=new Set();for(let slot=0;slot<60;slot++){const p=playerProfile('match','p1:'+role+':'+slot,role);assert.deepEqual(p,playerProfile('match',p.id,role));forms.add(p.form);hands.add(p.hand);}assert.equal(forms.size,6);assert.equal(hands.size,2);}
 class Redis {async hincrby(){return 1}async get(){return null}async set(){return 'OK'}}
 const source=stripTypeScriptTypes(readFileSync('app/api/match/handler.ts','utf8').replace(/^import .*;\r?$/gm,'')).replace('export default async function handler','async function handler');
 const control={outcome:'ball'};
@@ -56,4 +56,4 @@ for(const outcome of ['ball','outfield_flyout','infield_flyout'])for(let mask=0;
  await api.resolve({code:'SITUATION_FIXTURE',mode:'friend',players:{p1:null,p2:null},game});
  const r=game.lastPlay.runningPlay;assert.ok(r);assert.equal(game.scores[0],r.runsScored);assert.equal(game.playLog[0].outsRecorded,r.outsRecorded);assert.equal(game.half,r.inningEnded?1:0);assert.ok(game.lastPlay.batterId.startsWith('p1:batter:'));checks++;
 }
-console.log('PASS: '+checks+' rule/API cases; walk awards, tag-up and third-out runs, tactical first/second/third/home throws, runner conservation, exact bag touches and stable 4-form left/right roster profiles.');
+console.log('PASS: '+checks+' rule/API cases; walk awards, tag-up and third-out runs, tactical first/second/third/home throws, runner conservation, exact bag touches and stable 6-form left/right roster profiles.');

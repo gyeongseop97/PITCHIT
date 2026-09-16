@@ -84,6 +84,19 @@ export function createPlayerFactory(scene) {
   const stitches=[];const count=mitt?24:18;for(let i=0;i<count;i++){const a=i/count*Math.PI*2;stitches.push(oval([Math.sin(a)*(mitt?.13:.09),Math.cos(a)*(mitt?.14:.115),.055],[.009,.005,.005]))}
   surface(g,combine(stitches),laces);surface(g,combine([oval([.015,.004,.054],mitt?[.096,.105,.008]:[.06,.068,.008])]),standard('#614125'));return g;
  }
+ const bodyVariants=new Map();
+ function shapedBody(build){
+  if(bodyVariants.has(build.id))return bodyVariants.get(build.id);
+  const g=body.clone(),pos=g.attributes.position,skin=g.attributes.skinIndex;
+  for(let i=0;i<pos.count;i++){
+   let x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);const bone=skin.getX(i);
+   if([3,4,6,7].includes(bone)){const center=bone<6?.245:-.245;x=center+(x-center)*build.arm;z*=build.arm;y+=build.torsoExtra;}
+   else if([9,10,12,13].includes(bone)){const center=bone<12?.13:-.13;x=center+(x-center)*build.leg;z*=build.leg;}
+   else{const u=clamp((y-.92)/.46,0,1);if(y<1.445){x*=THREE.MathUtils.lerp(build.waist,build.chest,u);z*=build.depth;}y+=build.torsoExtra*u;}
+   pos.setXYZ(i,x,y,z);
+  }
+  g.computeVertexNormals();bodyVariants.set(build.id,g);return g;
+ }
  const badgeTextures=new Map();
  function lettering(text) {
   if(badgeTextures.has(text))return badgeTextures.get(text);
@@ -95,6 +108,7 @@ export function createPlayerFactory(scene) {
   const left={},right={};for(const [arm,x] of [[left,.245],[right,-.245]]){arm.pivot=bone(torso,x,.43,0,bones);arm.elbow=bone(arm.pivot,0,-.32,0,bones);arm.hand=bone(arm.elbow,0,-.31,0,bones)}
   const legs=[];for(const x of [.13,-.13]){const leg={};leg.pivot=bone(hip,x,-.05,0,bones);leg.knee=bone(leg.pivot,0,-.39,0,bones);leg.foot=bone(leg.knee,0,-.34,0,bones);legs.push(leg)}
   const jersey=standard(color,.94),kit=standard(color,.48),trim=standard('#eee5cc'),skin=standard(skinColors[(parseInt(number)||0)%skinColors.length],.83);
+  const bindPositions=bones.map(b=>b.position.clone());let bodyBuild={id:'balanced',name:'균형형',chest:1,waist:1,depth:1,arm:1,leg:1,torsoExtra:0};
   const bodyMesh=new THREE.SkinnedMesh(body,[jersey,role==='umpire'?dark:pants,skin]);bodyMesh.castShadow=bodyMesh.receiveShadow=true;bodyMesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1,0),2.3);root.add(bodyMesh);root.updateMatrixWorld(true);bodyMesh.bind(new THREE.Skeleton(bones));
   surface(head,faceGeometry,skin);surface(head,faceDetails,dark);
   const hat=surface(head,role==='batter'||role==='runner'||role==='catcher'?helmetGeometry:capGeometry,kit);
@@ -104,7 +118,7 @@ export function createPlayerFactory(scene) {
   const belt=surface(hip,new THREE.CylinderGeometry(.204,.204,.036,32),dark);belt.scale.z=.70;belt.position.y=.04;
   const buckle=surface(hip,new THREE.BoxGeometry(.047,.03,.015),standard('#b6b4a5',.35));buckle.position.set(0,.04,.153);
   const shirtDetails=[];for(let i=0;i<4;i++)shirtDetails.push(oval([0,.13+i*.065,.14],[.006,.006,.004]));
-  surface(torso,combine(shirtDetails),trim);
+  const buttons=surface(torso,combine(shirtDetails),trim);
   const collar=surface(torso,new THREE.TorusGeometry(.064,.011,6,24),trim);collar.rotation.x=Math.PI/2;collar.position.y=.507;
   const badge=new THREE.Group();torso.add(badge);
   for(const [text,w,h,y,z,ry] of [['PITCHIT',.32,.13,.285,.151,0],[number,.23,.26,.26,-.147,Math.PI]]){const m=surface(badge,new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:lettering(text),color:'#f9f5e7',transparent:true,depthWrite:false,side:THREE.DoubleSide}));m.position.set(0,y,z);m.rotation.y=ry;m.castShadow=false;}
@@ -122,8 +136,19 @@ export function createPlayerFactory(scene) {
   }
   root.position.set(x,0,z);
   function setUniform(color) {jersey.color.set(color);const light=jersey.color.getHSL({}).l>.5;kit.color.set(light?'#243848':color).multiplyScalar(light?.9:.62);trim.color.set(light?'#283d50':'#f3e9d6');badge.children.forEach(m=>m.material.color.copy(trim.color));}
+  function setBuild(build){
+   if(!build||bodyBuild.id===build.id)return;bodyBuild={...build};
+   const pose=bones.map(b=>({position:b.position.clone(),rotation:b.quaternion.clone()}));
+   bones.forEach((b,i)=>{b.position.copy(bindPositions[i]);b.quaternion.identity();});
+   head.position.y+=build.torsoExtra;left.pivot.position.y+=build.torsoExtra;right.pivot.position.y+=build.torsoExtra;
+   root.updateWorldMatrix(true,true);bodyMesh.skeleton.dispose();bodyMesh.geometry=shapedBody(build);bodyMesh.bind(new THREE.Skeleton(bones));
+   // Restore animation without undoing the new shoulder/head bind positions.
+   bones.forEach((b,i)=>{if(![2,3,6].includes(i))b.position.copy(pose[i].position);b.quaternion.copy(pose[i].rotation);});
+   belt.scale.set(build.waist,1,.70*build.depth);buckle.position.z=.153*build.depth;buttons.position.set(0,build.torsoExtra*.5,.14*(build.depth-1));collar.position.y=.507+build.torsoExtra;
+   for(const m of badge.children)m.position.z=(m.rotation.y?-.147:.151)*build.depth;
+  }
   setUniform(color);
-  return {root,hip,torso,head,left,right,legs,badge,bodyMesh,role,hat,gear,get uniformColor(){return jersey.color.getStyle()},setUniform};
+  return {root,hip,torso,head,left,right,legs,badge,bodyMesh,role,hat,gear,setBuild,get build(){return {...bodyBuild}},get uniformColor(){return jersey.color.getStyle()},setUniform};
  }
  return {player,createGlove};
 }

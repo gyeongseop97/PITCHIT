@@ -2,6 +2,7 @@ import {BASES,planPlay} from './play-plan.js';
 import {TIMING} from './presentation-timing.js';
 import {createBattedFlight,sampleBattedFlight} from './batted-flight.js';
 import {runnerDuration} from './running-timing.js';
+import {defensiveCoverage} from './defensive-coverage.js';
 import {locomotionPose,capturePose,blendPose,smoothStep} from './motion-blend.js';
 import {plantFoot,reachHand} from './rig-poses.js';
 // One possession timeline drives the ball, glove, bag touch, tag and umpire call.
@@ -50,18 +51,12 @@ export function createDefense({THREE,player,createGlove,scene,pitcher}) {
    const leg={source,receiver,runner,action,base,carry,sourcePosition:sourcePosition.clone(),position,start:cursor,release:releaseTime,end:receiveAt,decisionAt};
    source=receiver;sourcePosition=position;cursor=decisionAt;return leg;
   });
-  const assigned=new Set([fielder,...legs.flatMap(l=>[l.source,l.receiver])]);
-  const support=[];const last=legs.at(-1),bag=last?.position||vec(BASES[2]);
-  // Back up the ball, back up the receiving base, cover uncovered bags, and
-  // align an infielder between the outfield and the target as a cutoff.
-  const available=fielders.filter(p=>!assigned.has(p));
-  function assign(role,dest,pool=available){const candidates=pool.filter(p=>available.includes(p));if(!candidates.length)return;const p=candidates.reduce((a,b)=>a.home.distanceTo(dest)<b.home.distanceTo(dest)?a:b);available.splice(available.indexOf(p),1);support.push({player:p,role,dest,arrival:Math.max(shot.catchAt,p.home.distanceTo(dest)/7.8+.15)});}
-  const behind=end.clone().add(end.clone().sub(start).normalize().multiplyScalar(6));assign('타구 백업',behind,fielders.slice(4));
-  const throwLine=bag.clone().sub(end).normalize();assign('송구 백업',bag.clone().addScaledVector(throwLine,5));
-  if(shot.distance>42)assign('중계 대기',end.clone().lerp(bag,.56),fielders.slice(0,4));
-  for(const base of [2,3,1])if(!legs.some(l=>l.base===base))assign(base+'루 커버',vec(BASES[base]).add(vec([.4,0,.3])),fielders.slice(0,4));
-  for(const p of available)support.push({player:p,role:'커버 이동',dest:p.home.clone().lerp(end,.12),arrival:Math.max(.8,shot.catchAt)});
-  if(!assigned.has(pitcher)){const homeBackup=(last?.base===4?vec([0,0,5]):bag.clone().addScaledVector(throwLine,5.5));support.push({player:pitcher,role:'송구 백업',dest:homeBackup,arrival:Math.max(shot.catchAt,pitcher.home.distanceTo(homeBackup)/7.8+.15)});}
+  const playerIndex=p=>p===pitcher?7:p===catcher?8:fielders.indexOf(p);
+  const reserved=[fielder,...legs.flatMap(l=>[l.source,l.receiver])].map(playerIndex);
+  const support=defensiveCoverage({...shot,end:end.toArray(),fielder:playerIndex(fielder),reserved}).map(task=>{
+   const p=task.index===7?pitcher:fielders[task.index],dest=vec(task.target);
+   return {player:p,role:task.role,dest,arrival:Math.max(shot.catchAt,p.home.distanceTo(dest)/7.8+.15)};
+  });
   plan={...shot,fielder,from,end,catchPoint,start:start.clone(),ballFlight:createBattedFlight(shot,start.toArray(),catchPoint.toArray()),style,legs,support,duration:cursor+TIMING.settle};stage='chase';return true;
  }
  function receivePose(leg,t,runners){

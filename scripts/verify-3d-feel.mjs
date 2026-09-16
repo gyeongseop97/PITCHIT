@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile,mkdir} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {defensiveCoverage} from '../public/3d/defensive-coverage.js';
+import {createImpactMotion} from '../public/3d/impact-motion.js';
+import {BODY_TYPES,PITCH_FORMS,BAT_FORMS,playerProfile} from '../public/3d/player-profiles.js';
+const first=[19.4,0,-19.4],distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));let coverage=0;
+for(let fielder=0;fielder<4;fielder++)for(const throws of [[1],[2,1],[3,1],[4,1]])for(const loaded of [false,true]){
+ const receiver=throws[0]===2?1:throws[0]===3?3:throws[0]===4?8:0,reserved=[fielder,receiver,0],end=[[-16,0,-24],[7,0,-25],[-12,0,-28],[18,0,-20]][fielder],runs=loaded?[{from:0,to:1},{from:1,to:2},{from:2,to:3},{from:3,to:4}]:[{from:0,to:1}];
+ const tasks=defensiveCoverage({ground:true,end,fielder,reserved,throws,runs});
+ assert.equal(new Set(tasks.map(t=>t.index)).size,tasks.length);assert.ok(tasks.every(t=>!reserved.includes(t.index)));assert.ok(tasks.filter(t=>distance(t.target,first)<12).every(t=>t.index===6),'Wrong position backs up first');assert.ok(tasks.filter(t=>distance(t.target,first)<12).length<=1,'Crowd at first');
+ for(const t of tasks.filter(t=>[4,5].includes(t.index)))assert.ok(t.target[0]<=10&&t.target[2]<=-40,'Left/center fielder left his area');coverage++;
+}
+for(const kind of ['contact','soft','strike','strikeout','out','homerun']){const motion=createImpactMotion();assert.equal(motion.sample(.1).active,false);motion.trigger(kind);let peak=0;for(let i=0;i<50;i++){const s=motion.sample(.01);peak=Math.max(peak,Math.abs(s.x)+Math.abs(s.y));assert.ok(Math.abs(s.roll)<.01&&s.zoom<.04);}assert.ok(peak>0);assert.equal(motion.sample(.1).active,false);motion.clear();assert.equal(motion.sample(.1).zoom,0);const reduced=createImpactMotion(true);reduced.trigger(kind);assert.equal(reduced.sample(.01).x,0);assert.equal(reduced.sample(.01).zoom,0);}
+let now=100000;class TestDate extends Date{static now(){return now}}
+const clockSource=readFileSync('public/game/index.html','utf8').match(/<script id="match-clock-v1">([\s\S]*?)<\/script>/)?.[1];assert.ok(clockSource);
+for(const skew of [-5000,0,8000]){
+ now=100000+skew;const state={deadline:125000,introUntil:105000};const clock=runInNewContext(clockSource+';({remainingTurnSeconds,observeMatchClock,matchNow})',{state,Date:TestDate});clock.observeMatchClock({serverNow:100000});assert.equal(clock.remainingTurnSeconds(),20);now+=6000;assert.equal(clock.remainingTurnSeconds(),19);state.introUntil=0;now+=19000;assert.equal(clock.remainingTurnSeconds(),0);state.deadline=150000;assert.equal(clock.remainingTurnSeconds(),20);
+}
+for(const role of ['pitcher','batter']){const forms=new Set(),bodies=new Set();for(let i=0;i<400;i++){const p=playerProfile('VARIETY',role+i,role);assert.deepEqual(p,playerProfile('VARIETY',role+i,role));forms.add(p.name);bodies.add(p.body.id);}assert.equal(forms.size,6);assert.equal(bodies.size,5);}
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');const root=fileURLToPath(new URL('../',import.meta.url));
+const server=createServer(async(req,res)=>{try{const file=path.resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!file.startsWith(root)){res.writeHead(403).end();return}res.setHeader('Content-Type',file.endsWith('.html')?'text/html; charset=utf-8':'text/javascript');res.end(await readFile(file))}catch{res.writeHead(404).end()}});await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+try{
+ browser=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});const page=await browser.newPage({viewport:{width:1100,height:700}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{const get=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,options){return get.call(this,type,/webgl/.test(type)?{...options,preserveDrawingBuffer:true}:options)};});
+ await page.goto('http://127.0.0.1:'+server.address().port+'/public/3d/commentary.js');
+ await page.evaluate(async()=>{document.body.style.margin='0';document.body.innerHTML='<div id="host" style="width:100vw;height:100vh"></div>';window.queue=[];requestAnimationFrame=fn=>{queue.push(fn);return 0};window.calls=[];window.s=(await import('/public/3d/scene.js')).createPitchitScene(document.getElementById('host'),(text,meta={})=>calls.push({text,meta}));window.time=performance.now();window.step=()=>{time+=25;queue.splice(0).forEach(fn=>fn(time));return s.snapshot()};s.setRoomSeed('VARIETY');});
+ for(const [outcome,text,expected] of [['single','안타','contact'],['swinging_strike','루킹 삼진','strikeout'],['ball','볼',null]]){
+  const r=await page.evaluate(({outcome,text})=>{s.sync({pick:12,defending:false,effects:true});calls.length=0;s.play({key:text,outcome,text,actualCell:12,batCell:12,pitchName:'패스트볼',speed:145});let snap,first=null,early=false,peak=0;for(let i=0;i<600;i++){snap=step();if(snap.impactMotion.active){if(['windup','flight','catch'].includes(snap.phase))early=true;first??=snap;peak=Math.max(peak,Math.abs(snap.impactMotion.x));}if(snap.phase==='ready')break;}return {early,first,peak,snap,calls:[...calls]};},{outcome,text});
+  assert.equal(r.early,false);if(expected){assert.ok(r.peak>0);assert.equal(r.first.impactMotion.kind,expected);assert.equal(r.calls.filter(c=>c.meta.sensation?.kind===expected).length,1);}else assert.equal(r.first,null);assert.equal(r.snap.impactMotion.active,false);
+ }
+ const silent=await page.evaluate(()=>{s.sync({effects:false,pick:12});calls.length=0;s.play({key:'muted',outcome:'single',text:'안타',actualCell:12,batCell:12,speed:140});for(let i=0;i<600;i++)if(step().phase==='ready')break;return calls.filter(c=>c.meta.sensation).length});assert.equal(silent,0);
+ const variety=await page.evaluate(async()=>{
+  const THREE=await import('/public/3d/vendor/three.module.min.js'),{playerProfile,BODY_TYPES}=await import('/public/3d/player-profiles.js'),{createPlayerFactory}=await import('/public/3d/player-model.js');
+  const render=THREE.WebGLRenderer.prototype.render;THREE.WebGLRenderer.prototype.render=function(){};
+  try{const ids=new Map();for(let i=0;i<600;i++){const p=playerProfile('VARIETY','batter'+i,'batter');if(!ids.has(p.body.id+':'+p.hand))ids.set(p.body.id+':'+p.hand,p.id);}let error=0,plays=0,worst=null;
+   for(const id of ids.values())for(const cell of [0,4,12,20,24]){s.reset();s.setRoomSeed('VARIETY');s.sync({effects:false,pick:cell,batterId:id,pitcherId:'pitcher'+plays});s.play({key:'body'+plays,batterId:id,pitcherId:'pitcher'+plays,outcome:'single',actualCell:cell,batCell:cell,speed:145});let original=null;for(let n=0;n<90;n++){const snap=step();original??=snap.builds.batter;if(snap.builds.batter.id!==original.id)throw Error('Body changed during swing');if(snap.batterVisible&&snap.phase==='result')for(let k=0;k<2;k++){const gap=Math.hypot(...snap.players.batter.hands[k].map((v,j)=>v-(k?snap.batTopHandWorld:snap.batGripWorld)[j]));if(gap>error){error=gap;worst={cell,body:snap.builds.batter.id,hand:snap.handedness.bat,form:snap.profiles.batter.name,age:snap.swingAge,k};}}if(snap.runnerVisible){if(snap.builds.runner.id!==snap.builds.batter.id)throw Error('Body changed at takeoff');break;}}plays++;}
+   for(let i=0;i<650;i++)if(step().phase==='ready')break;if(s.snapshot().builds.bases[0].id!==s.snapshot().builds.batter.id)throw Error('Body changed after reaching first base');
+   const test=createPlayerFactory(new THREE.Scene()).player('#f2e7c8',0,0,'1','batter'),bounds=[];for(const build of BODY_TYPES){test.setBuild(build);test.bodyMesh.geometry.computeBoundingBox();const box=test.bodyMesh.geometry.boundingBox;bounds.push({id:build.id,width:box.max.x-box.min.x,height:box.max.y-box.min.y});}
+   return {error,plays,combos:ids.size,bounds,worst};
+  }finally{THREE.WebGLRenderer.prototype.render=render;}
+ });assert.equal(variety.combos,10);assert.ok(variety.error<.012,'Grip error '+variety.error+' '+JSON.stringify(variety.worst));assert.ok(Math.max(...variety.bounds.map(b=>b.height))-Math.min(...variety.bounds.map(b=>b.height))>.10);assert.ok(Math.max(...variety.bounds.map(b=>b.width))-Math.min(...variety.bounds.map(b=>b.width))>.04);
+ // Visual comparison of actual five skinned body meshes, not mockups.
+ await page.evaluate(async()=>{s.dispose();const T=await import('/public/3d/vendor/three.module.min.js'),{createPlayerFactory}=await import('/public/3d/player-model.js'),{BODY_TYPES}=await import('/public/3d/player-profiles.js'),{plantFoot}=await import('/public/3d/rig-poses.js');const scene=new T.Scene();scene.background=new T.Color('#16342c');scene.add(new T.HemisphereLight('#fff4dd','#456d5c',3));const key=new T.DirectionalLight('#ffffff',3);key.position.set(-3,5,5);scene.add(key);const factory=createPlayerFactory(scene);BODY_TYPES.forEach((body,i)=>{const p=factory.player('#eee2c2',(i-2)*1.15,0,String(i+1),'batter');p.setBuild(body);p.hip.position.y=.77;plantFoot(p,0,new T.Vector3(.18,.08,0));plantFoot(p,1,new T.Vector3(-.18,.08,0));p.left.elbow.rotation.x=-.25;p.right.elbow.rotation.x=-.25;});const camera=new T.PerspectiveCamera(35,1100/700,.1,30);camera.position.set(0,1.4,9.5);camera.lookAt(0,.8,0);const renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(1100,700);document.getElementById('host').replaceChildren(renderer.domElement);renderer.render(scene,camera);});await mkdir('outputs',{recursive:true});await page.screenshot({path:'outputs/3d-body-variety.png'});
+ assert.deepEqual(errors,[]);console.log('PASS: '+coverage+' position-specific grounder coverages; 20-second clock under intro/skew; impact timing, muted/reduced-motion behavior; six forms per role, five visible builds, '+variety.plays+' body/hand/course plays and stable runner identity. Grip error '+variety.error.toFixed(3)+'m.');
+}finally{await browser?.close();await new Promise(r=>server.close(r))}

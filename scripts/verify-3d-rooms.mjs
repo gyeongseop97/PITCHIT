@@ -15,7 +15,7 @@ async function request(body,expectedStatus){let data,status=200;const res={setHe
 for(const action of ['create','quick'])for(const [a,b] of [[false,false],[true,false],[false,true],[true,true]]){
  const first=await request({action,graphics3D:a});
  const second=await request({action:action==='quick'?'quick':'join',code:first.code,graphics3D:b});
- assert.equal(second.graphics3D,a||b);
+ assert.equal(second.graphics3D,a||b);assert.equal(second.turnSeconds,20);assert.equal(second.game.deadline-second.game.introUntil,20000);assert.ok(second.serverNow>0);
  const host=await request({action:'state',code:first.code,token:first.token});const guest=await request({action:'state',code:first.code,token:second.token});
  assert.equal(host.graphics3D,a||b);assert.equal(guest.graphics3D,a||b);
  assert.ok(!JSON.stringify(host.players).includes(first.token));
@@ -24,4 +24,4 @@ assert.equal((await request({action:'solo',graphics3D:true})).graphics3D,true);
 assert.equal((await request({action:'create',graphics3D:'true'})).graphics3D,false);
 console.log('PASS: friend/quick rooms share either-player 3D preference; both-off and malformed preference stay 2D; player shuffling and tokens preserved.');
 
-const emptyRoom=await request({action:'solo'});for(const cell of [null,undefined,-1,25,2.5,'12'])await request({action:'choose',code:emptyRoom.code,token:emptyRoom.token,choice:{kind:'bat',cell,swing:'contact'}},400);console.log('PASS: server rejects missing, null, non-integer and out-of-zone choices.');
+const emptyRoom=await request({action:'solo'});assert.equal(emptyRoom.turnSeconds,20);assert.ok(emptyRoom.game.deadline-emptyRoom.serverNow<=20000&&emptyRoom.game.deadline-emptyRoom.serverNow>=19900);for(const cell of [null,undefined,-1,25,2.5,'12'])await request({action:'choose',code:emptyRoom.code,token:emptyRoom.token,choice:{kind:'bat',cell,swing:'contact'}},400);console.log('PASS: server rejects missing, null, non-integer and out-of-zone choices.');

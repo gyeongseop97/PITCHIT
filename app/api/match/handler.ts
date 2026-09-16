@@ -71,6 +71,7 @@ const accountCareerKey = (profileId: string) => `pitchit:account-career:v1:${pro
 const guestNicknameKey = (profileId: string) => `pitchit:guest-nickname:v1:${profileId}`;
 const guestNicknameIndexKey = (name: string) => `pitchit:guest-nickname:index:v1:${name}`;
 type RankingPlayer = { name: string; points: number; wins: number; losses: number; draws: number; games: number; updatedAt: number };
+const decisionWindowMs = 20_000;
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
@@ -245,6 +246,8 @@ async function applyShopRewards(room: Room) {
   }
 }
 const publicRoom = (room: Room) => ({
+  serverNow: Date.now(),
+  turnSeconds: decisionWindowMs / 1000,
   code: room.code,
   mode: room.mode,
   graphics3D: Boolean(room.players.p1?.prefer3D || room.players.p2?.prefer3D),
@@ -296,7 +299,7 @@ function walk(game: Game, batterSpeed: number) {
 function nextPitch(game: Game) {
   game.choices = {};
   game.drafts = {};
-  game.deadline = Date.now() + 20000;
+  game.deadline = Date.now() + decisionWindowMs;
 }
 function finishWalkoff(game: Game) {
   // In the regulation final half and every extra-inning bottom half, the
@@ -544,7 +547,7 @@ function startRoom(room: Room, joining: Player): PlayerId {
   // Reserve the opening decision window now.  Clients can receive the
   // match-intro state a few milliseconds before its expiry; a zero deadline
   // in that gap used to leave the first defender unable to submit a pitch.
-  room.game.deadline = room.game.introUntil + 20_000;
+  room.game.deadline = room.game.introUntil + decisionWindowMs;
   room.game.choices = {};
   room.game.drafts = {};
   room.game.event = "매칭 완료! 양 팀 소개 후 경기가 시작됩니다.";
@@ -703,7 +706,7 @@ export default async function handler(req: any, res: any) {
         const next = freshGame();
         next.status = "playing";
         next.introUntil = Date.now() + 5_000;
-        next.deadline = next.introUntil + 20_000;
+        next.deadline = next.introUntil + decisionWindowMs;
         next.event = "리매치 성사! 양 팀 소개 후 경기가 시작됩니다.";
         room.game = next;
       }

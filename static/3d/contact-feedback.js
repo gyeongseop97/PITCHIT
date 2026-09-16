@@ -24,3 +24,10 @@ export function playContactSound(context,impact){
  const source=context.createBufferSource(),filter=context.createBiquadFilter(),gain=context.createGain();source.buffer=buffer;filter.type='bandpass';filter.frequency.value=impact.tone;filter.Q.value=.7;gain.gain.value=impact.volume;source.connect(filter).connect(gain).connect(context.destination);source.start(at);source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect()};
  const oscillator=context.createOscillator(),body=context.createGain();oscillator.type='triangle';oscillator.frequency.setValueAtTime(impact.tone*.26,at);oscillator.frequency.exponentialRampToValueAtTime(110,at+.055);body.gain.setValueAtTime(impact.volume*.32,at);body.gain.exponentialRampToValueAtTime(.001,at+.065);oscillator.connect(body).connect(context.destination);oscillator.start(at);oscillator.stop(at+.07);oscillator.onended=()=>{oscillator.disconnect();body.disconnect()};return true;
 }
+
+export function playImpactSound(context,kind,impact){
+ if(kind==='contact'||kind==='soft')return playContactSound(context,impact);
+ if(!context||context.state!=='running')return false;
+ const profiles={strike:[170,.07,.055],strikeout:[125,.16,.13],out:[150,.10,.07],homerun:[220,.20,.10]},p=profiles[kind];if(!p)return false;
+ const at=context.currentTime,osc=context.createOscillator(),gain=context.createGain();osc.type='triangle';osc.frequency.setValueAtTime(p[0]*2.1,at);osc.frequency.exponentialRampToValueAtTime(p[0],at+.045);gain.gain.setValueAtTime(p[2],at);gain.gain.exponentialRampToValueAtTime(.001,at+p[1]);osc.connect(gain).connect(context.destination);osc.start(at);osc.stop(at+p[1]+.01);osc.onended=()=>{osc.disconnect();gain.disconnect()};return true;
+}
