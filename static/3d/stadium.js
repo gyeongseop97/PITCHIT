@@ -7,7 +7,7 @@ export function createStadium(scene) {
  const root=new THREE.Group();root.name='PITCHIT Ballpark';scene.add(root);
  const skyMaterial=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,uniforms:{zenith:{value:new THREE.Color('#507fa2')},horizon:{value:new THREE.Color('#c1d7d7')}},vertexShader:'varying float altitude; void main(){altitude=position.y/230.0;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'uniform vec3 zenith; uniform vec3 horizon; varying float altitude; void main(){gl_FragColor=vec4(mix(horizon,zenith,smoothstep(0.0,0.8,altitude)),1.0);\n #include <tonemapping_fragment>\n #include <colorspace_fragment>\n}'});
  const sky=new THREE.Mesh(new THREE.SphereGeometry(230,24,16),skyMaterial);sky.position.z=-28;sky.renderOrder=-10;root.add(sky);
- const batches=new Map(),dummy=new THREE.Object3D();
+ const batches=new Map(),dummy=new THREE.Object3D(),crowdMeshes=[];
  const cube=new THREE.BoxGeometry(1,1,1),ball=new THREE.SphereGeometry(1,8,5);
  const mats={concrete:new THREE.MeshStandardMaterial({color:'#9a9e99',roughness:1}),paint:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.83}),metal:new THREE.MeshStandardMaterial({color:'#4a5b60',roughness:.55}),glass:new THREE.MeshStandardMaterial({color:'#24464e',roughness:.25,metalness:.35}),light:new THREE.MeshBasicMaterial({color:'#fff1c3'})};
  const stats={sections:0,seats:0,spectators:0,dugouts:2,outfieldRadius:100,wallHeight:3.3};
@@ -51,7 +51,7 @@ export function createStadium(scene) {
    // Bright stair nosings divide the rows and read from moving cameras.
    piece(origin,angle,[0,y+.025,z-.40],[1,.05,.12],'#d9cda3');
   }
-  stats.seats+=seats.length;stats.spectators+=crowd.length;instanceSection(seatGeometry,mats.paint,seats);instanceSection(personGeometry,mats.paint,crowd);
+  stats.seats+=seats.length;stats.spectators+=crowd.length;instanceSection(seatGeometry,mats.paint,seats);const crowdMesh=instanceSection(personGeometry,mats.paint,crowd);crowdMeshes.push({mesh:crowdMesh,count:crowd.length});
   const top=(outfield?3.4:back?1.0:1.8)+rows*.64,edge=1.1+rows*.95;
   piece(origin,angle,[0,top-.12,edge+1.1],[length+.2,.3,2.4],'#bdc2b7','concrete');
   piece(origin,angle,[0,top/2,edge+2.5],[length+.15,top,.7],'#546b6a');
@@ -99,5 +99,5 @@ export function createStadium(scene) {
  for(const x of [-70.71,70.71]){rod([x,0,-70.71],[x,15,-70.71],.11);block([x,9,-70.71],[.4,7,.12],'#e2be4c');}
  for(const [x,z] of [[-47,7],[47,7],[-77,-40],[77,-40],[-63,-102],[63,-102]]){rod([x,0,z],[x,27,z],.22);block([x,27,z],[6,2,.6],'#38494d');for(let i=0;i<6;i++)for(let row=0;row<2;row++)block([x-2.5+i,26.55+row*.9,z+.34],[.67,.65,.08],'#fff','light');}
  for(const {geometry,material,items} of batches.values()){const mesh=instanceSection(geometry,material,items);mesh.castShadow=material!==mats.light;}
- return {root,stats,horizon:skyMaterial.uniforms.horizon.value,setTheme(theme){const colors={classic:['#507fa2','#c1d7d7'],night:['#101b36','#53677e'],retro:['#857057','#d9c8a5'],neon:['#292644','#807a9e']}[theme]||['#507fa2','#c1d7d7'];skyMaterial.uniforms.zenith.value.set(colors[0]);skyMaterial.uniforms.horizon.value.set(colors[1]);}};
+ return {root,stats,setQuality(fraction){for(const {mesh,count} of crowdMeshes){mesh.count=Math.floor(count*fraction);mesh.visible=mesh.count>0;}stats.visibleSpectators=crowdMeshes.reduce((n,{mesh})=>n+mesh.count,0);},horizon:skyMaterial.uniforms.horizon.value,setTheme(theme){const colors={classic:['#507fa2','#c1d7d7'],night:['#101b36','#53677e'],retro:['#857057','#d9c8a5'],neon:['#292644','#807a9e']}[theme]||['#507fa2','#c1d7d7'];skyMaterial.uniforms.zenith.value.set(colors[0]);skyMaterial.uniforms.horizon.value.set(colors[1]);}};
 }

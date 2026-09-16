@@ -1,5 +1,6 @@
 // Deterministic presentation from the resolved play. Never rolls a new result.
 import {flightProfile} from './batted-flight.js';
+import {contactStyle} from './contact-feedback.js';
 export const BASES=[[0,0,0],[19.4,0,-19.4],[0,0,-38.8],[-19.4,0,-19.4],[0,0,0]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function normalizeOutcome(play={}){
@@ -39,7 +40,8 @@ export function planPlay(play={}){
  let a=foul?(variation>.5?1:-1)*(1.0+variation*.4):angle;
  if(groundPlay?.field){distance=Math.hypot(groundPlay.field.position[0],groundPlay.field.position[2]);a=Math.atan2(groundPlay.field.position[0],-groundPlay.field.position[2]);}
  const end=groundPlay?.field?[...groundPlay.field.position]:[Math.sin(a)*distance,0,-Math.cos(a)*distance];
- const flight=flightProfile({distance,ground,infieldHit,home,foul,fly,out,variant,variation,angle:a,batHand:play.batHand});
+ const impact=contactStyle(play,{home,fly,foul,infieldHit,ground,variant,variation,out});
+ const flight=flightProfile({distance,ground,infieldHit,home,foul,fly,out,variant,variation,angle:a,batHand:play.batHand,impact});
  const catchAt=flight.duration,apex=flight.apex;
  const before=play.basesBefore||[0,0,0],after=play.basesAfter;
  const runs=[],count=home?4:out==='triple'?3:out==='double'?2:1;
@@ -67,5 +69,5 @@ export function planPlay(play={}){
  // inning changes and empty post-play bases. Never infer a score from absence.
  if(runningPlay?.runnerMoves){runs.splice(0,runs.length,...runningPlay.runnerMoves.map(r=>({...r,walk,delay:r.from===0?(walk?.3:.48):r.tagUp?catchAt+.18:.08,slide:r.from>0&&r.to>r.from&&!walk&&!home,attemptTo:r.retreat?r.from+1:undefined})));}
  const throws=runningPlay?.throws|| (dp?[2,1]:ground&&!hit?[force?2:1]:infieldHit?[1]:fly?[runs.some(r=>r.to===4&&r.from>0)?4:2]:out==='triple'?[2,3]:out==='double'?[2]:hit?[2]:[]);
- return {variant,kind,out,contact,ground,fly,hit,home,foul,walk,infieldHit,angle:a,end,apex,catchAt,throws,runs,distance,flight,field:groundPlay?.field,inningEnded:Boolean(runningPlay?.inningEnded)};
+ return {variant,kind,out,contact,impact,ground,fly,hit,home,foul,walk,infieldHit,angle:a,end,apex,catchAt,throws,runs,distance,flight,field:groundPlay?.field,inningEnded:Boolean(runningPlay?.inningEnded)};
 }

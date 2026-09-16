@@ -5,15 +5,16 @@ const BALL_HEIGHT = .085;
 const clamp = v => Math.max(0, Math.min(1, v));
 const smooth = v => { v = clamp(v); return v * v * (3 - 2 * v); };
 
-export function flightProfile({distance, ground, infieldHit, home, foul, fly, out, variant, variation, angle, batHand}) {
+export function flightProfile({distance, ground, infieldHit, home, foul, fly, out, variant, variation, angle, batHand, impact}) {
  const curve = (batHand === 'L' ? -1 : 1) * (variant - 1) * .7;
  if (home || fly || (foul && variant !== 0)) {
-  const duration = home ? 4.8 + variation * .45 : out === 'infield_flyout' ? 3.05 + variation * .4 : foul ? 2.6 + variant * .4 : 3.5 + variation * .6;
+  const duration = home ? 4.8 + variation * .45 : out === 'infield_flyout' ? 3.05 + variation * .4 : foul ? 2.6 + variant * .4 : (impact?.kind==='barrel'?3.15:3.8) + variation * .45;
   const drag = home ? .20 : .14;
   return {type:home?'home_run':out==='infield_flyout'?'popup':foul?'foul_fly':'fly_ball', airTime:duration, duration, drag, curve, exitSpeed:distance * drag / (1 - Math.exp(-drag * duration)), apex:GRAVITY * duration * duration / 8};
  }
  const rolling = ground || foul;
- const speed = infieldHit ? 17 + variation * 3 : rolling ? 29 + variation * 7 : (out === 'single' ? 39 : 43) + variation * 3 - variant * 1.5;
+ const energy=impact?.energy??1;
+ const speed = infieldHit ? 16 + variation * 3 : rolling ? 25 + variation * 7 + energy*5 : (out === 'single' ? 34+energy*8 : 43) + variation * 3 - variant * 1.5;
  const fraction = rolling ? (infieldHit ? .06 : .12) : out === 'single' ? [.54,.70,.84][variant] : [.72,.84,.93][variant];
  const drag = .14, airTime = -Math.log(1 - distance * fraction * drag / speed) / drag;
  const landingSpeed = speed * Math.exp(-drag * airTime), tailSpeed = infieldHit ? 1.2 : rolling ? 5 : 6;
