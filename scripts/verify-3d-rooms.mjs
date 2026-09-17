@@ -118,3 +118,43 @@ staminaState=await request({action:'choose',code:staminaRoom.code,token:staminaR
 assert.equal(staminaState.game.pitchCounts.p2[aiPitcher],11);
 assert.equal(staminaState.game.lastPlay.stamina,97);
 console.log('PASS: pitch count is recorded, with full stamina through 10 pitches and wear from pitch 11.');
+
+// T/B/S/K must belong to the active pitcher for this game, not the live at-bat
+// count. Every result consumes one pitch and therefore keeps T = B + S.
+const pitcherTotalsRoom=await request({action:'solo'});let pitcherTotalsState=pitcherTotalsRoom;
+for(let turn=0;turn<12;turn++){
+ const before=structuredClone(pitcherTotalsState.game.pitcherStats);
+ const choice=pitcherTotalsState.attacker==='p1'?{kind:'bat',cell:12,swing:'contact'}:{kind:'pitch',cell:12,pitch:'fast'};
+ pitcherTotalsState=await request({action:'choose',code:pitcherTotalsRoom.code,token:pitcherTotalsRoom.token,choice});
+ const play=pitcherTotalsState.game.lastPlay;
+ const pitcherMatch=String(play?.pitcherId||'').match(/^(p[12]):pitcher:(\d+)$/);
+ assert.ok(pitcherMatch,'resolved play identifies the pitcher that threw it');
+ const player=pitcherMatch[1],index=Number(pitcherMatch[2]);
+ const prior=before[player]?.[index]||{pitches:0,balls:0,strikes:0,strikeouts:0};
+ const line=pitcherTotalsState.game.pitcherStats[player][index];
+ assert.equal(line.pitches,prior.pitches+1);
+ assert.equal(line.balls,prior.balls+(play.outcome==='ball'?1:0));
+ assert.equal(line.strikes,prior.strikes+(play.outcome==='ball'?0:1));
+ assert.equal(line.strikeouts,prior.strikeouts+(/삼진/.test(play.playText||'')?1:0));
+ assert.equal(line.pitches,line.balls+line.strikes);
+}
+console.log('PASS: every server-resolved pitch updates only that pitcher’s T/B/S/K and preserves T = B + S.');
+
+// A reliever starts with an independent game line while the outgoing
+// pitcher’s completed line remains unchanged.
+const relieverRoom=await request({action:'solo'});
+const relieverStored=db.get(`pitchit:room:${relieverRoom.code}`);
+relieverStored.game.introUntil=undefined;
+relieverStored.game.half=1;
+relieverStored.game.deadline=Date.now()+20_000;
+relieverStored.game.choices={};
+relieverStored.game.drafts={};
+const outgoing=relieverStored.game.teams.p1.activePitcher;
+const reliever=relieverStored.game.teams.p1.pitchers.findIndex((_,index)=>index!==outgoing);
+const beforeReliever=structuredClone(relieverStored.game.pitcherStats.p1);
+await request({action:'swap',code:relieverRoom.code,token:relieverRoom.token,index:reliever});
+const relieverPitch=await request({action:'choose',code:relieverRoom.code,token:relieverRoom.token,choice:{kind:'pitch',cell:12,pitch:'fast'}});
+assert.equal(relieverPitch.game.lastPlay.pitcherId,`p1:pitcher:${reliever}`);
+assert.equal(relieverPitch.game.pitcherStats.p1[reliever].pitches,beforeReliever[reliever].pitches+1);
+assert.equal(relieverPitch.game.pitcherStats.p1[outgoing].pitches,beforeReliever[outgoing].pitches);
+console.log('PASS: pitcher changes keep outgoing and incoming T/B/S/K lines independent.');

@@ -9,6 +9,7 @@ type PlayerId = "p1" | "p2";
 type Choice = { kind: "bat" | "pitch"; cell: number; swing?: string; pitch?: string };
 type Batter = { n: string; t: string; p: number; a: number; e: number; v: number };
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
+type PitcherGameLine = { pitches: number; balls: number; strikes: number; strikeouts: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { execution?: string; isBall?: boolean; batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
 type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; batterType: string; pitcherType: string; pitchCount?: number; stamina?: number; contactZone: "exact" | "near" | "outer"; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
@@ -45,6 +46,8 @@ type Game = {
   lastSeen?: Partial<Record<PlayerId, number>>;
   // Pitch count belongs to the individual pitcher, not merely the team.
   pitchCounts?: Record<PlayerId, number[]>;
+  // The live scoreboard reads this per-pitcher game line; B + S always equals T.
+  pitcherStats?: Record<PlayerId, PitcherGameLine[]>;
   // Consecutive turns that reached the deadline without a final submission.
   // Drafts still count as automatic: they merely preserve the highlighted
   // cell, but do not mean the player was present to confirm the turn.
@@ -98,10 +101,36 @@ const makeTeam = (): Team => {
   const activePitcher = Math.floor(Math.random() * pitchers.length);
   return { lineup, pitchers, activePitcher, usedPitchers: [activePitcher] };
 };
-const freshGame = (): Game => ({
-  status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastSeen: {}, pitchCounts: { p1: Array(5).fill(0), p2: Array(5).fill(0) }, drafts: {}, autoTurns: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
-});
+const createPitcherLine = (pitches = 0): PitcherGameLine => ({ pitches, balls: 0, strikes: pitches, strikeouts: 0 });
+const freshPitcherLines = (team: Team): PitcherGameLine[] => team.pitchers.map(() => createPitcherLine());
+function ensurePitcherStats(game: Game, player: PlayerId, team: Team) {
+  game.pitcherStats ??= { p1: freshPitcherLines(game.teams.p1), p2: freshPitcherLines(game.teams.p2) };
+  const lines = game.pitcherStats[player] ??= freshPitcherLines(team);
+  const legacyCounts = game.pitchCounts?.[player] ?? [];
+  for (let index = 0; index < team.pitchers.length; index++) {
+    const legacyPitches = Math.max(0, Number(legacyCounts[index] ?? 0));
+    const line = lines[index];
+    if (!line) { lines[index] = createPitcherLine(legacyPitches); continue; }
+    line.pitches = Math.max(legacyPitches, Math.max(0, Number(line.pitches ?? 0)));
+    line.balls = Math.min(line.pitches, Math.max(0, Number(line.balls ?? 0)));
+    line.strikes = Math.min(line.pitches, Math.max(0, Number(line.strikes ?? 0)));
+    line.strikeouts = Math.max(0, Number(line.strikeouts ?? 0));
+    const counted = line.balls + line.strikes;
+    if (counted < line.pitches) line.strikes += line.pitches - counted;
+    if (counted > line.pitches) line.strikes = Math.max(0, line.pitches - line.balls);
+  }
+  return lines;
+}
+const freshGame = (): Game => {
+  const teams: Record<PlayerId, Team> = { p1: makeTeam(), p2: makeTeam() };
+  return {
+    status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
+    bases: [0, 0, 0], batter: [0, 0], teams, deadline: 0, choices: {}, lastSeen: {},
+    pitchCounts: { p1: Array(teams.p1.pitchers.length).fill(0), p2: Array(teams.p2.pitchers.length).fill(0) },
+    pitcherStats: { p1: freshPitcherLines(teams.p1), p2: freshPitcherLines(teams.p2) },
+    drafts: {}, autoTurns: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
+  };
+};
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
 const profileId = (value: unknown) => {
@@ -443,8 +472,11 @@ async function resolve(room: Room) {
   const pitcher = pitchingTeam.pitchers[activePitcher];
   game.pitchCounts ??= { p1: Array(game.teams.p1.pitchers.length).fill(0), p2: Array(game.teams.p2.pitchers.length).fill(0) };
   game.pitchCounts[pitchingPlayer] ??= Array(pitchingTeam.pitchers.length).fill(0);
+  const pitcherLines = ensurePitcherStats(game, pitchingPlayer, pitchingTeam);
+  const pitcherLine = pitcherLines[activePitcher] ??= createPitcherLine(game.pitchCounts[pitchingPlayer][activePitcher] ?? 0);
   const pitchCount = (game.pitchCounts[pitchingPlayer][activePitcher] ?? 0) + 1;
   game.pitchCounts[pitchingPlayer][activePitcher] = pitchCount;
+  pitcherLine.pitches = pitchCount;
   const fatigue = fatigueForPitch(pitchCount);
   const effectivePitcher: Pitcher = {
     ...pitcher,
@@ -470,6 +502,10 @@ async function resolve(room: Room) {
   game.history = [{ execution: plate.execution, isBall: plate.isBall, batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
   const executionNotice = plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : "";
   game.event = `${executionNotice}${plate.message}`;
+  // In the official P-S split, every delivered pitch is a ball or a strike.
+  // Foul balls and balls put in play therefore count as strikes, keeping T = B + S.
+  if (plate.outcome === "ball") pitcherLine.balls++;
+  else pitcherLine.strikes++;
   if (plate.outcome === "ball") {
     // A command miss is a forced take: it has already been ruled a ball by
     // the shared engine, regardless of the hitter's target or swing type.
@@ -479,7 +515,7 @@ async function resolve(room: Room) {
     game.strikes = Math.min(2, game.strikes + 1);
   } else if (plate.outcome === "swinging_strike") {
     game.strikes++;
-    if (game.strikes >= 3) { game.outs++; outsOnPlay = 1; game.event = `${plate.message} · ${plate.strikeStyle === "looking" ? "루킹 삼진 아웃" : "헛스윙 스트라이크 삼진 아웃"}`; endPlate(game); }
+    if (game.strikes >= 3) { pitcherLine.strikeouts++; game.outs++; outsOnPlay = 1; game.event = `${plate.message} · ${plate.strikeStyle === "looking" ? "루킹 삼진 아웃" : "헛스윙 스트라이크 삼진 아웃"}`; endPlate(game); }
   } else if (plate.outcome === "groundout") {
     const lowPitchBonus = Math.max(0, Math.floor(plate.actualCell / 5) - 2) * .04;
     const doublePlayChance = Math.min(.38, Math.max(.08, .20 + lowPitchBonus + (effectivePitcher.s - 50) / 260 + (50 - batter.v) / 150 + ((pitching.pitch ?? "fast") === "breaking" ? .02 : 0)));
