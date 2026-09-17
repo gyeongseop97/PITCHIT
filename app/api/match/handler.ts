@@ -99,6 +99,7 @@ const profileId = (value: unknown) => {
   return /^[A-Za-z0-9_-]{12,96}$/.test(candidate) ? candidate : token();
 };
 const rankingName = (value: unknown) => String(value ?? "플레이어").trim().slice(0, 16) || "플레이어";
+const normalizedRankingName = (value: string) => value.toLocaleLowerCase("ko-KR");
 const validStoredProfileId = (value: unknown) => /^[A-Za-z0-9_-]{12,96}$/.test(String(value ?? ""));
 const rankingRecord = (saved?: RankingPlayer | null) => {
   const games = Math.max(0, Number(saved?.games ?? 0));
@@ -577,10 +578,20 @@ export default async function handler(req: any, res: any) {
     if (input.action === "ranking") {
       const ids = await redis.zrange<string[]>(rankingBoardKey, 0, 49, { rev: true });
       const entries = await Promise.all(ids.map(async (id) => ({ id, player: await redis.get<RankingPlayer>(rankingPlayerKey(id)) })));
-      const ranking = entries
-        .filter((entry): entry is { id: string; player: RankingPlayer } => Boolean(entry.player))
-        .map(({ player }) => { const games = Math.max(0, player.games), wins = Math.max(0, player.wins), draws = Math.max(0, player.draws ?? 0); return { name: rankingName(player.name), points: Math.max(0, Math.round(player.points)), wins, losses: Math.max(0, player.losses ?? games - wins - draws), draws, games }; })
-        .sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name, "ko"));
+      // The leaderboard is public-facing by nickname.  Old guest rows can
+      // survive an account migration, so never show the same nickname twice.
+      // Keep the strongest canonical record while the migration cleanup retires
+      // the stale profile id in the background.
+      const byNickname = new Map<string, { name: string; points: number; wins: number; losses: number; draws: number; games: number }>();
+      for (const entry of entries) {
+        if (!entry.player) continue;
+        const player = entry.player, games = Math.max(0, player.games), wins = Math.max(0, player.wins), draws = Math.max(0, player.draws ?? 0);
+        const record = { name: rankingName(player.name), points: Math.max(0, Math.round(player.points)), wins, losses: Math.max(0, player.losses ?? games - wins - draws), draws, games };
+        const key = normalizedRankingName(record.name);
+        const current = byNickname.get(key);
+        if (!current || record.points > current.points || (record.points === current.points && (record.wins > current.wins || (record.wins === current.wins && record.games > current.games)))) byNickname.set(key, record);
+      }
+      const ranking = [...byNickname.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name, "ko"));
       return res.status(200).json({ ranking });
     }
     if (input.action === "migrate-guest") {

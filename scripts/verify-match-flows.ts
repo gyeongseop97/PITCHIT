@@ -17,7 +17,7 @@ async function request(body: Record<string, unknown>, expected = 200): Promise<a
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await response.json();
+  const data: any = await response.json();
   assert.equal(response.status, expected, `${body.action}: ${data.error ?? JSON.stringify(data)}`);
   return data;
 }
