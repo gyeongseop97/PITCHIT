@@ -11,7 +11,7 @@ type Batter = { n: string; t: string; p: number; a: number; e: number; v: number
 type Pitcher = { n: string; t: string; v: number; c: number; s: number; m: number };
 type Team = { lineup: Batter[]; pitchers: Pitcher[]; activePitcher: number; usedPitchers: number[] };
 type PlayMemory = { execution?: string; isBall?: boolean; batCell: number; pitchCell: number; actualCell: number; attacker: PlayerId; pitchName: string; speed: number };
-type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; batterType: string; pitcherType: string; contactZone: "exact" | "near" | "outer"; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
+type PlayLog = PlayMemory & { inning: number; half: 0 | 1; swing: string; pitch: string; batterType: string; pitcherType: string; pitchCount?: number; stamina?: number; contactZone: "exact" | "near" | "outer"; outcome: string; event: string; runsBattedIn: number; outsRecorded: number; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" };
 type RankingResult = { before: number; points: number; change: number; wins: number; losses: number; draws: number; games: number };
 type Game = {
   status: "waiting" | "playing" | "finished";
@@ -40,6 +40,11 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
+  // Last heartbeat from each browser. An online player has a 30-second
+  // reconnection grace period before the opponent receives a forfeit win.
+  lastSeen?: Partial<Record<PlayerId, number>>;
+  // Pitch count belongs to the individual pitcher, not merely the team.
+  pitchCounts?: Record<PlayerId, number[]>;
   // Consecutive turns that reached the deadline without a final submission.
   // Drafts still count as automatic: they merely preserve the highlighted
   // cell, but do not mean the player was present to confirm the turn.
@@ -47,7 +52,7 @@ type Game = {
   // A highlighted cell is saved privately so a player who runs out of time
   // can still use the plan they had prepared.  It is never sent to the rival.
   drafts: Partial<Record<PlayerId, Choice>>;
-  lastPlay: { basesBefore?: number[]; basesAfter?: number[]; groundPlay?: GroundBallResult; runningPlay?: RunningResult; batterId?: string; pitcherId?: string; playText?: string; outsRecorded?: number; bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
+  lastPlay: { basesBefore?: number[]; basesAfter?: number[]; groundPlay?: GroundBallResult; runningPlay?: RunningResult; batterId?: string; pitcherId?: string; playText?: string; outsRecorded?: number; pitchCount?: number; stamina?: number; bat: Choice; pitch: Choice; attacker: PlayerId; pitchName: string; speed: number; actualCell: number; outcome: PlayOutcome; execution?: "command" | "mistake" | "wild"; strikeStyle?: "swinging" | "looking" } | null;
   history: PlayMemory[];
   playLog: PlayLog[];
   aiStyle: "공격형" | "모서리형" | "변화구형" | "혼합형";
@@ -76,6 +81,7 @@ const guestNicknameKey = (profileId: string) => `pitchit:guest-nickname:v1:${pro
 const guestNicknameIndexKey = (name: string) => `pitchit:guest-nickname:index:v1:${name}`;
 type RankingPlayer = { name: string; points: number; wins: number; losses: number; draws: number; games: number; updatedAt: number };
 const decisionWindowMs = 20_000;
+const reconnectGraceMs = 30_000;
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
@@ -94,7 +100,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, drafts: {}, autoTurns: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, lastSeen: {}, pitchCounts: { p1: Array(5).fill(0), p2: Array(5).fill(0) }, drafts: {}, autoTurns: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -250,8 +256,15 @@ async function applyShopRewards(room: Room) {
     await redis.set(accountCareerKey(player.profileId), { ...saved, shop: { ...shop, coins: shop.coins + reward.total, rewardedGames: [...shop.rewardedGames, room.code].slice(-150) }, updatedAt: Date.now() });
   }
 }
-const publicRoom = (room: Room) => ({
-  serverNow: Date.now(),
+const reconnectSeconds = (room: Room, player: PlayerId, now = Date.now()) => {
+  if (room.mode === "solo" || room.game.status !== "playing") return 0;
+  const seen = Number(room.game.lastSeen?.[player] ?? now);
+  return Math.max(0, Math.ceil((seen + reconnectGraceMs - now) / 1000));
+};
+const publicRoom = (room: Room) => {
+  const now = Date.now();
+  return {
+  serverNow: now,
   turnSeconds: decisionWindowMs / 1000,
   code: room.code,
   mode: room.mode,
@@ -261,9 +274,42 @@ const publicRoom = (room: Room) => ({
   // Reveal only that a player has locked a choice.  Their target, swing and
   // pitch stay private until both choices are received and resolved.
   choiceReady: { p1: Boolean(room.game.choices.p1), p2: Boolean(room.game.choices.p2) },
-  game: { ...room.game, choices: {}, drafts: {} },
+  connection: { p1: reconnectSeconds(room, "p1", now), p2: reconnectSeconds(room, "p2", now) },
+  game: { ...room.game, choices: {}, drafts: {}, lastSeen: {} },
   attacker: actor(room.game),
-});
+};
+};
+
+function fatigueForPitch(pitchCount: number) {
+  // Short games should reward a planned change, not punish the starter after
+  // one at-bat. Wear begins after eight pitches and stays moderate through a
+  // normal three-inning outing.
+  const wear = Math.max(0, pitchCount - 8);
+  return {
+    stamina: Math.max(40, 100 - wear * 3),
+    controlPenalty: Math.min(14, Math.floor(wear * .65)),
+    stuffPenalty: Math.min(12, Math.floor(wear * .5)),
+    velocityPenalty: Math.min(3, Math.floor(wear / 6)),
+  };
+}
+
+async function forfeitDisconnectedOpponent(room: Room, active: PlayerId) {
+  if (room.mode === "solo" || room.game.status !== "playing") return false;
+  const opponent: PlayerId = active === "p1" ? "p2" : "p1";
+  const lastSeen = Number(room.game.lastSeen?.[opponent] ?? Date.now());
+  if (Date.now() - lastSeen < reconnectGraceMs) return false;
+  room.game.status = "finished";
+  room.game.deadline = 0;
+  room.game.choices = {};
+  room.game.drafts = {};
+  room.game.forfeitWinner = active;
+  room.game.event = `${room.players[opponent]?.name || "상대"} 님의 연결이 30초간 끊겨 몰수패했습니다. ${room.players[active]?.name || "플레이어"} 님의 몰수승입니다.`;
+  await applyRankings(room);
+  await applyCareerRecords(room);
+  await applyShopRewards(room);
+  await applyBalanceGame(room);
+  return true;
+}
 
 function addRun(game: Game, side: 0 | 1 = game.half) {
   game.inningScores ??= [[], []];
@@ -390,9 +436,23 @@ async function resolve(room: Room) {
     }
   }
   const battingPlayer = actor(game);
+  const pitchingPlayer = defender(game);
   const batting = game.choices[battingPlayer] ?? game.drafts[battingPlayer] ?? { kind: "bat" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: "contact" };
-  const pitching = game.choices[defender(game)] ?? game.drafts[defender(game)] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
-  const pitcher = game.teams[defender(game)].pitchers[game.teams[defender(game)].activePitcher];
+  const pitching = game.choices[pitchingPlayer] ?? game.drafts[pitchingPlayer] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
+  const pitchingTeam = game.teams[pitchingPlayer];
+  const activePitcher = pitchingTeam.activePitcher;
+  const pitcher = pitchingTeam.pitchers[activePitcher];
+  game.pitchCounts ??= { p1: Array(game.teams.p1.pitchers.length).fill(0), p2: Array(game.teams.p2.pitchers.length).fill(0) };
+  game.pitchCounts[pitchingPlayer] ??= Array(pitchingTeam.pitchers.length).fill(0);
+  const pitchCount = (game.pitchCounts[pitchingPlayer][activePitcher] ?? 0) + 1;
+  game.pitchCounts[pitchingPlayer][activePitcher] = pitchCount;
+  const fatigue = fatigueForPitch(pitchCount);
+  const effectivePitcher: Pitcher = {
+    ...pitcher,
+    v: Math.max(40, pitcher.v - fatigue.velocityPenalty),
+    c: Math.max(20, pitcher.c - fatigue.controlPenalty),
+    s: Math.max(20, pitcher.s - fatigue.stuffPenalty),
+  };
   const batter = game.teams[battingPlayer].lineup[game.batter[game.half]];
   const battingSide = battingPlayer === "p1" ? 0 : 1;
   const scoreBefore = game.scores[battingSide];
@@ -400,14 +460,14 @@ async function resolve(room: Room) {
   let outsOnPlay = 0;
   const plate = resolvePlateAppearance({
     batter,
-    pitcher,
+    pitcher: effectivePitcher,
     targetCell: batting.cell,
     pitchCell: pitching.cell,
     swing: (batting.swing ?? "contact") as SwingType,
     pitch: (pitching.pitch ?? "fast") as PitchType,
     count: { balls: game.balls, strikes: game.strikes },
   });
-  game.lastPlay = { basesBefore: [...game.bases], batterId: `${battingPlayer}:batter:${game.batter[game.half]}`, pitcherId: `${defender(game)}:pitcher:${game.teams[defender(game)].activePitcher}`, bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
+  game.lastPlay = { basesBefore: [...game.bases], batterId: `${battingPlayer}:batter:${game.batter[game.half]}`, pitcherId: `${pitchingPlayer}:pitcher:${activePitcher}`, pitchCount, stamina: fatigue.stamina, bat: batting, pitch: pitching, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed, actualCell: plate.actualCell, outcome: plate.outcome, execution: plate.execution, strikeStyle: plate.strikeStyle };
   game.history = [{ execution: plate.execution, isBall: plate.isBall, batCell: batting.cell, pitchCell: pitching.cell, actualCell: plate.actualCell, attacker: battingPlayer, pitchName: plate.pitchName, speed: plate.speed }, ...(game.history ?? [])].slice(0, 5);
   const executionNotice = plate.execution === "mistake" ? "실투 · " : plate.execution === "wild" ? "제구 이탈 · " : "";
   game.event = `${executionNotice}${plate.message}`;
@@ -423,7 +483,7 @@ async function resolve(room: Room) {
     if (game.strikes >= 3) { game.outs++; outsOnPlay = 1; game.event = `${plate.message} · ${plate.strikeStyle === "looking" ? "루킹 삼진 아웃" : "헛스윙 스트라이크 삼진 아웃"}`; endPlate(game); }
   } else if (plate.outcome === "groundout") {
     const lowPitchBonus = Math.max(0, Math.floor(plate.actualCell / 5) - 2) * .04;
-    const doublePlayChance = Math.min(.38, Math.max(.08, .20 + lowPitchBonus + (pitcher.s - 50) / 260 + (50 - batter.v) / 150 + ((pitching.pitch ?? "fast") === "breaking" ? .02 : 0)));
+    const doublePlayChance = Math.min(.38, Math.max(.08, .20 + lowPitchBonus + (effectivePitcher.s - 50) / 260 + (50 - batter.v) / 150 + ((pitching.pitch ?? "fast") === "breaking" ? .02 : 0)));
     const groundPlay = resolveGroundBall({ bases: game.bases, outs: game.outs, batterSpeed: batter.v, doublePlayChance, contact: { actualCell: plate.actualCell, batCell: batting.cell, defenseLead: game.scores[battingSide ? 0 : 1] - game.scores[battingSide], inning: game.inning } });
     game.lastPlay.groundPlay = groundPlay;
     game.bases = groundPlay.basesAfter;
@@ -457,6 +517,8 @@ async function resolve(room: Room) {
     pitch: pitching.pitch ?? "fast",
     batterType: batter.t,
     pitcherType: pitcher.t,
+    pitchCount,
+    stamina: fatigue.stamina,
     contactZone,
     pitchName: plate.pitchName,
     speed: plate.speed,
@@ -515,7 +577,7 @@ async function applyBalanceGame(room: Room) {
     outcomeCounts: outcomes, executionCounts: execution,
     // All mechanics needed for later simulations: type, swing/pitch choice,
     // aimed cell, actual cell, and exact/near/outer contact classification.
-    plays: plays.map(({ inning, half, batCell, pitchCell, actualCell, swing, pitch, batterType, pitcherType, contactZone, outcome, execution, runsBattedIn, outsRecorded }) => ({ inning, half, batCell, pitchCell, actualCell, swing, pitch, batterType, pitcherType, contactZone, outcome, execution: execution || "command", runsBattedIn, outsRecorded })),
+    plays: plays.map(({ inning, half, batCell, pitchCell, actualCell, swing, pitch, batterType, pitcherType, pitchCount, stamina, contactZone, outcome, execution, runsBattedIn, outsRecorded }) => ({ inning, half, batCell, pitchCell, actualCell, swing, pitch, batterType, pitcherType, pitchCount, stamina, contactZone, outcome, execution: execution || "command", runsBattedIn, outsRecorded })),
   };
   await redis.set(balanceGameKey(room.code), summary);
   await Promise.all([
@@ -585,6 +647,7 @@ function startRoom(room: Room, joining: Player): PlayerId {
   room.game.deadline = room.game.introUntil + decisionWindowMs;
   room.game.choices = {};
   room.game.drafts = {};
+  room.game.lastSeen = { p1: Date.now(), p2: Date.now() };
   room.game.event = "매칭 완료! 양 팀 소개 후 경기가 시작됩니다.";
   return joiningBatsFirst ? "p1" : "p2";
 }
@@ -710,7 +773,7 @@ export default async function handler(req: any, res: any) {
     }
     let room = await load(String(input.code || "").toUpperCase());
     if (!room) return res.status(404).json({ error: "방을 찾을 수 없습니다." });
-    const needsRoomLock = input.action === "join" || input.action === "draft" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || input.action === "rematch" || (input.action === "state" && Boolean(room.game.introUntil));
+    const needsRoomLock = input.action === "join" || input.action === "draft" || input.action === "choose" || input.action === "swap" || input.action === "forfeit" || input.action === "rematch" || input.action === "state";
     const roomLockKey = `pitchit:room:${room.code}:lock`;
     const roomLock = needsRoomLock ? await acquire(roomLockKey, 12) : null;
     if (needsRoomLock && !roomLock) return res.status(409).json({ error: "상대 선택을 처리 중입니다. 잠시 후 다시 시도해 주세요." });
@@ -752,6 +815,7 @@ export default async function handler(req: any, res: any) {
         next.status = "playing";
         next.introUntil = Date.now() + 5_000;
         next.deadline = next.introUntil + decisionWindowMs;
+        next.lastSeen = { p1: Date.now(), p2: Date.now() };
         next.event = "리매치 성사! 양 팀 소개 후 경기가 시작됩니다.";
         room.game = next;
       }
@@ -775,6 +839,14 @@ export default async function handler(req: any, res: any) {
     }
     const player = identify(room, input.token);
     if (!player) return res.status(403).json({ error: "유효하지 않은 참가자입니다." });
+    if (room.mode !== "solo" && room.game.status === "playing") {
+      room.game.lastSeen ??= {};
+      room.game.lastSeen[player] = Date.now();
+      if (await forfeitDisconnectedOpponent(room, player)) {
+        await save(room);
+        return res.json({ ...publicRoom(room), player, token: input.token, reconnectForfeit: true });
+      }
+    }
     if (room.game.introUntil) {
       if (Date.now() < room.game.introUntil) {
         if (input.action === "choose") return res.status(409).json({ error: "매칭 안내가 끝난 뒤 작전을 선택할 수 있습니다." });

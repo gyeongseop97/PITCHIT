@@ -4,7 +4,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {runInNewContext} from 'node:vm';
 import {randomBytes} from 'node:crypto';
 import * as engine from '../lib/game-engine.ts';
-import {resolveGroundBall} from '../lib/base-running.ts';
+import {resolveGroundBall,resolveFlyBall,resolveWalk} from '../lib/base-running.ts';
 import * as roster from '../lib/roster.ts';
 import {readShop} from '../lib/shop.ts';
 const db=new Map();
@@ -20,7 +20,7 @@ class Redis{
  async hincrby(k,field,amount){const hash=hashes.get(k)||new Map(),next=Number(hash.get(field)||0)+Number(amount);hash.set(field,next);hashes.set(k,hash);return next}
 }
 const source=stripTypeScriptTypes(readFileSync('app/api/match/handler.ts','utf8').replace(/^import .*;\r?$/gm,'')).replace('export default async function handler','async function handler');
-const handler=runInNewContext(source+'\nhandler',{...engine,...roster,readShop,resolveGroundBall,randomBytes,Redis,process:{env:{}},console,Date,setTimeout,Math});
+const handler=runInNewContext(source+'\nhandler',{...engine,...roster,readShop,resolveGroundBall,resolveFlyBall,resolveWalk,randomBytes,Redis,process:{env:{}},console,Date,setTimeout,Math});
 async function request(body,expectedStatus){let data,status=200;const res={setHeader(){},status(n){status=n;return res},json(v){data=v},end(){}};await handler({method:'POST',body},res);if(expectedStatus)assert.equal(status,expectedStatus);else assert.ok(status<400,JSON.stringify(data));return data;}
 for(const action of ['create','quick'])for(const [a,b] of [[false,false],[true,false],[false,true],[true,true]]){
  const first=await request({action,graphics3D:a});
@@ -83,3 +83,27 @@ const resetResult=await request({action:'state',code:resetHost.code,token:resetH
 assert.equal(resetResult.game.autoTurns.p1,0);
 assert.equal(resetResult.game.autoTurns.p2,0);
 console.log('PASS: either player confirming a turn resets only their consecutive absence streak.');
+
+// A refresh is recoverable for 30 seconds. Once that window has elapsed,
+// the connected opponent's next state check closes the room as a forfeit.
+const reconnectHost=await request({action:'create',name:'재접속'});
+const reconnectGuest=await request({action:'join',code:reconnectHost.code,name:'대기'});
+const reconnectHostState=await request({action:'state',code:reconnectHost.code,token:reconnectHost.token});
+const activeId=reconnectHostState.player,missingId=activeId==='p1'?'p2':'p1';
+const reconnectStored=db.get(`pitchit:room:${reconnectHost.code}`);
+reconnectStored.game.lastSeen[missingId]=Date.now()-30_001;
+const reconnectResult=await request({action:'state',code:reconnectHost.code,token:reconnectHost.token});
+assert.equal(reconnectResult.game.status,'finished');
+assert.equal(reconnectResult.game.forfeitWinner,activeId);
+assert.match(reconnectResult.game.event,/연결이 30초간 끊겨/);
+console.log('PASS: online rooms grant a 30-second reconnect window, then close as a forfeit for the connected opponent.');
+
+// Pitch count is recorded per pitcher and fatigue starts only after a normal
+// opening workload, so a starter is not punished on the first few pitches.
+const staminaRoom=await request({action:'solo'});let staminaState=staminaRoom;
+for(let pitch=0;pitch<9;pitch++)staminaState=await request({action:'choose',code:staminaRoom.code,token:staminaRoom.token,choice:{kind:'bat',cell:12,swing:'contact'}});
+const aiPitcher=staminaState.game.teams.p2.activePitcher;
+assert.equal(staminaState.game.pitchCounts.p2[aiPitcher],9);
+assert.equal(staminaState.game.lastPlay.stamina,97);
+assert.equal(staminaState.game.lastPlay.pitchCount,9);
+console.log('PASS: pitch count and gradual individual-pitcher stamina are recorded on every resolved pitch.');

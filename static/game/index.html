@@ -1156,7 +1156,10 @@ function leaveCurrentGame(event){
   render();
 }
 document.getElementById('back').addEventListener('click',leaveCurrentGame,true);
-window.addEventListener('pagehide',()=>{const room=matchSession?.code&&matchSession?.token?{code:matchSession.code,token:matchSession.token}:null;reportCompetitiveForfeit(room,true)});
+// Closing, refreshing, or backgrounding a tab is not an intentional forfeit.
+// The server grants a 30-second reconnection window and the saved room token
+// restores this match on the same device. The explicit 홈으로 action above
+// remains an immediate voluntary forfeit.
 </script><style id="scoreboard-layering-v2">
 /* 점수 기록과 투타 정보를 서로 다른 전광판 행으로 분리한다. */
 .score{padding-bottom:194px!important;min-height:248px!important}
@@ -1861,6 +1864,43 @@ const applyMatchBeforeCosmeticSet=applyMatch;applyMatch=function(data){const res
 const renderBeforeCosmeticSet=render;render=function(){const result=renderBeforeCosmeticSet();paintPitchMarker();return result};
 let operatorGrantPending=false;const accountPanelBeforeOperatorGrant=accountPanel;accountPanel=function(){accountPanelBeforeOperatorGrant();if(!accountState?.operator||accountState?.shop?.operatorGrantApplied||operatorGrantPending)return;operatorGrantPending=true;accountRequest({action:'operator-grant'}).then(data=>{accountState={...accountState,shop:data.shop,operator:true};applyShopTheme();accountPanelBeforeOperatorGrant()}).catch(()=>{}).finally(()=>{operatorGrantPending=false})};
 setTimeout(()=>accountPanel(),0);
+</script>
+<style id="competitive-depth-v1">
+.reconnectNotice{margin:7px 0 4px;padding:8px 10px;border-left:4px solid #f0bd42;background:#fff9e9;color:#73550a;font-size:11px;font-weight:900;text-align:center}.scoreStamina{display:block;margin-top:3px;color:#b9d5e7!important;font-size:8px!important;font-weight:800}.matchPatternReport{margin:14px 0 0;padding:12px;border:1px solid #c7d6e5;background:#f5f9fd;text-align:left}.matchPatternReport h3{margin:0 0 8px;color:#173d67;font-size:14px}.matchPatternReport p{margin:6px 0;color:#49627b;font-size:12px;line-height:1.45}.matchPatternReport b{color:#163a61}@media(max-width:760px){.reconnectNotice{margin:5px 0 3px;padding:6px 8px;font-size:9px}.scoreStamina{margin-top:2px;font-size:7px!important}.matchPatternReport{padding:10px}.matchPatternReport h3{font-size:12px}.matchPatternReport p{font-size:10px}}
+</style><script id="competitive-depth-v1">
+const pitchStamina = count => Math.max(40,100-Math.max(0,Number(count||0)-8)*3);
+const cellLabel = cell => `${Math.floor(Number(cell||0)/5)+1}행 ${Number(cell||0)%5+1}열`;
+const mostCommon = values => {const counts=new Map();values.forEach(value=>counts.set(value,(counts.get(value)||0)+1));return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]||null};
+const applyMatchBeforeCompetitiveDepth=applyMatch;
+applyMatch=function(data){
+  const value=applyMatchBeforeCompetitiveDepth(data),game=data?.game,me=matchSession?.player;
+  if(game&&me){const other=me==='p1'?'p2':'p1';state.myPitchCounts=game.pitchCounts?.[me]||[];state.awayPitchCounts=game.pitchCounts?.[other]||[];state.opponentReconnectSeconds=Number(data?.connection?.[other]||0);}
+  return value;
+};
+const renderBeforeCompetitiveDepth=render;
+render=function(){
+  renderBeforeCompetitiveDepth();
+  if(!state.mode)return;
+  const attacking=state.half==='top',staff=attacking?(state.awayPitchers||[]):(state.pitchers||[]),active=attacking?(state.awayActivePitcher??0):(state.activePitcher??0),count=Number((attacking?state.awayPitchCounts:state.myPitchCounts)?.[active]||0),card=document.querySelector('#scoreMatchup article:nth-child(2)');
+  if(card){let stamina=card.querySelector('.scoreStamina');if(!stamina){stamina=document.createElement('span');stamina.className='scoreStamina';card.append(stamina)}stamina.textContent=`투구 수 ${count} · 체력 ${pitchStamina(count)}%`;}
+  let notice=document.getElementById('reconnectNotice');const seconds=Number(state.opponentReconnectSeconds||0),show=state.net&&!state.finished&&seconds>0&&seconds<=25;
+  if(show){if(!notice){notice=document.createElement('p');notice.id='reconnectNotice';notice.className='reconnectNotice';document.getElementById('swing')?.before(notice)}notice.textContent=`상대 재접속 대기 중 · ${seconds}초 안에 돌아오지 않으면 몰수승`;}
+  else notice?.remove();
+};
+const showGameSummaryBeforeCompetitiveDepth=showGameSummary;
+showGameSummary=function(game){
+  showGameSummaryBeforeCompetitiveDepth(game);
+  const dialog=document.querySelector('.gameSummary'),me=matchSession?.player,plays=game?.playLog||state.replayLog||[];
+  if(!dialog||!me||dialog.querySelector('.matchPatternReport'))return;
+  const opponentPitches=plays.filter(play=>play.attacker===me),opponentAtBats=plays.filter(play=>play.attacker!==me);
+  const pitchSpot=mostCommon(opponentPitches.map(play=>play.pitchCell)),pitchKind=mostCommon(opponentPitches.map(play=>play.pitch||'fast'));
+  const batSpot=mostCommon(opponentAtBats.map(play=>play.batCell)),swing=mostCommon(opponentAtBats.map(play=>play.swing||'contact'));
+  const report=document.createElement('section');report.className='matchPatternReport';
+  const pitchText=pitchSpot?`가장 자주 던진 곳은 <b>${cellLabel(pitchSpot[0])}</b> (${pitchSpot[1]}회)${pitchKind?`, 주력 구종은 <b>${pitchKind[0]==='breaking'?'변화구':'패스트볼'}</b>`:''}.`:'상대 투구 기록이 충분하지 않습니다.';
+  const batText=batSpot?`가장 자주 노린 곳은 <b>${cellLabel(batSpot[0])}</b> (${batSpot[1]}회)${swing?`, 주력 스윙은 <b>${swing[0]==='contact'?'컨택':swing[0]==='power'?'파워':'스팟'} 스윙</b>`:''}.`:'상대 타격 기록이 충분하지 않습니다.';
+  report.innerHTML=`<h3>상대 패턴 리포트</h3><p>${pitchText}</p><p>${batText}</p>`;
+  dialog.querySelector('.summaryNote')?.after(report);
+};
 </script>
 <!-- PITCHIT BASE RUNNING START -->
 <script>
