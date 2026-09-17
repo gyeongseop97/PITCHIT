@@ -40,6 +40,10 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
+  // Consecutive turns that reached the deadline without a final submission.
+  // Drafts still count as automatic: they merely preserve the highlighted
+  // cell, but do not mean the player was present to confirm the turn.
+  autoTurns?: Partial<Record<PlayerId, number>>;
   // A highlighted cell is saved privately so a player who runs out of time
   // can still use the plan they had prepared.  It is never sent to the rival.
   drafts: Partial<Record<PlayerId, Choice>>;
@@ -90,7 +94,7 @@ const makeTeam = (): Team => {
 };
 const freshGame = (): Game => ({
   status: "waiting", inning: 1, half: 0, scores: [0, 0], inningScores: [Array(9).fill(0), Array(9).fill(0)], hits: [0, 0], walks: [0, 0], balls: 0, strikes: 0, outs: 0,
-  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, drafts: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
+  bases: [0, 0, 0], batter: [0, 0], teams: { p1: makeTeam(), p2: makeTeam() }, deadline: 0, choices: {}, drafts: {}, autoTurns: {}, lastPlay: null, history: [], playLog: [], aiStyle: ["공격형", "모서리형", "변화구형", "혼합형"][Math.floor(Math.random() * 4)] as Game["aiStyle"], event: "친구의 입장을 기다리는 중입니다.",
 });
 const code = () => randomBytes(3).toString("hex").toUpperCase();
 const token = () => randomBytes(18).toString("base64url");
@@ -355,6 +359,36 @@ function endPlate(game: Game) {
 async function resolve(room: Room) {
   const game = room.game;
   if (game.status !== "playing") return;
+  // Online matches must not remain open for an absent player.  A final
+  // `choose` is the only proof of an active turn; a draft is deliberately
+  // not enough because it can be left behind by a closed/backgrounded tab.
+  // The counter belongs to each player and a confirmed choice resets only
+  // that player's streak.
+  if (room.mode !== "solo") {
+    game.autoTurns ??= {};
+    const players: PlayerId[] = ["p1", "p2"];
+    const absent = players.filter((player) => !game.choices[player]);
+    for (const player of players) {
+      game.autoTurns[player] = game.choices[player]
+        ? 0
+        : (game.autoTurns[player] ?? 0) + 1;
+    }
+    const forfeiting = absent.find((player) => (game.autoTurns?.[player] ?? 0) >= 3);
+    if (forfeiting) {
+      const winner: PlayerId = forfeiting === "p1" ? "p2" : "p1";
+      game.status = "finished";
+      game.deadline = 0;
+      game.choices = {};
+      game.drafts = {};
+      game.forfeitWinner = winner;
+      game.event = `${room.players[forfeiting]?.name || "플레이어"} 님이 3턴 연속 자리비움으로 몰수패했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
+      await applyRankings(room);
+      await applyCareerRecords(room);
+      await applyShopRewards(room);
+      await applyBalanceGame(room);
+      return;
+    }
+  }
   const battingPlayer = actor(game);
   const batting = game.choices[battingPlayer] ?? game.drafts[battingPlayer] ?? { kind: "bat" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], swing: "contact" };
   const pitching = game.choices[defender(game)] ?? game.drafts[defender(game)] ?? { kind: "pitch" as const, cell: strikeCells[Math.floor(Math.random() * strikeCells.length)], pitch: "fast" };
