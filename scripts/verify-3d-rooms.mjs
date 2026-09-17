@@ -101,9 +101,20 @@ console.log('PASS: online rooms grant a 30-second reconnect window, then close a
 // Pitch count is recorded per pitcher and fatigue starts only after a normal
 // opening workload, so a starter is not punished on the first few pitches.
 const staminaRoom=await request({action:'solo'});let staminaState=staminaRoom;
-for(let pitch=0;pitch<9;pitch++)staminaState=await request({action:'choose',code:staminaRoom.code,token:staminaRoom.token,choice:{kind:'bat',cell:12,swing:'contact'}});
-const aiPitcher=staminaState.game.teams.p2.activePitcher;
-assert.equal(staminaState.game.pitchCounts.p2[aiPitcher],9);
+const staminaStored=db.get(`pitchit:room:${staminaRoom.code}`);
+const aiPitcher=staminaStored.game.teams.p2.activePitcher;
+staminaStored.game.pitchCounts.p2[aiPitcher]=9;
+staminaState=await request({action:'choose',code:staminaRoom.code,token:staminaRoom.token,choice:{kind:'bat',cell:12,swing:'contact'}});
+assert.equal(staminaState.game.pitchCounts.p2[aiPitcher],10);
+assert.equal(staminaState.game.lastPlay.stamina,100);
+assert.equal(staminaState.game.lastPlay.pitchCount,10);
+const staminaStoredAgain=db.get(`pitchit:room:${staminaRoom.code}`);
+staminaStoredAgain.game.half=0;
+staminaStoredAgain.game.outs=0;
+staminaStoredAgain.game.choices={};
+staminaStoredAgain.game.drafts={};
+staminaStoredAgain.game.pitchCounts.p2[aiPitcher]=10;
+staminaState=await request({action:'choose',code:staminaRoom.code,token:staminaRoom.token,choice:{kind:'bat',cell:12,swing:'contact'}});
+assert.equal(staminaState.game.pitchCounts.p2[aiPitcher],11);
 assert.equal(staminaState.game.lastPlay.stamina,97);
-assert.equal(staminaState.game.lastPlay.pitchCount,9);
-console.log('PASS: pitch count and gradual individual-pitcher stamina are recorded on every resolved pitch.');
+console.log('PASS: pitch count is recorded, with full stamina through 10 pitches and wear from pitch 11.');

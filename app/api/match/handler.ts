@@ -281,14 +281,13 @@ const publicRoom = (room: Room) => {
 };
 
 function fatigueForPitch(pitchCount: number) {
-  // Short games should reward a planned change, not punish the starter after
-  // one at-bat. Wear begins after eight pitches and stays moderate through a
-  // normal three-inning outing.
-  const wear = Math.max(0, pitchCount - 8);
+  // A starter gets ten full-strength pitches. Wear begins only with the
+  // eleventh pitch, then stays moderate through a normal three-inning game.
+  const wear = Math.max(0, pitchCount - 10);
   return {
     stamina: Math.max(40, 100 - wear * 3),
-    controlPenalty: Math.min(14, Math.floor(wear * .65)),
-    stuffPenalty: Math.min(12, Math.floor(wear * .5)),
+    controlPenalty: Math.min(14, Math.ceil(wear * .65)),
+    stuffPenalty: Math.min(12, Math.ceil(wear * .5)),
     velocityPenalty: Math.min(3, Math.floor(wear / 6)),
   };
 }
