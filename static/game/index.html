@@ -1969,6 +1969,28 @@ render=function(){
   strip.innerHTML=`<small>공격 타순</small><div class="scoreLineupCells">${activeLineup.slice(0,9).map((player,index)=>`<span class="${index===activeTurn?'now':''}" title="${index+1}번 타자 · ${player.t||''}"><b>${index+1}</b>${String(player.t||'').replace('형','')}</span>`).join('')}</div>`;
 };
 </script>
+<style id="ballpark-scoreboard-layout-v3">
+/* Full ballpark-board composition: lineups at the sides, live battery in the
+   centre and the inning line score along the lower rail. */
+.score{grid-template-columns:112px 46px 70px minmax(0,1fr) 112px!important;grid-template-rows:42px 86px 42px auto!important;gap:5px!important;padding:24px 8px 8px!important}.score>div:first-child{grid-column:2;grid-row:1/3;align-self:start;padding:3px!important}.score>.bases{grid-column:3;grid-row:1/3;align-self:center;transform:scale(.7);transform-origin:center}.score>.counts{grid-column:5;grid-row:3;align-self:stretch;justify-content:center;padding:4px!important;border:1px solid #46576a!important;background:#0a131d}.scoreMatchup{grid-column:4;grid-row:1/4;display:grid!important;grid-template-columns:1fr!important;gap:4px!important;margin:0!important;padding:0!important}.scoreMatchup article{min-height:0!important;padding:7px 9px!important;border:1px solid #46576a!important;background:#0a131d!important}.scoreMatchup .scorePitch{padding:5px 8px!important}.stadiumStats{grid-column:2/5!important;grid-row:4!important;margin:0!important}.scoreLineup{display:none!important}.scoreTeamCard{grid-row:1/4;min-width:0;border:1px solid #526373;background:#0b151f;color:#e6eef3;font-family:Arial,"Noto Sans KR",sans-serif}.scoreTeamCard.home{grid-column:1}.scoreTeamCard.away{grid-column:5}.scoreTeamCard h4{margin:0;padding:5px 4px;background:#233545;color:#f3f7fa;text-align:center;font-size:10px;letter-spacing:.08em}.scoreTeamCard .teamHead,.scoreTeamCard li{display:grid;grid-template-columns:16px minmax(0,1fr) 18px;gap:3px;align-items:center}.scoreTeamCard .teamHead{padding:4px 4px 3px;color:#aebfcc;font-size:7px}.scoreTeamCard ol{margin:0;padding:0;list-style:none}.scoreTeamCard li{min-height:17px;padding:2px 4px;border-top:1px solid #344655;font-size:8px}.scoreTeamCard li span{color:#f0c34d;text-align:center}.scoreTeamCard li b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px}.scoreTeamCard li em{color:#aebfcc;font-size:7px;font-style:normal;text-align:right}.scoreTeamCard li.now{background:#2a3d4f;box-shadow:inset 3px 0 #e33b31}.scoreTeamCard li.now b{color:#fff36a}
++@media(max-width:760px){.score{grid-template-columns:72px 33px 47px minmax(0,1fr) 72px!important;grid-template-rows:37px 76px 39px auto!important;gap:3px!important;padding:19px 4px 6px!important}.score>div:first-child b{font-size:22px!important}.score>.bases{transform:scale(.48)!important}.score>.counts{padding:3px!important}.counts .countGroup{min-height:9px!important}.counts .countGroup i{width:8px!important;height:8px!important}.counts .countGroup small{font-size:8px!important}.scoreMatchup{gap:3px!important}.scoreMatchup article{padding:4px!important}.scoreMatchup article small{font-size:6px!important}.scoreMatchup article b{font-size:9px!important}.scoreMatchup article span{font-size:7px!important}.scoreMatchup .scorePitch{padding:3px 4px!important;font-size:6px!important;line-height:9px!important}.scoreTeamCard h4{padding:4px 2px;font-size:8px}.scoreTeamCard .teamHead{padding:3px 2px;font-size:6px}.scoreTeamCard li{grid-template-columns:12px minmax(0,1fr) 14px;min-height:15px;padding:2px;font-size:7px}.scoreTeamCard li b{font-size:7px}.scoreTeamCard li em{font-size:6px}.lineScore th,.lineScore td{height:13px!important;padding:0 1px!important}.lineScore .team{width:30px!important}}
++</style><script id="ballpark-scoreboard-layout-v3">
+const renderBeforeBallparkScoreboardLayout=render;
+render=function(){
+  renderBeforeBallparkScoreboardLayout();
+  if(!state.mode)return;
+  const score=document.querySelector('.score'); if(!score)return;
+  const ownLineup=typeof lineup!=='undefined'?lineup:[];
+  const otherLineup=state.awayLineup||ownLineup;
+  const mineIsHome=state.net?matchSession?.player==='p2':false;
+  const batting=state.half==='top'?ownLineup:otherLineup;
+  const battingTurn=state.half==='top'?Number(state.turn||0):Number(state.awayTurn??state.turn??0);
+  const positions=['CF','SS','RF','1B','DH','3B','LF','C','2B'];
+  const renderTeam=(side,title,players)=>{let card=score.querySelector(`.scoreTeamCard.${side}`);if(!card){card=document.createElement('section');card.className=`scoreTeamCard ${side}`;score.append(card)}card.innerHTML=`<h4>${title}</h4><div class="teamHead"><span>#</span><span>타자명</span><span>POS</span></div><ol>${players.slice(0,9).map((player,index)=>`<li class="${players===batting&&index===battingTurn?'now':''}"><span>${index+1}</span><b title="${player.n||`${index+1}번 타자`} · ${player.t||''}">${player.t||`${index+1}번 타자`}</b><em>${positions[index]}</em></li>`).join('')}</ol>`};
+  renderTeam('away','어웨이팀',mineIsHome?otherLineup:ownLineup);
+  renderTeam('home','홈팀',mineIsHome?ownLineup:otherLineup);
+};
+</script>
 <!-- PITCHIT BASE RUNNING START -->
 <script>
 (()=>{
