@@ -1907,6 +1907,39 @@ showGameSummary=function(game){
   dialog.querySelector('.summaryNote')?.after(report);
 };
 </script>
+<style id="mobile-one-screen-play-v1">
+/* The play surface is deliberately a fixed mobile composition.  Secondary
+   information stays in its existing dialogs/details controls, leaving every
+   decision control in reach without page scrolling. */
+@media (max-width:760px){
+  html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+  .app{height:100svh;min-height:100svh;overflow:hidden}
+  .game.show{height:100svh;min-height:100svh;overflow:hidden;padding:4px 6px}
+  .top{min-height:29px;gap:6px;padding-bottom:4px}
+  .top h2{font-size:14px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .back{padding:5px 7px;font-size:10px;white-space:nowrap}
+  .board{height:calc(100svh - 48px);min-height:0;margin-top:4px}
+  .board>div{height:100%;min-height:0;display:flex;flex-direction:column}
+  .score{flex:0 0 auto;min-height:0!important}
+  .board>div>.panel{display:flex;flex:1 1 auto;min-height:0;flex-direction:column;padding:4px 6px;overflow:hidden}
+  .board>div>.panel>h3{display:none}
+  .types{flex:0 0 auto;margin:2px 0 4px}
+  .types button{min-height:31px;padding:6px 2px;font-size:11px}
+  .zoneWrap{flex:0 1 auto;width:min(70vw,250px,calc(100svh - 305px));min-width:150px;margin:auto;padding:0}
+  .action{flex:0 0 auto;min-height:39px;padding:9px 7px;font-size:14px;box-shadow:0 3px 0 #95241e}
+  #onlineTurnStatus{flex:0 0 auto;margin:3px 0!important;padding:4px 6px!important;font-size:9px!important}
+  .reconnectNotice{flex:0 0 auto;margin:3px 0!important;padding:4px 6px!important;font-size:8px!important}
+  .score{grid-template-columns:33px 46px minmax(0,1fr)!important;grid-template-rows:43px auto auto!important;gap:2px!important;padding:17px 3px 4px!important}
+  .score>div:first-child b{font-size:22px!important}.score>.bases{transform:scale(.45)!important}.score>.counts{padding-left:3px!important}.counts .countGroup{min-height:9px!important}.counts .countGroup i{width:7px!important;height:7px!important}.counts .countGroup small{width:7px!important;font-size:8px!important}.lineScore th,.lineScore td{height:11px!important;padding:0 1px!important}.lineScore thead th{height:9px!important}.lineScore .team{width:29px!important}.scoreMatchup article{min-height:35px!important}.scoreMatchup article small{font-size:6px!important}.scoreMatchup article b{font-size:10px!important}.scoreMatchup article span{font-size:7px!important}.scoreMatchup .scorePitch{min-height:14px!important;padding:2px 3px!important;font-size:6px!important;line-height:8px!important}
+  body.pitchit3DEnabled .board>div>.panel{display:block;overflow:hidden}
+  body.pitchit3DEnabled .pitch3dViewport{height:min(48svh,350px)!important;margin:4px 0!important}
+}
+@media (max-width:360px),(max-height:620px){
+  .zoneWrap{width:min(64vw,205px,calc(100svh - 285px));min-width:132px}
+  .score{grid-template-columns:29px 39px minmax(0,1fr)!important;grid-template-rows:37px auto auto!important;padding-top:15px!important}
+  .scoreMatchup article{min-height:31px!important}.types button{min-height:28px;font-size:10px}.action{min-height:35px;padding:7px;font-size:12px}
+}
+</style>
 <!-- PITCHIT BASE RUNNING START -->
 <script>
 (()=>{
