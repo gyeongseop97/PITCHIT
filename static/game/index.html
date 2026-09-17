@@ -1991,6 +1991,26 @@ render=function(){
   renderTeam('home','홈팀',mineIsHome?ownLineup:otherLineup);
 };
 </script>
+<style id="ballpark-scoreboard-layout-fix-v1">
+/* Explicit grid placements win over the legacy board's absolute/summary rules. */
+.score>div:first-child{grid-column:2!important;grid-row:1/3!important;align-self:start!important}.score>.bases{grid-column:3!important;grid-row:1/3!important;align-self:center!important}.score>.counts{grid-column:5!important;grid-row:3!important;align-self:stretch!important}.scoreMatchup{position:static!important;grid-column:4!important;grid-row:1/4!important;display:grid!important;grid-template-columns:1fr!important;align-self:stretch!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important}.stadiumStats{position:static!important;grid-column:2/5!important;grid-row:4!important;align-self:stretch!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important}.scoreTeamCard.home{grid-column:1!important;min-height:0!important;height:auto!important;overflow:hidden!important;padding:0!important;background:#0b151f!important}.scoreTeamCard.away{grid-column:5!important;min-height:0!important;height:auto!important;overflow:hidden!important;padding:0!important}.scoreLineup{display:none!important}.lineScore .inningNow{position:relative;border-color:#f4d34c!important;background:#35424a!important;color:#fff58a!important;box-shadow:inset 0 0 0 1px #fff4a0,0 0 8px #d6b42b88}.lineScore thead .inningNow{background:#f0c34d!important;color:#102033!important;text-shadow:none}
+@media(max-width:760px){.score{grid-template-columns:68px 28px 42px minmax(0,1fr) 68px!important}.score>div:first-child{grid-column:2!important;grid-row:1/3!important}.score>.bases{grid-column:3!important;grid-row:1/3!important}.score>.counts{grid-column:5!important;grid-row:3!important}.scoreMatchup{grid-column:4!important;grid-row:1/4!important}.stadiumStats{grid-column:2/5!important;grid-row:4!important}.scoreTeamCard.home{grid-column:1!important}.scoreTeamCard.away{grid-column:5!important}}
+</style><script id="ballpark-scoreboard-layout-fix-v1">
+const renderBeforeBallparkScoreboardFix=render;
+render=function(){
+  renderBeforeBallparkScoreboardFix();
+  if(!state.mode)return;
+  const lineScore=document.querySelector('.lineScore');
+  if(!lineScore)return;
+  const activeInning=Math.max(1,Math.min(9,Number(state.inning||1)));
+  lineScore.querySelectorAll('.inningNow').forEach(cell=>cell.classList.remove('inningNow'));
+  const header=[...lineScore.querySelectorAll('thead th')].find(cell=>Number(cell.textContent)===activeInning);
+  if(!header)return;
+  header.classList.add('inningNow');
+  const column=header.cellIndex;
+  lineScore.querySelectorAll('tbody tr').forEach(row=>row.children[column]?.classList.add('inningNow'));
+};
+</script>
 <!-- PITCHIT BASE RUNNING START -->
 <script>
 (()=>{
