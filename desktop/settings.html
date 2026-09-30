@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PITCHIT 창 설정</title>
+    <style>
+      :root { color-scheme: dark; font-family: Arial, "Noto Sans KR", sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: #071018; color: #edf5fa; }
+      main { padding: 25px; }
+      .eyebrow { margin: 0 0 7px; color: #f4c94a; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
+      h1 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
+      .lead { margin: 8px 0 22px; color: #b8cbd7; font-size: 13px; line-height: 1.55; }
+      section { margin-top: 13px; padding: 14px; border: 1px solid #2c4658; background: #0d1b26; }
+      h2 { margin: 0 0 11px; color: #d4e5ef; font-size: 13px; letter-spacing: .04em; }
+      label { display: block; color: #c5d4dd; font-size: 12px; font-weight: 800; }
+      select, input[type="number"] { width: 100%; margin-top: 6px; border: 1px solid #49657a; border-radius: 4px; background: #08141e; color: #fff; padding: 9px; font: inherit; }
+      .size { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
+      .toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; cursor: pointer; }
+      .toggle input { width: 20px; height: 20px; accent-color: #f0c44a; }
+      .range-head { display: flex; align-items: center; justify-content: space-between; }
+      output { color: #f6d45e; font-size: 14px; font-weight: 900; }
+      input[type="range"] { width: 100%; margin: 12px 0 2px; accent-color: #f0c44a; }
+      .range-note { margin: 5px 0 0; color: #90aab9; font-size: 11px; line-height: 1.5; }
+      .actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 16px; }
+      button { border: 1px solid #557086; border-radius: 4px; background: #183142; color: #fff; padding: 10px 12px; font: 900 13px Arial, "Noto Sans KR", sans-serif; cursor: pointer; }
+      button.primary { border-color: #e65747; background: #df493b; }
+      button:hover { filter: brightness(1.12); }
+      #status { min-height: 17px; margin: 12px 0 0; color: #a6d8a9; font-size: 12px; font-weight: 800; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">PITCHIT DESKTOP</p>
+      <h1>창 설정</h1>
+      <p class="lead">작게 띄워 두고 게임하거나, 다른 창 위에 고정해 두세요. 설정은 다음 실행에도 유지됩니다.</p>
+
+      <form id="settingsForm">
+        <section>
+          <h2>창 크기</h2>
+          <label>
+            빠른 선택
+            <select id="sizePreset">
+              <option value="480x720">컴팩트 · 480 × 720</option>
+              <option value="600x820">작게 · 600 × 820</option>
+              <option value="720x900">기본 · 720 × 900</option>
+              <option value="960x1080">크게 · 960 × 1080</option>
+              <option value="custom">사용자 설정</option>
+            </select>
+          </label>
+          <div class="size">
+            <label>가로 <input id="width" type="number" min="420" max="1800" step="10" required /></label>
+            <label>세로 <input id="height" type="number" min="580" max="1800" step="10" required /></label>
+          </div>
+        </section>
+
+        <section>
+          <label class="toggle" for="alwaysOnTop">
+            <span>다른 창보다 항상 위에 표시</span>
+            <input id="alwaysOnTop" type="checkbox" />
+          </label>
+        </section>
+
+        <section>
+          <div class="range-head">
+            <h2>창 투명도</h2>
+            <output id="opacityValue" for="opacity">100%</output>
+          </div>
+          <input id="opacity" type="range" min="55" max="100" value="100" />
+          <p class="range-note">배경 작업을 보면서 플레이하고 싶을 때 낮춰 보세요.</p>
+        </section>
+
+        <div class="actions">
+          <button class="primary" type="submit">창 크기 적용</button>
+          <button id="reset" type="button">기본값</button>
+        </div>
+        <p id="status" role="status" aria-live="polite"></p>
+      </form>
+    </main>
+    <script>
+      const api = window.pitchitDesktop;
+      const form = document.getElementById('settingsForm');
+      const preset = document.getElementById('sizePreset');
+      const width = document.getElementById('width');
+      const height = document.getElementById('height');
+      const alwaysOnTop = document.getElementById('alwaysOnTop');
+      const opacity = document.getElementById('opacity');
+      const opacityValue = document.getElementById('opacityValue');
+      const status = document.getElementById('status');
+
+      function setStatus(message) {
+        status.textContent = message;
+        window.clearTimeout(setStatus.timer);
+        setStatus.timer = window.setTimeout(() => { status.textContent = ''; }, 1800);
+      }
+
+      function presetFor(settings) {
+        const value = `${settings.width}x${settings.height}`;
+        return [...preset.options].some((option) => option.value === value) ? value : 'custom';
+      }
+
+      function render(settings) {
+        width.value = settings.width;
+        height.value = settings.height;
+        alwaysOnTop.checked = settings.alwaysOnTop;
+        opacity.value = Math.round(settings.opacity * 100);
+        opacityValue.value = `${opacity.value}%`;
+        opacityValue.textContent = `${opacity.value}%`;
+        preset.value = presetFor(settings);
+      }
+
+      async function apply(partial, message) {
+        const settings = await api.updateSettings(partial);
+        render(settings);
+        if (message) setStatus(message);
+      }
+
+      preset.addEventListener('change', () => {
+        if (preset.value === 'custom') return;
+        const [nextWidth, nextHeight] = preset.value.split('x');
+        width.value = nextWidth;
+        height.value = nextHeight;
+      });
+
+      width.addEventListener('input', () => { preset.value = 'custom'; });
+      height.addEventListener('input', () => { preset.value = 'custom'; });
+      alwaysOnTop.addEventListener('change', () => apply({ alwaysOnTop: alwaysOnTop.checked }, alwaysOnTop.checked ? '항상 위 고정이 켜졌습니다.' : '항상 위 고정이 꺼졌습니다.'));
+      opacity.addEventListener('input', () => {
+        opacityValue.value = `${opacity.value}%`;
+        opacityValue.textContent = `${opacity.value}%`;
+      });
+      opacity.addEventListener('change', () => apply({ opacity: Number(opacity.value) / 100 }, '투명도를 적용했습니다.'));
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        apply({ width: Number(width.value), height: Number(height.value) }, '창 크기를 적용했습니다.');
+      });
+      document.getElementById('reset').addEventListener('click', async () => {
+        const settings = await api.resetSettings();
+        render(settings);
+        setStatus('기본값으로 되돌렸습니다.');
+      });
+
+      api.onSettingsChanged(render);
+      api.getSettings().then(render);
+    </script>
+  </body>
+</html>
