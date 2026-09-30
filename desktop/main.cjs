@@ -80,7 +80,9 @@ function contentZoomFactor() {
   const referenceWidth = Math.max(1, DEFAULT_SETTINGS.width - frameWidth);
   const referenceHeight = Math.max(1, DEFAULT_SETTINGS.height - frameHeight);
   const factor = Math.min(1, contentBounds.width / referenceWidth, contentBounds.height / referenceHeight);
-  return boundedNumber(factor, 1, 0.5, 1);
+  // The game already has responsive layouts. Keep a readable lower limit here
+  // instead of turning a compact desktop scoreboard into tiny text.
+  return boundedNumber(factor, 1, 0.82, 1);
 }
 
 function applyContentScale() {
@@ -238,6 +240,7 @@ function createMainWindow() {
     autoHideMenuBar: false,
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, 'game-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
