@@ -72,18 +72,10 @@ function notifySettingsWindow() {
 }
 
 function contentZoomFactor() {
-  if (!mainWindow || mainWindow.isDestroyed()) return 1;
-
-  const windowBounds = mainWindow.getBounds();
-  const contentBounds = mainWindow.getContentBounds();
-  const frameWidth = Math.max(0, windowBounds.width - contentBounds.width);
-  const frameHeight = Math.max(0, windowBounds.height - contentBounds.height);
-  const referenceWidth = Math.max(1, DEFAULT_SETTINGS.width - frameWidth);
-  const referenceHeight = Math.max(1, DEFAULT_SETTINGS.height - frameHeight);
-  const factor = Math.min(1, contentBounds.width / referenceWidth, contentBounds.height / referenceHeight);
-  // The game already has responsive layouts. Keep a readable lower limit here
-  // instead of turning a compact desktop scoreboard into tiny text.
-  return boundedNumber(factor, 1, 0.82, 1);
+  // The game iframe measures its own live height and scales only the active
+  // play surface. Keeping Chromium at 100% lets the responsive layout react
+  // to the real window size and prevents a nested scrollbar from appearing.
+  return 1;
 }
 
 function applyContentScale() {

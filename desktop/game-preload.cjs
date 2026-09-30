@@ -5,6 +5,7 @@
   const HUD_ID = 'pitchitDesktopHud';
   const STYLE_ID = 'pitchitDesktopHudStyle';
   let renderQueued = false;
+  let fitQueued = false;
 
   const text = (node) => String(node?.textContent || '').replace(/\s+/g, ' ').trim();
   const find = (selector, scope = document) => scope.querySelector(selector);
@@ -17,6 +18,10 @@
     style.textContent = `
       html.pitchit-desktop-hud-active #game.show .board .score { display: none !important; }
       html.pitchit-desktop-hud-active #game.show .board { margin-top: 12px !important; }
+      html.pitchit-desktop-fit-active,
+      html.pitchit-desktop-fit-active body { width: 100% !important; height: 100% !important; overflow: hidden !important; overscroll-behavior: none !important; }
+      html.pitchit-desktop-fit-active .app { width: 100% !important; height: 100% !important; min-height: 100% !important; margin: 0 !important; overflow: hidden !important; }
+      html.pitchit-desktop-fit-active #game.show { transform-origin: top left; }
       #${HUD_ID} { box-sizing: border-box; display: grid; grid-template-columns: minmax(142px, .9fr) minmax(108px, .58fr) minmax(205px, 1.45fr); gap: 0; width: 100%; margin: 12px 0 16px; overflow: hidden; border: 2px solid #213e53; background: #07131d; box-shadow: 0 7px 16px #07162530; color: #edf6fb; font-family: Arial, "Noto Sans KR", sans-serif; }
       #${HUD_ID}[hidden] { display: none !important; }
       #${HUD_ID} *, #${HUD_ID} *::before, #${HUD_ID} *::after { box-sizing: border-box; }
@@ -214,18 +219,58 @@
     swap.disabled = !sourceSwap || sourceSwap.disabled;
   }
 
+  function fitGameToViewport() {
+    const game = document.getElementById('game');
+    const inGame = Boolean(game?.classList.contains('show'));
+    document.documentElement.classList.toggle('pitchit-desktop-fit-active', inGame);
+
+    if (!game || !inGame) {
+      if (game?.dataset.pitchitDesktopFit) {
+        game.style.removeProperty('zoom');
+        delete game.dataset.pitchitDesktopFit;
+      }
+      return;
+    }
+
+    const currentZoom = Number.parseFloat(getComputedStyle(game).zoom) || 1;
+    const rect = game.getBoundingClientRect();
+    const naturalHeight = Math.max(game.scrollHeight || 0, rect.height / currentZoom);
+    const availableHeight = Math.max(1, window.innerHeight - Math.max(0, rect.top) - 2);
+    if (!Number.isFinite(naturalHeight) || naturalHeight <= 0) return;
+
+    // CSS zoom preserves all hit targets, unlike a visual-only transform.  The
+    // slight margin prevents a one-pixel scrollbar caused by rounding.
+    const nextZoom = Math.max(0.32, Math.min(1, (availableHeight / naturalHeight) * 0.995));
+    if (!game.dataset.pitchitDesktopFit || Math.abs(currentZoom - nextZoom) > 0.002) {
+      game.style.zoom = nextZoom.toFixed(4);
+      game.dataset.pitchitDesktopFit = 'true';
+    }
+    window.scrollTo(0, 0);
+  }
+
+  function scheduleFit() {
+    if (fitQueued) return;
+    fitQueued = true;
+    window.requestAnimationFrame(() => {
+      fitQueued = false;
+      fitGameToViewport();
+    });
+  }
+
   function scheduleRender() {
     if (renderQueued) return;
     renderQueued = true;
     window.requestAnimationFrame(() => {
       renderQueued = false;
       renderHud();
+      scheduleFit();
     });
   }
 
   function boot() {
     ensureStyle();
     scheduleRender();
+    scheduleFit();
     const observer = new MutationObserver((records) => {
       const hud = document.getElementById(HUD_ID);
       if (hud && records.length && records.every((record) => hud.contains(record.target))) return;
@@ -234,6 +279,7 @@
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
     window.addEventListener('hashchange', scheduleRender);
     window.addEventListener('pageshow', scheduleRender);
+    window.addEventListener('resize', scheduleFit);
     document.addEventListener('click', () => window.setTimeout(scheduleRender, 0), true);
   }
 
