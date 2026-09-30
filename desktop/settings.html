@@ -18,6 +18,8 @@
       select, input[type="number"] { width: 100%; margin-top: 6px; border: 1px solid #49657a; border-radius: 4px; background: #08141e; color: #fff; padding: 9px; font: inherit; }
       .size { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
       .toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; cursor: pointer; }
+      .toggle-copy { display: grid; gap: 3px; }
+      .toggle-copy small { color: #90aab9; font-size: 11px; font-weight: 500; line-height: 1.4; }
       .toggle input { width: 20px; height: 20px; accent-color: #f0c44a; }
       .range-head { display: flex; align-items: center; justify-content: space-between; }
       output { color: #f6d45e; font-size: 14px; font-weight: 900; }
@@ -34,11 +36,11 @@
     <main>
       <p class="eyebrow">PITCHIT DESKTOP</p>
       <h1>창 설정</h1>
-      <p class="lead">작게 띄워 두고 게임하거나, 다른 창 위에 고정해 두세요. 설정은 다음 실행에도 유지됩니다.</p>
+      <p class="lead">작게 띄워도 게임 화면은 비율에 맞게 자동으로 축소됩니다. 모든 설정은 다음 실행에도 유지됩니다.</p>
 
       <form id="settingsForm">
         <section>
-          <h2>창 크기</h2>
+          <h2>창 크기 · 자동 축소</h2>
           <label>
             빠른 선택
             <select id="sizePreset">
@@ -53,12 +55,23 @@
             <label>가로 <input id="width" type="number" min="420" max="1800" step="10" required /></label>
             <label>세로 <input id="height" type="number" min="580" max="1800" step="10" required /></label>
           </div>
+          <p class="range-note">창을 기본 크기보다 줄이면 게임 전체가 비율에 맞게 축소되어 잘리지 않습니다.</p>
         </section>
 
         <section>
           <label class="toggle" for="alwaysOnTop">
             <span>다른 창보다 항상 위에 표시</span>
             <input id="alwaysOnTop" type="checkbox" />
+          </label>
+        </section>
+
+        <section>
+          <label class="toggle" for="grayscale">
+            <span class="toggle-copy">
+              <span>흑백 모드</span>
+              <small>게임 화면의 모든 색상을 흑백으로 전환합니다.</small>
+            </span>
+            <input id="grayscale" type="checkbox" />
           </label>
         </section>
 
@@ -85,6 +98,7 @@
       const width = document.getElementById('width');
       const height = document.getElementById('height');
       const alwaysOnTop = document.getElementById('alwaysOnTop');
+      const grayscale = document.getElementById('grayscale');
       const opacity = document.getElementById('opacity');
       const opacityValue = document.getElementById('opacityValue');
       const status = document.getElementById('status');
@@ -104,6 +118,7 @@
         width.value = settings.width;
         height.value = settings.height;
         alwaysOnTop.checked = settings.alwaysOnTop;
+        grayscale.checked = settings.grayscale;
         opacity.value = Math.round(settings.opacity * 100);
         opacityValue.value = `${opacity.value}%`;
         opacityValue.textContent = `${opacity.value}%`;
@@ -126,6 +141,7 @@
       width.addEventListener('input', () => { preset.value = 'custom'; });
       height.addEventListener('input', () => { preset.value = 'custom'; });
       alwaysOnTop.addEventListener('change', () => apply({ alwaysOnTop: alwaysOnTop.checked }, alwaysOnTop.checked ? '항상 위 고정이 켜졌습니다.' : '항상 위 고정이 꺼졌습니다.'));
+      grayscale.addEventListener('change', () => apply({ grayscale: grayscale.checked }, grayscale.checked ? '흑백 모드가 켜졌습니다.' : '흑백 모드가 꺼졌습니다.'));
       opacity.addEventListener('input', () => {
         opacityValue.value = `${opacity.value}%`;
         opacityValue.textContent = `${opacity.value}%`;

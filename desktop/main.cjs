@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   height: 900,
   opacity: 1,
   alwaysOnTop: false,
+  grayscale: false,
 });
 const LIMITS = Object.freeze({
   minWidth: 420,
@@ -22,6 +23,8 @@ let mainWindow = null;
 let settingsWindow = null;
 let settings = { ...DEFAULT_SETTINGS };
 let boundsSaveTimer = null;
+let grayscaleCssKey = null;
+let grayscaleRevision = 0;
 
 function boundedNumber(value, fallback, min, max, integer = false) {
   const parsed = Number(value);
@@ -36,6 +39,7 @@ function normalizeSettings(value = {}) {
     height: boundedNumber(value.height, DEFAULT_SETTINGS.height, LIMITS.minHeight, LIMITS.maxHeight, true),
     opacity: boundedNumber(value.opacity, DEFAULT_SETTINGS.opacity, LIMITS.minOpacity, LIMITS.maxOpacity),
     alwaysOnTop: Boolean(value.alwaysOnTop),
+    grayscale: Boolean(value.grayscale),
   };
 }
 
@@ -66,6 +70,55 @@ function notifySettingsWindow() {
   settingsWindow.webContents.send('desktop-settings:changed', settings);
 }
 
+function contentZoomFactor() {
+  if (!mainWindow || mainWindow.isDestroyed()) return 1;
+
+  const windowBounds = mainWindow.getBounds();
+  const contentBounds = mainWindow.getContentBounds();
+  const frameWidth = Math.max(0, windowBounds.width - contentBounds.width);
+  const frameHeight = Math.max(0, windowBounds.height - contentBounds.height);
+  const referenceWidth = Math.max(1, DEFAULT_SETTINGS.width - frameWidth);
+  const referenceHeight = Math.max(1, DEFAULT_SETTINGS.height - frameHeight);
+  const factor = Math.min(1, contentBounds.width / referenceWidth, contentBounds.height / referenceHeight);
+  return boundedNumber(factor, 1, 0.5, 1);
+}
+
+function applyContentScale() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const factor = contentZoomFactor();
+    if (Math.abs(mainWindow.webContents.getZoomFactor() - factor) > 0.005) {
+      mainWindow.webContents.setZoomFactor(factor);
+    }
+  } catch (_) {
+    // Keep the live game usable even if a platform does not expose zoom APIs.
+  }
+}
+
+async function applyGrayscale() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const webContents = mainWindow.webContents;
+  if (webContents.isDestroyed()) return;
+
+  const revision = ++grayscaleRevision;
+  const previousCssKey = grayscaleCssKey;
+  grayscaleCssKey = null;
+  if (previousCssKey) {
+    await webContents.removeInsertedCSS(previousCssKey).catch(() => {});
+  }
+  if (!settings.grayscale) return;
+
+  const cssKey = await webContents
+    .insertCSS('html { filter: grayscale(1) !important; }')
+    .catch(() => null);
+  if (!cssKey) return;
+  if (revision !== grayscaleRevision || !settings.grayscale || webContents.isDestroyed()) {
+    await webContents.removeInsertedCSS(cssKey).catch(() => {});
+    return;
+  }
+  grayscaleCssKey = cssKey;
+}
+
 function applyWindowSettings({ resize = true } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (resize) {
@@ -81,6 +134,8 @@ function applyWindowSettings({ resize = true } = {}) {
     // Opacity is supported on Windows, but leaving the game usable is safer
     // on platforms that do not offer it.
   }
+  applyContentScale();
+  void applyGrayscale();
 }
 
 function updateSettings(partial = {}, options = {}) {
@@ -93,6 +148,7 @@ function updateSettings(partial = {}, options = {}) {
 }
 
 function scheduleBoundsSave() {
+  applyContentScale();
   clearTimeout(boundsSaveTimer);
   boundsSaveTimer = setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -111,11 +167,11 @@ function openSettings() {
 
   settingsWindow = new BrowserWindow({
     width: 430,
-    height: 560,
+    height: 640,
     minWidth: 430,
-    minHeight: 560,
+    minHeight: 640,
     maxWidth: 430,
-    maxHeight: 560,
+    maxHeight: 640,
     title: 'PITCHIT 창 설정',
     parent: mainWindow || undefined,
     resizable: false,
@@ -146,6 +202,12 @@ function buildApplicationMenu() {
           type: 'checkbox',
           checked: settings.alwaysOnTop,
           click: (item) => updateSettings({ alwaysOnTop: item.checked }, { resize: false }),
+        },
+        {
+          label: '흑백 모드',
+          type: 'checkbox',
+          checked: settings.grayscale,
+          click: (item) => updateSettings({ grayscale: item.checked }, { resize: false }),
         },
         { type: 'separator' },
         { role: 'reload', label: '게임 새로고침' },
@@ -183,9 +245,18 @@ function createMainWindow() {
   });
 
   applyWindowSettings({ resize: false });
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    applyContentScale();
+    mainWindow.show();
+  });
   mainWindow.on('resize', scheduleBoundsSave);
+  mainWindow.webContents.on('did-finish-load', () => {
+    applyContentScale();
+    void applyGrayscale();
+  });
   mainWindow.on('closed', () => {
+    grayscaleRevision += 1;
+    grayscaleCssKey = null;
     mainWindow = null;
   });
 
