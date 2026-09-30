@@ -1,4 +1,7 @@
 (() => {
+  if (window.__pitchitDesktopHudInjected) return;
+  window.__pitchitDesktopHudInjected = true;
+
   const HUD_ID = 'pitchitDesktopHud';
   const STYLE_ID = 'pitchitDesktopHudStyle';
   let renderQueued = false;

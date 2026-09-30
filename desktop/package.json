@@ -1,6 +1,6 @@
 {
   "name": "pitchit-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PITCHIT baseball mind game desktop app",
   "author": "PITCHIT",
   "main": "main.cjs"

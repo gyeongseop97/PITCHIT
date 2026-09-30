@@ -1,8 +1,9 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, webFrameMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
 const GAME_URL = process.env.PITCHIT_DESKTOP_URL || 'https://pitchit-baseball.vercel.app/';
+const GAME_HUD_SCRIPT = fs.readFileSync(path.join(__dirname, 'game-preload.cjs'), 'utf8');
 const DEFAULT_SETTINGS = Object.freeze({
   width: 720,
   height: 900,
@@ -229,6 +230,22 @@ function buildApplicationMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+function isGameFrame(frame) {
+  try {
+    return new URL(frame?.url || '').pathname.endsWith('/game/index.html');
+  } catch (_) {
+    return false;
+  }
+}
+
+function installDesktopHud(frame) {
+  if (!frame || frame.isDestroyed() || !isGameFrame(frame)) return;
+  frame.executeJavaScript(GAME_HUD_SCRIPT).catch(() => {
+    // A frame can disappear while navigating. The next finished game frame
+    // receives the HUD again, so keep the remote match usable in that case.
+  });
+}
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: settings.width,
@@ -240,7 +257,6 @@ function createMainWindow() {
     autoHideMenuBar: false,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'game-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -256,6 +272,9 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     applyContentScale();
     void applyGrayscale();
+  });
+  mainWindow.webContents.on('did-frame-finish-load', (_event, _isMainFrame, processId, routingId) => {
+    installDesktopHud(webFrameMain.fromId(processId, routingId));
   });
   mainWindow.on('closed', () => {
     grayscaleRevision += 1;
