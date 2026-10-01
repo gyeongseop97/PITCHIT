@@ -41,8 +41,8 @@ type Game = {
   teams: Record<PlayerId, Team>;
   deadline: number;
   choices: Partial<Record<PlayerId, Choice>>;
-  // Last heartbeat from each browser. An online player has a 30-second
-  // reconnection grace period before the opponent receives a forfeit win.
+  // Last heartbeat from each browser. This is presence-only information;
+  // a silent browser never loses by elapsed connection time alone.
   lastSeen?: Partial<Record<PlayerId, number>>;
   // Pitch count belongs to the individual pitcher, not merely the team.
   pitchCounts?: Record<PlayerId, number[]>;
@@ -84,7 +84,7 @@ const guestNicknameKey = (profileId: string) => `pitchit:guest-nickname:v1:${pro
 const guestNicknameIndexKey = (name: string) => `pitchit:guest-nickname:index:v1:${name}`;
 type RankingPlayer = { name: string; points: number; wins: number; losses: number; draws: number; games: number; updatedAt: number };
 const decisionWindowMs = 20_000;
-const reconnectGraceMs = 30_000;
+const automaticForfeitTurns = 3;
 const strikeCells = Array.from({ length: 25 }, (_, cell) => cell);
 const actor = (game: Game): PlayerId => (game.half === 0 ? "p1" : "p2");
 const defender = (game: Game): PlayerId => (actor(game) === "p1" ? "p2" : "p1");
@@ -285,11 +285,6 @@ async function applyShopRewards(room: Room) {
     await redis.set(accountCareerKey(player.profileId), { ...saved, shop: { ...shop, coins: shop.coins + reward.total, rewardedGames: [...shop.rewardedGames, room.code].slice(-150) }, updatedAt: Date.now() });
   }
 }
-const reconnectSeconds = (room: Room, player: PlayerId, now = Date.now()) => {
-  if (room.mode === "solo" || room.game.status !== "playing") return 0;
-  const seen = Number(room.game.lastSeen?.[player] ?? now);
-  return Math.max(0, Math.ceil((seen + reconnectGraceMs - now) / 1000));
-};
 const publicRoom = (room: Room) => {
   const now = Date.now();
   return {
@@ -303,7 +298,6 @@ const publicRoom = (room: Room) => {
   // Reveal only that a player has locked a choice.  Their target, swing and
   // pitch stay private until both choices are received and resolved.
   choiceReady: { p1: Boolean(room.game.choices.p1), p2: Boolean(room.game.choices.p2) },
-  connection: { p1: reconnectSeconds(room, "p1", now), p2: reconnectSeconds(room, "p2", now) },
   game: { ...room.game, choices: {}, drafts: {}, lastSeen: {} },
   attacker: actor(room.game),
 };
@@ -319,24 +313,6 @@ function fatigueForPitch(pitchCount: number) {
     stuffPenalty: Math.min(12, Math.ceil(wear * .5)),
     velocityPenalty: Math.min(3, Math.floor(wear / 6)),
   };
-}
-
-async function forfeitDisconnectedOpponent(room: Room, active: PlayerId) {
-  if (room.mode === "solo" || room.game.status !== "playing") return false;
-  const opponent: PlayerId = active === "p1" ? "p2" : "p1";
-  const lastSeen = Number(room.game.lastSeen?.[opponent] ?? Date.now());
-  if (Date.now() - lastSeen < reconnectGraceMs) return false;
-  room.game.status = "finished";
-  room.game.deadline = 0;
-  room.game.choices = {};
-  room.game.drafts = {};
-  room.game.forfeitWinner = active;
-  room.game.event = `${room.players[opponent]?.name || "상대"} 님의 연결이 30초간 끊겨 몰수패했습니다. ${room.players[active]?.name || "플레이어"} 님의 몰수승입니다.`;
-  await applyRankings(room);
-  await applyCareerRecords(room);
-  await applyShopRewards(room);
-  await applyBalanceGame(room);
-  return true;
 }
 
 function addRun(game: Game, side: 0 | 1 = game.half) {
@@ -447,7 +423,7 @@ async function resolve(room: Room) {
         ? 0
         : (game.autoTurns[player] ?? 0) + 1;
     }
-    const forfeiting = absent.find((player) => (game.autoTurns?.[player] ?? 0) >= 3);
+    const forfeiting = absent.find((player) => (game.autoTurns?.[player] ?? 0) >= automaticForfeitTurns);
     if (forfeiting) {
       const winner: PlayerId = forfeiting === "p1" ? "p2" : "p1";
       game.status = "finished";
@@ -455,7 +431,7 @@ async function resolve(room: Room) {
       game.choices = {};
       game.drafts = {};
       game.forfeitWinner = winner;
-      game.event = `${room.players[forfeiting]?.name || "플레이어"} 님이 3턴 연속 자리비움으로 몰수패했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
+      game.event = `${room.players[forfeiting]?.name || "플레이어"} 님이 ${automaticForfeitTurns}턴 연속 자리비움으로 몰수패했습니다. ${room.players[winner]?.name || "상대"} 님의 몰수승입니다.`;
       await applyRankings(room);
       await applyCareerRecords(room);
       await applyShopRewards(room);
@@ -877,10 +853,6 @@ export default async function handler(req: any, res: any) {
     if (room.mode !== "solo" && room.game.status === "playing") {
       room.game.lastSeen ??= {};
       room.game.lastSeen[player] = Date.now();
-      if (await forfeitDisconnectedOpponent(room, player)) {
-        await save(room);
-        return res.json({ ...publicRoom(room), player, token: input.token, reconnectForfeit: true });
-      }
     }
     if (room.game.introUntil) {
       if (Date.now() < room.game.introUntil) {

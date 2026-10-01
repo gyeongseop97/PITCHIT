@@ -46,57 +46,85 @@ console.log('PASS: legacy and account rows with the same public nickname are de-
 
 const emptyRoom=await request({action:'solo'});assert.equal(emptyRoom.turnSeconds,20);assert.ok(emptyRoom.game.deadline-emptyRoom.serverNow<=20000&&emptyRoom.game.deadline-emptyRoom.serverNow>=19900);for(const cell of [null,undefined,-1,25,2.5,'12'])await request({action:'choose',code:emptyRoom.code,token:emptyRoom.token,choice:{kind:'bat',cell,swing:'contact'}},400);console.log('PASS: server rejects missing, null, non-integer and out-of-zone choices.');
 
-// Three expired online turns without a final confirmation are an absence,
-// even when a draft was left in the zone. The game must end immediately and
-// award the present opponent the normal forfeit result.
-const absenceHost=await request({action:'create',name:'자리비움'});
-const absenceGuest=await request({action:'join',code:absenceHost.code,name:'대기중'});
-for(let turn=0;turn<3;turn++){
- const stored=db.get(`pitchit:room:${absenceHost.code}`);
+// Online forfeits are based only on missed final choices. Heartbeats remain
+// useful for presence, but an old `lastSeen` timestamp must never finish a
+// game by itself. Exercise both friend and quick rooms because player roles
+// are randomized when the second player joins.
+const onlineMatch=async mode=>{
+ const first=await request({action:mode==='quick'?'quick':'create',name:`${mode}-첫번째`});
+ const second=await request({action:mode==='quick'?'quick':'join',code:first.code,name:`${mode}-두번째`});
+ const firstState=await request({action:'state',code:first.code,token:first.token});
+ const secondState=await request({action:'state',code:first.code,token:second.token});
+ const sessions={
+  [firstState.player]:{token:first.token,player:firstState.player},
+  [secondState.player]:{token:second.token,player:secondState.player},
+ };
+ const stored=db.get(`pitchit:room:${first.code}`);
  stored.game.introUntil=undefined;
+ stored.game.deadline=Date.now()+20_000;
+ stored.game.choices={};
+ stored.game.drafts={};
+ stored.game.autoTurns={};
+ return {code:first.code,sessions};
+};
+const choiceFor=(game,player)=>((game.half===0?'p1':'p2')===player
+ ? {kind:'bat',cell:12,swing:'contact'}
+ : {kind:'pitch',cell:12,pitch:'fast'});
+const submitFinal=async(match,player)=>{
+ const game=db.get(`pitchit:room:${match.code}`).game;
+ return request({action:'choose',code:match.code,token:match.sessions[player].token,deadline:game.deadline,choice:choiceFor(game,player)});
+};
+const expireWithAbsent=async(match,absent)=>{
+ const present=absent==='p1'?'p2':'p1';
+ await submitFinal(match,present);
+ const stored=db.get(`pitchit:room:${match.code}`);
  stored.game.deadline=Date.now()-1;
- // A draft is intentionally not treated as an active final choice.
- stored.game.drafts.p1={kind:'bat',cell:12,swing:'contact'};
- await request({action:'state',code:absenceHost.code,token:absenceHost.token});
-}
-const absenceResult=await request({action:'state',code:absenceHost.code,token:absenceGuest.token});
-assert.equal(absenceResult.game.status,'finished');
-assert.equal(absenceResult.game.forfeitWinner,'p2');
-assert.match(absenceResult.game.event,/3턴 연속 자리비움/);
-assert.equal(absenceResult.game.autoTurns.p1,3);
-console.log('PASS: three consecutive automatic online turns immediately end as an absence forfeit; drafts do not bypass it.');
+ return request({action:'state',code:match.code,token:match.sessions[present].token});
+};
 
-// A confirmed turn breaks the streak. Otherwise two old timeouts followed by
-// one active turn could incorrectly become a forfeit on the next deadline.
-const resetHost=await request({action:'create',name:'복귀'});
-const resetGuest=await request({action:'join',code:resetHost.code,name:'상대'});
-for(let turn=0;turn<2;turn++){
- const stored=db.get(`pitchit:room:${resetHost.code}`);
- stored.game.introUntil=undefined;
- stored.game.deadline=Date.now()-1;
- await request({action:'state',code:resetHost.code,token:resetHost.token});
-}
-const resetStored=db.get(`pitchit:room:${resetHost.code}`);
-resetStored.game.deadline=Date.now()-1;
-resetStored.game.choices={p1:{kind:'bat',cell:12,swing:'contact'},p2:{kind:'pitch',cell:12,pitch:'fast'}};
-const resetResult=await request({action:'state',code:resetHost.code,token:resetHost.token});
-assert.equal(resetResult.game.autoTurns.p1,0);
-assert.equal(resetResult.game.autoTurns.p2,0);
-console.log('PASS: either player confirming a turn resets only their consecutive absence streak.');
+for(const mode of ['friend','quick']){
+ for(const absent of ['p1','p2']){
+ const match=await onlineMatch(mode);
+ const present=absent==='p1'?'p2':'p1';
+ const stored=db.get(`pitchit:room:${match.code}`);
+ stored.game.lastSeen[absent]=Date.now()-60_000;
+ const afterThirtySeconds=await request({action:'state',code:match.code,token:match.sessions[present].token});
+ assert.equal(afterThirtySeconds.game.status,'playing',`${mode}: an old heartbeat alone must not forfeit`);
 
-// A refresh is recoverable for 30 seconds. Once that window has elapsed,
-// the connected opponent's next state check closes the room as a forfeit.
-const reconnectHost=await request({action:'create',name:'재접속'});
-const reconnectGuest=await request({action:'join',code:reconnectHost.code,name:'대기'});
-const reconnectHostState=await request({action:'state',code:reconnectHost.code,token:reconnectHost.token});
-const activeId=reconnectHostState.player,missingId=activeId==='p1'?'p2':'p1';
-const reconnectStored=db.get(`pitchit:room:${reconnectHost.code}`);
-reconnectStored.game.lastSeen[missingId]=Date.now()-30_001;
-const reconnectResult=await request({action:'state',code:reconnectHost.code,token:reconnectHost.token});
-assert.equal(reconnectResult.game.status,'finished');
-assert.equal(reconnectResult.game.forfeitWinner,activeId);
-assert.match(reconnectResult.game.event,/연결이 30초간 끊겨/);
-console.log('PASS: online rooms grant a 30-second reconnect window, then close as a forfeit for the connected opponent.');
+ let afterTwo=afterThirtySeconds;
+ for(let turn=0;turn<2;turn++){
+  const game=db.get(`pitchit:room:${match.code}`).game;
+  // A draft never substitutes for the final manual confirmation.
+  game.drafts[absent]=choiceFor(game,absent);
+  afterTwo=await expireWithAbsent(match,absent);
+ }
+ assert.equal(afterTwo.game.status,'playing',`${mode}: two automatic turns must not forfeit`);
+ assert.equal(afterTwo.game.autoTurns[absent],2,`${mode}: two missed finals are tracked`);
+ assert.equal(afterTwo.game.autoTurns[present],0,`${mode}: the present player remains active`);
+
+ const afterThird=await expireWithAbsent(match,absent);
+ assert.equal(afterThird.game.status,'finished',`${mode}: the third missed final ends the match`);
+ assert.equal(afterThird.game.forfeitWinner,present,`${mode}: the present player receives the forfeit win`);
+ assert.match(afterThird.game.event,/3턴 연속 자리비움/);
+
+ const resetMatch=await onlineMatch(mode);
+ for(let turn=0;turn<2;turn++) await expireWithAbsent(resetMatch,absent);
+ assert.equal((await request({action:'state',code:resetMatch.code,token:resetMatch.sessions[present].token})).game.autoTurns[absent],2);
+ await submitFinal(resetMatch,absent);
+ const manualReset=await submitFinal(resetMatch,present);
+ assert.equal(manualReset.game.status,'playing',`${mode}: a confirmed return keeps the game open`);
+ assert.equal(manualReset.game.autoTurns[absent],0,`${mode}: final manual choice resets that player's absence streak`);
+ for(let turn=0;turn<2;turn++) await expireWithAbsent(resetMatch,absent);
+ const afterReturnMisses=await request({action:'state',code:resetMatch.code,token:resetMatch.sessions[present].token});
+ assert.equal(afterReturnMisses.game.status,'playing',`${mode}: two new misses after a return still do not forfeit`);
+ assert.equal(afterReturnMisses.game.autoTurns[absent],2);
+
+ const quit=await request({action:'forfeit',code:resetMatch.code,token:resetMatch.sessions[absent].token});
+ assert.equal(quit.game.status,'finished',`${mode}: explicit quit remains immediate`);
+ assert.equal(quit.game.forfeitWinner,present,`${mode}: explicit quit awards the opponent`);
+ }
+}
+console.log('PASS: friend and quick rooms apply the same AFK rule to either player, ignore stale heartbeats, reset on a manual choice, and keep explicit quit immediate.');
 
 // Pitch count is recorded per pitcher and fatigue starts only after a normal
 // opening workload, so a starter is not punished on the first few pitches.

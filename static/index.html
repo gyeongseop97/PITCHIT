@@ -24,6 +24,9 @@ const pitcherTypes=[
  {t:"구속형",v:86,c:52,s:50,m:42},{t:"제구형",v:48,c:88,s:48,m:46},
  {t:"구위형",v:53,c:50,s:87,m:40},{t:"변화형",v:50,c:54,s:45,m:86},{t:"밸런스형",v:58,c:58,s:57,m:57}
 ];
+// Online entry bypasses start(). Initialize the same fastball that the
+// defense controls display, including on a freshly loaded or resumed page.
+state.pitchType="fast";
 function newPitchers(){state.pitchers=pitcherTypes.map(p=>({...p,n:`${p.t} 투수`}));state.activePitcher=Math.floor(Math.random()*state.pitchers.length);state.usedPitchers=[state.activePitcher];state.half="top";state.inning=1;state.o=0;state.b=0;state.s=0;state.bases=[0,0,0];state.r=0;state.away=0}
 function scoreRun(team,n){let next=[0,0,0];for(let i=2;i>=0;i--)if(state.bases[i]){let d=i+n;if(d>=3)state[team]++;else next[d]=1}if(n>=4)state[team]++;else next[n-1]=1;state.bases=next}
 function scoreWalk(team){const result=window.pitchitBaseRunning.resolveWalk({bases:state.bases,batterSpeed:(team==='r'?state.batter:state.awayBatter)?.v||55});const basesBefore=[...state.bases];state.bases=[...result.basesAfter];state[team]+=result.runsScored;state.localGroundVisual={basesBefore,basesAfter:[...state.bases],runningPlay:result,outcome:'walk',defending:state.half==='bottom',attacker:team==='r'?'p1':'p2'};}
@@ -122,9 +125,9 @@ async function submitMatch(){
   // this final choice.  Cancel that delayed draft so the final request owns
   // the room lock and cannot be crowded out by its own preview request.
   clearTimeout(draftChoiceTimer);
-  matchSubmitted=true;render();
   const kind=state.half==='top'?'bat':'pitch';
-  const deadline=state.deadline,choice={kind,cell:state.pick,swing:state.swing,pitch:state.pitchType};
+  const deadline=state.deadline,choice={kind,cell:state.pick,swing:state.swing,pitch:state.pitchType==='breaking'?'breaking':'fast'};
+  matchSubmitted=true;render();
   let lastError=null;
   // A brief room-lock or mobile-network collision should never cost a full
   // turn. Retry the exact same final choice while it still belongs to this
@@ -1151,9 +1154,9 @@ function leaveCurrentGame(event){
 }
 document.getElementById('back').addEventListener('click',leaveCurrentGame,true);
 // Closing, refreshing, or backgrounding a tab is not an intentional forfeit.
-// The server grants a 30-second reconnection window and the saved room token
-// restores this match on the same device. The explicit 홈으로 action above
-// remains an immediate voluntary forfeit.
+// The saved room token restores this match on the same device. Only three
+// consecutive unconfirmed turns cause an absence forfeit. The explicit
+// 경기 포기하기 action above remains an immediate voluntary forfeit.
 </script><style id="scoreboard-layering-v2">
 /* 점수 기록과 투타 정보를 서로 다른 전광판 행으로 분리한다. */
 .score{padding-bottom:194px!important;min-height:248px!important}
@@ -1660,7 +1663,7 @@ function saveDraftChoice(){
   draftChoiceTimer=setTimeout(()=>{
     if(!state.net||!matchSession||matchSubmitted||state.deadline!==deadline||!Number.isInteger(state.pick))return;
     const kind=state.half==='top'?'bat':'pitch';
-    requestMatch({action:'draft',code:matchSession.code,token:matchSession.token,deadline,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType}}).catch(()=>undefined);
+    requestMatch({action:'draft',code:matchSession.code,token:matchSession.token,deadline,choice:{kind,cell:state.pick,swing:state.swing,pitch:state.pitchType==='breaking'?'breaking':'fast'}}).catch(()=>undefined);
   },250);
 }
 const applyMatchBeforeCursorReset=applyMatch;
@@ -1860,11 +1863,11 @@ let operatorGrantPending=false;const accountPanelBeforeOperatorGrant=accountPane
 setTimeout(()=>accountPanel(),0);
 </script>
 <style id="competitive-depth-v1">
-.reconnectNotice{margin:7px 0 4px;padding:8px 10px;border-left:4px solid #f0bd42;background:#fff9e9;color:#73550a;font-size:11px;font-weight:900;text-align:center}.scoreStamina{display:block;margin-top:3px;color:#b9d5e7!important;font-size:8px!important;font-weight:800}.matchPatternReport{margin:14px 0 0;padding:12px;border:1px solid #c7d6e5;background:#f5f9fd;text-align:left}.matchPatternReport h3{margin:0 0 8px;color:#173d67;font-size:14px}.matchPatternReport p{margin:6px 0;color:#49627b;font-size:12px;line-height:1.45}.matchPatternReport b{color:#163a61}
+.scoreStamina{display:block;margin-top:3px;color:#b9d5e7!important;font-size:8px!important;font-weight:800}.matchPatternReport{margin:14px 0 0;padding:12px;border:1px solid #c7d6e5;background:#f5f9fd;text-align:left}.matchPatternReport h3{margin:0 0 8px;color:#173d67;font-size:14px}.matchPatternReport p{margin:6px 0;color:#49627b;font-size:12px;line-height:1.45}.matchPatternReport b{color:#163a61}
 /* A compact version of a real ballpark board: game state on top, the
    inning-by-inning line score in the middle, and the current battery below. */
 .score{display:grid!important;grid-template-columns:45px 70px minmax(0,1fr)!important;grid-template-rows:58px auto auto!important;gap:6px!important;padding:24px 8px 8px!important;min-height:0!important}.score>div:first-child{grid-column:1;grid-row:1;padding:2px!important}.score>.bases{grid-column:2;grid-row:1;align-self:center}.score>.counts{grid-column:3;grid-row:1;display:flex!important;flex-direction:column;align-items:flex-start;justify-content:center;padding-left:8px!important;border-left:1px solid #536171}.score>div:nth-child(4){display:none!important}.stadiumStats{position:static!important;grid-column:1/-1!important;grid-row:2!important;left:auto!important;right:auto!important;bottom:auto!important;margin:0!important;padding:6px 0!important;border-top:1px solid #536171!important;border-bottom:1px solid #536171!important}.lineScore{font-family:Arial,"Noto Sans KR",sans-serif!important}.lineScore .team{font-weight:900}.scoreMatchup{position:static!important;grid-column:1/-1!important;grid-row:3!important;left:auto!important;right:auto!important;bottom:auto!important;margin:0!important;padding-top:0!important;border-top:0!important}.scoreMatchup article{background:#0c1520!important}.scoreMatchup .scorePitch{grid-column:1/-1!important}.counts .countGroup{min-height:13px}.counts .countGroup small{width:10px}.score:before{content:"PITCHIT · BALLPARK SCOREBOARD"!important}
-@media(max-width:760px){.reconnectNotice{margin:5px 0 3px;padding:6px 8px;font-size:9px}.scoreStamina{margin-top:2px;font-size:7px!important}.matchPatternReport{padding:10px}.matchPatternReport h3{font-size:12px}.matchPatternReport p{font-size:10px}.score{grid-template-columns:36px 51px minmax(0,1fr)!important;grid-template-rows:49px auto auto!important;gap:3px!important;padding:19px 4px 5px!important}.score>.counts{padding-left:4px!important}.counts .countGroup{min-height:10px}.counts .countGroup small{width:8px}.stadiumStats{padding:4px 0!important}.lineScore{border-spacing:1px!important}.lineScore th,.lineScore td{padding:0 1px!important}.scoreMatchup{gap:3px!important}.scoreMatchup article{min-height:42px!important}}
+@media(max-width:760px){.scoreStamina{margin-top:2px;font-size:7px!important}.matchPatternReport{padding:10px}.matchPatternReport h3{font-size:12px}.matchPatternReport p{font-size:10px}.score{grid-template-columns:36px 51px minmax(0,1fr)!important;grid-template-rows:49px auto auto!important;gap:3px!important;padding:19px 4px 5px!important}.score>.counts{padding-left:4px!important}.counts .countGroup{min-height:10px}.counts .countGroup small{width:8px}.stadiumStats{padding:4px 0!important}.lineScore{border-spacing:1px!important}.lineScore th,.lineScore td{padding:0 1px!important}.scoreMatchup{gap:3px!important}.scoreMatchup article{min-height:42px!important}}
 </style><script id="competitive-depth-v1">
 const pitchStamina = count => Math.max(40,100-Math.max(0,Number(count||0)-10)*3);
 const cellLabel = cell => `${Math.floor(Number(cell||0)/5)+1}행 ${Number(cell||0)%5+1}열`;
@@ -1872,7 +1875,7 @@ const mostCommon = values => {const counts=new Map();values.forEach(value=>count
 const applyMatchBeforeCompetitiveDepth=applyMatch;
 applyMatch=function(data){
   const game=data?.game,me=matchSession?.player||data?.player;
-  if(game&&me){const other=me==='p1'?'p2':'p1';state.myPitchCounts=game.pitchCounts?.[me]||[];state.awayPitchCounts=game.pitchCounts?.[other]||[];state.myPitcherStats=game.pitcherStats?.[me]||[];state.awayPitcherStats=game.pitcherStats?.[other]||[];state.opponentReconnectSeconds=Number(data?.connection?.[other]||0);}
+  if(game&&me){const other=me==='p1'?'p2':'p1';state.myPitchCounts=game.pitchCounts?.[me]||[];state.awayPitchCounts=game.pitchCounts?.[other]||[];state.myPitcherStats=game.pitcherStats?.[me]||[];state.awayPitcherStats=game.pitcherStats?.[other]||[];}
   return applyMatchBeforeCompetitiveDepth(data);
 };
 const renderBeforeCompetitiveDepth=render;
@@ -1882,9 +1885,6 @@ render=function(){
   const exit=document.getElementById('back');if(exit)exit.textContent='경기 포기하기';
   const attacking=state.half==='top',staff=attacking?(state.awayPitchers||[]):(state.pitchers||[]),active=attacking?(state.awayActivePitcher??0):(state.activePitcher??0),count=Number((attacking?state.awayPitchCounts:state.myPitchCounts)?.[active]||0),card=document.querySelector('#scoreMatchup article:nth-child(2)');
   if(card){let stamina=card.querySelector('.scoreStamina');if(!stamina){stamina=document.createElement('span');stamina.className='scoreStamina';card.append(stamina)}stamina.textContent=`투구 수 ${count} · 체력 ${pitchStamina(count)}%`;}
-  let notice=document.getElementById('reconnectNotice');const seconds=Number(state.opponentReconnectSeconds||0),show=state.net&&!state.finished&&seconds>0&&seconds<=25;
-  if(show){if(!notice){notice=document.createElement('p');notice.id='reconnectNotice';notice.className='reconnectNotice';document.getElementById('swing')?.before(notice)}notice.textContent=`상대 재접속 대기 중 · ${seconds}초 안에 돌아오지 않으면 몰수승`;}
-  else notice?.remove();
 };
 const showGameSummaryBeforeCompetitiveDepth=showGameSummary;
 showGameSummary=function(game){
@@ -1922,7 +1922,6 @@ showGameSummary=function(game){
   .zoneWrap{flex:0 1 auto;width:min(70vw,250px,calc(100svh - 305px));min-width:150px;margin:auto;padding:0}
   .action{flex:0 0 auto;min-height:39px;padding:9px 7px;font-size:14px;box-shadow:0 3px 0 #95241e}
   #onlineTurnStatus{flex:0 0 auto;margin:3px 0!important;padding:4px 6px!important;font-size:9px!important}
-  .reconnectNotice{flex:0 0 auto;margin:3px 0!important;padding:4px 6px!important;font-size:8px!important}
   .score{grid-template-columns:33px 46px minmax(0,1fr)!important;grid-template-rows:43px auto auto!important;gap:2px!important;padding:17px 3px 4px!important}
   .score>div:first-child b{font-size:22px!important}.score>.bases{transform:scale(.45)!important}.score>.counts{padding-left:3px!important}.counts .countGroup{min-height:9px!important}.counts .countGroup i{width:7px!important;height:7px!important}.counts .countGroup small{width:7px!important;font-size:8px!important}.lineScore th,.lineScore td{height:11px!important;padding:0 1px!important}.lineScore thead th{height:9px!important}.lineScore .team{width:29px!important}.scoreMatchup article{min-height:35px!important}.scoreMatchup article small{font-size:6px!important}.scoreMatchup article b{font-size:10px!important}.scoreMatchup article span{font-size:7px!important}.scoreMatchup .scorePitch{min-height:14px!important;padding:2px 3px!important;font-size:6px!important;line-height:8px!important}
   body.pitchit3DEnabled .board>div>.panel{display:block;overflow:hidden}
@@ -1944,7 +1943,7 @@ showGameSummary=function(game){
   .top{min-height:auto!important;gap:8px!important;padding-bottom:8px!important}.top h2{font-size:17px!important;line-height:1.2!important}.back{padding:7px 9px!important;font-size:11px!important}.board{height:auto!important;min-height:0!important;margin-top:10px!important}.board>div{height:auto!important;min-height:0!important;display:block!important}.board>div>.panel{display:block!important;min-height:0!important;overflow:visible!important;padding:12px!important}.board>div>.panel>h3{display:block!important}
   .score{grid-template-columns:39px 58px minmax(0,1fr)!important;grid-template-rows:58px auto auto!important;gap:4px!important;padding:21px 5px 7px!important}.score>div:first-child b{font-size:25px!important}.score>.bases{transform:scale(.55)!important}.score>.counts{padding-left:5px!important}.counts .countGroup{min-height:11px!important}.counts .countGroup i{width:9px!important;height:9px!important}.counts .countGroup small{width:9px!important;font-size:9px!important}.lineScore th,.lineScore td{height:14px!important;padding:0 2px!important}.lineScore thead th{height:11px!important}.lineScore .team{width:36px!important}.scoreMatchup article{min-height:43px!important}.scoreMatchup article small{font-size:7px!important}.scoreMatchup article b{font-size:11px!important}.scoreMatchup article span{font-size:8px!important}.scoreMatchup .scorePitch{min-height:18px!important;padding:3px 5px!important;font-size:7px!important;line-height:10px!important}
   .scoreLineup{grid-template-columns:1fr;padding:6px;gap:4px}.scoreLineup>small{font-size:8px}.scoreLineupCells{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.scoreLineupCells span{padding:5px 3px;font-size:9px}.scoreLineupCells span b{font-size:10px}
-  .types{margin:8px 0!important;gap:6px!important}.types button{min-height:42px!important;padding:10px 4px!important;font-size:13px!important}.zoneWrap{width:min(78vw,340px)!important;min-width:0!important;margin:14px auto!important;padding:0!important}.zone button{font-size:20px!important}.action{min-height:48px!important;padding:13px 9px!important;font-size:16px!important}.hint#reveal{display:block!important;margin:8px 0!important}.result{display:block!important;margin-top:10px!important}.reconnectNotice,#onlineTurnStatus{margin:7px 0!important;padding:7px 9px!important;font-size:10px!important}
+  .types{margin:8px 0!important;gap:6px!important}.types button{min-height:42px!important;padding:10px 4px!important;font-size:13px!important}.zoneWrap{width:min(78vw,340px)!important;min-width:0!important;margin:14px auto!important;padding:0!important}.zone button{font-size:20px!important}.action{min-height:48px!important;padding:13px 9px!important;font-size:16px!important}.hint#reveal{display:block!important;margin:8px 0!important}.result{display:block!important;margin-top:10px!important}#onlineTurnStatus{margin:7px 0!important;padding:7px 9px!important;font-size:10px!important}
   body.pitchit3DEnabled .board>div>.panel{display:block!important;overflow:visible!important}body.pitchit3DEnabled .pitch3dViewport{height:clamp(420px,62svh,560px)!important;margin:10px 0!important}
 }
 </style><style id="ballpark-scoreboard-v6">
